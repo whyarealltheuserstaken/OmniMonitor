@@ -156,18 +156,108 @@ def cmd_export(args) -> int:
     return 0
 
 
+def _status_word(st: str) -> str:
+    return {"supported": "supported", "partial": "partial", "not_supported": "no"}.get(st, st)
+
+
 def cmd_providers(args) -> int:
+    from omnimonitor import accounts, apikeys, catalog
     from omnimonitor.adapters import describe
-    rows = describe(_load(args))
+    cfg = _load(args)
+    action = args.action or "list"
+    if action in ("enable", "disable"):
+        if args.id not in catalog.SWITCHABLE:
+            print("unknown or non-switchable provider %r. Switchable: %s"
+                  % (args.id, ", ".join(catalog.SWITCHABLE)), file=sys.stderr)
+            return 2
+        cur = dict(cfg.get("providers") or {})
+        cur[args.id] = {"enabled": action == "enable"}
+        path = config_mod.update_config_file({"providers": cur}, Path(cfg["_config_path"]))
+        info = catalog.get(args.id)
+        print("%s %s in %s (restart the tray app to apply)" % (
+            info.name, "enabled" if action == "enable" else "disabled", path))
+        if action == "enable" and info.kind == "api":
+            key, name = accounts.key_for(args.id)
+            if not key:
+                print("It needs a key: export %s=... or run `omnimonitor secrets set %s`"
+                      % (name, name))
+        return 0
+    if action == "primary":
+        if args.id not in catalog.PRIMARY_CHOICES:
+            print("primary must be one of: %s" % ", ".join(catalog.PRIMARY_CHOICES),
+                  file=sys.stderr)
+            return 2
+        path = config_mod.update_config_file({"primary_provider": args.id},
+                                             Path(cfg["_config_path"]))
+        print("Tray icon now follows %s (saved in %s)" % (args.id, path))
+        return 0
+    if action == "check":
+        from omnimonitor import doctor
+        return doctor.print_checks(doctor.provider_checks(cfg, online=True))
+    found = {r["name"]: r for r in describe(cfg)}
+    enabled = set(catalog.enabled_ids(cfg))
+    rows = []
+    for p in catalog.CATALOG:
+        r = {"id": p.id, "name": p.name, "family": p.family, "kind": p.kind,
+             "status": p.status, "shows": p.shows, "docs": list(p.docs), "reason": p.reason,
+             "enabled": (p.id in enabled) if p.id in catalog.SWITCHABLE else None}
+        if p.id in found:
+            r["found"], r["paths"] = found[p.id]["found"], found[p.id]["paths"]
+            if p.id == "grok_sessions":
+                r["enabled"] = found[p.id]["enabled"]
+        if p.kind == "api":
+            r["key"] = apikeys.where(accounts.key_for(p.id)[1]) or "not set"
+        rows.append(r)
     if args.json:
         print(json.dumps(rows, indent=2))
         return 0
-    for r in rows:
-        print("%-14s %-8s %-9s %s" % (r["label"], "enabled" if r["enabled"] else "off",
-                                      "found" if r["found"] else "not found",
-                                      ", ".join(r["paths"])))
-    print("\nEnable extras with: omnimonitor config set extra_token_sources "
-          "'[\"claude_code\",\"codex\"]'")
+    groups = (("Local logs (read-only files on this computer)", "local_logs"),
+              ("Account APIs (official, your key)", "api"),
+              ("Grok weekly pool", "billing"), ("Not supported", "none"))
+    for title, kind in groups:
+        print("\n" + title)
+        for r in (x for x in rows if x["kind"] == kind):
+            if kind == "none":
+                print("  %-24s %s" % (r["name"][:24], r["reason"]))
+                continue
+            on = "-" if r["enabled"] is None else ("ON " if r["enabled"] else "off")
+            extra = ("found" if r.get("found") else "not found") if "found" in r else \
+                ("key: %s" % r["key"] if "key" in r else "")
+            print("  %-24s %-3s %-9s %-10s %s" % (r["name"][:24], on, _status_word(r["status"]),
+                                                  extra, r["shows"][:60]))
+    print("\nEnable one:   omnimonitor providers enable <id>   (ids: --json, or docs/providers.md)")
+    print("Tray follows: omnimonitor providers primary <%s>" % "|".join(catalog.PRIMARY_CHOICES))
+    print("Live check:   omnimonitor providers check")
+    return 0
+
+
+def cmd_secrets(args) -> int:
+    from omnimonitor import apikeys
+    if args.action == "list":
+        print("API keys (values are never shown):")
+        for n, src in apikeys.status().items():
+            print("  %-22s %s" % (n, {"env": "set (environment)", "file": "set (secrets file)"}
+                                  .get(src, "not set")))
+        prob = apikeys.file_problem()
+        print("Secrets file: %s%s" % (apikeys.secrets_path(), " - " + prob if prob else ""))
+        return 1 if prob else 0
+    if not args.name:
+        print("usage: omnimonitor secrets %s NAME" % args.action, file=sys.stderr)
+        return 2
+    if args.action == "unset":
+        ok = apikeys.unset_secret(args.name)
+        print("Removed %s from the secrets file." % args.name if ok else
+              "%s was not in the secrets file." % args.name)
+        return 0
+    import getpass
+    try:
+        value = getpass.getpass("Paste %s (input hidden): " % args.name) if sys.stdin.isatty() \
+            else sys.stdin.readline()
+        path = apikeys.set_secret(args.name, value)
+    except (ValueError, EOFError, KeyboardInterrupt) as e:
+        print("Not saved: %s" % (e or "cancelled"), file=sys.stderr)
+        return 2
+    print("Saved %s to %s (chmod 600). It is never shown in the UI." % (args.name, path))
     return 0
 
 
@@ -213,6 +303,10 @@ def cmd_config(args) -> int:
                 return 2
             print("%s = %s" % (k, json.dumps(cfg.get(k))))
         return 0
+    if args.action == "export":
+        return _config_export(cfg, args.key)
+    if args.action == "import":
+        return _config_import(cfg, args.key)
     if args.action == "keys":
         for k, (_f, web, hlp) in settings_mod.SCHEMA.items():
             print("%-26s %s%s" % (k, hlp, "" if web else "  [CLI only]"))
@@ -228,6 +322,62 @@ def cmd_config(args) -> int:
     path = config_mod.update_config_file({args.key: val}, Path(cfg["_config_path"]))
     print("Saved %s = %s in %s (restart the tray app to apply)" % (
         args.key, json.dumps(val), path))
+    return 0
+
+
+EXPORT_MARK = "omnimonitor_config_export"
+
+
+def _config_export(cfg: dict, dest: Optional[str]) -> int:
+    """Settable keys from the config FILE only (never env overrides, the token or keys)."""
+    from omnimonitor import settings as settings_mod
+    try:
+        raw = json.loads(Path(cfg["_config_path"]).read_text("utf-8"))
+    except (OSError, ValueError):
+        raw = {}
+    doc = {EXPORT_MARK: __version__}
+    doc.update({k: raw[k] for k in settings_mod.SCHEMA if k in raw})
+    if "source" in raw and raw["source"] in ("demo", "grok_cli_billing", "grok_billing"):
+        doc["source"] = raw["source"]
+    text = json.dumps(doc, indent=2, sort_keys=True) + "\n"
+    if not dest or dest == "-":
+        sys.stdout.write(text)
+    else:
+        Path(dest).expanduser().write_text(text, "utf-8")
+        print("Exported %d setting(s) to %s (no tokens or API keys included)"
+              % (len(doc) - 1, dest))
+    return 0
+
+
+def _config_import(cfg: dict, src: Optional[str]) -> int:
+    from omnimonitor import settings as settings_mod
+    if not src:
+        print("usage: omnimonitor config import FILE", file=sys.stderr)
+        return 2
+    try:
+        doc = json.loads((sys.stdin.read() if src == "-" else
+                          Path(src).expanduser().read_text("utf-8")))
+    except (OSError, ValueError) as e:
+        print("Cannot read %s: %s" % (src, e), file=sys.stderr)
+        return 2
+    if not isinstance(doc, dict) or EXPORT_MARK not in doc:
+        print("Not an OmniMonitor settings export (missing %s)" % EXPORT_MARK, file=sys.stderr)
+        return 2
+    doc = {k: v for k, v in doc.items() if k != EXPORT_MARK}
+    source = doc.pop("source", None)
+    skipped = sorted(k for k in doc if k not in settings_mod.SCHEMA)
+    clean, errors = settings_mod.apply(cfg, {k: v for k, v in doc.items()
+                                             if k in settings_mod.SCHEMA}, web=False)
+    if errors:
+        for k, e in errors.items():
+            print("Invalid %s: %s" % (k, e), file=sys.stderr)
+        print("Nothing imported.", file=sys.stderr)
+        return 2
+    if source in ("demo", "grok_cli_billing", "grok_billing"):
+        clean["source"] = source
+    path = config_mod.update_config_file(clean, Path(cfg["_config_path"]))
+    print("Imported %d setting(s) into %s%s" % (
+        len(clean), path, "; ignored: %s" % ", ".join(skipped) if skipped else ""))
     return 0
 
 
@@ -256,7 +406,7 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("serve", help="stats web page only, no tray (127.0.0.1)")
     s.add_argument("--port", type=int, default=None)
     s.add_argument("--open", action="store_true", help="open it in the browser")
-    s = sub.add_parser("doctor", help="diagnose Grok CLI / login / billing")
+    s = sub.add_parser("doctor", help="diagnose Grok CLI, login, billing and every provider")
     s.add_argument("--offline", action="store_true", help="skip the billing request")
     s.add_argument("--json", action="store_true")
     s = sub.add_parser("setup", help="first-run: check login and switch off demo mode")
@@ -266,16 +416,21 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("config-path", help="print the config file path")
     s = sub.add_parser("export", help="export token data as CSV or JSON")
     s.add_argument("--format", choices=("csv", "json"), default="csv")
-    s.add_argument("--kind", choices=("daily", "daily-models", "breakdown", "events"),
+    s.add_argument("--kind", choices=("daily", "daily-models", "breakdown", "events", "providers"),
                    default="daily", help="CSV only")
     s.add_argument("-o", "--output", help="file path, or - for stdout")
-    s = sub.add_parser("providers", help="which local token logs exist / are enabled")
+    s = sub.add_parser("providers", help="provider matrix; enable/disable; tray primary; check")
+    s.add_argument("action", nargs="?", choices=("list", "enable", "disable", "primary", "check"))
+    s.add_argument("id", nargs="?")
     s.add_argument("--json", action="store_true")
+    s = sub.add_parser("secrets", help="API keys for account providers (chmod-600 file)")
+    s.add_argument("action", choices=("list", "set", "unset"))
+    s.add_argument("name", nargs="?")
     s = sub.add_parser("breakdown", help="tokens by tool, model and project")
     s.add_argument("--range", choices=("today", "week", "7d", "30d", "all"), default="7d")
     s.add_argument("--json", action="store_true")
     s = sub.add_parser("config", help="get/set validated settings")
-    s.add_argument("action", choices=("get", "set", "keys"))
+    s.add_argument("action", choices=("get", "set", "keys", "export", "import"))
     s.add_argument("key", nargs="?")
     s.add_argument("value", nargs="?")
     sub.add_parser("notify-test", help="show a test desktop notification")
@@ -312,7 +467,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if cmd == "config-path":
         return cmd_config_path(args)
     handlers = {"export": cmd_export, "providers": cmd_providers, "breakdown": cmd_breakdown,
-                "config": cmd_config, "notify-test": cmd_notify_test}
+                "config": cmd_config, "notify-test": cmd_notify_test, "secrets": cmd_secrets}
     if cmd in handlers:
         return handlers[cmd](args)
     return 2

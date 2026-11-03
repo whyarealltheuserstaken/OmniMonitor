@@ -4,6 +4,54 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - unreleased
+
+More providers, all opt-in. Format knowledge (not code) was cross-checked against the
+public documentation and open-source CLIs linked in `docs/providers.md`; ideas from
+[Token Monitor](https://github.com/Javis603/token-monitor) and
+[tokscale](https://github.com/junhoyeo/tokscale) (both MIT). No code was copied.
+
+### Added
+- Provider catalog (`catalog.py`) with 33 entries and a generated matrix,
+  `docs/providers.md` (`scripts/gen_providers_md.py`; a test fails if it is stale).
+- Local-log adapters: **Gemini CLI** (`~/.gemini/tmp/**/chats`), **Qwen Code**
+  (`~/.qwen/projects/**/chats`), **Kimi CLI / Kimi Code / Kimi Work** (`wire.jsonl`),
+  **opencode** (message JSON or `opencode.db` opened read-only) and **GitHub Copilot CLI**
+  (OpenTelemetry file exporter). All read-only, incremental and deduplicated.
+- **Codex plan limits:** the 5-hour / weekly `rate_limits` Codex writes to its rollout logs
+  (used %, reset time, plan type). Out-of-range values are ignored.
+- Account adapters using official APIs and a key you supply: Anthropic Admin cost report,
+  OpenAI organization costs, xAI prepaid balance, DeepSeek balance, Moonshot balance
+  (global or cn), GitHub Copilot premium-request usage, Cursor team spend (Admin API),
+  OpenRouter key credits / limits, Ollama Cloud balance. HTTPS only, host allow-list, no
+  redirects, ≥ 5 min between calls (`provider_poll_seconds`, default 900), last good
+  reading kept on failure, errors scrubbed of the key.
+- `providers` setting with per-provider switches; `primary_provider` picks what the tray
+  icon shows (with a labelled fallback to the Grok pool).
+- `omnimonitor providers [list|enable|disable|primary|check] [--json]`,
+  `omnimonitor secrets [list|set|unset]` (chmod-600 `secrets.json`, hidden input),
+  `omnimonitor config export|import` (validated settings only; never tokens or keys).
+- Stats page: one card per enabled provider (tokens and cost today / 7 d / 30 d, limit %,
+  pace, reset, balances, errors), all-tools totals, budgets card. Settings page: Providers
+  table (switches, primary, key status only), budgets, per-provider thresholds.
+- USD **budgets** (daily / weekly / monthly) on local-log cost with alerts at
+  `budget_alert_percent` and 100 %; **per-provider thresholds** (`provider_thresholds`).
+- Compact "today" tray tooltip and one tray menu line per enabled provider.
+- `export --kind providers` (CSV / JSON).
+- `doctor` checks every enabled provider (log folders; key, secrets-file permissions and
+  one live read, `--offline` to skip).
+- Tests: 51 new tests with synthetic fixtures and mocked HTTP (184 total).
+
+### Changed
+- `extra_token_sources` still works; explicit `providers` entries take precedence.
+- Demo mode also shows demo provider cards, prices and budgets, all labelled DEMO.
+
+### Security
+- API keys are never accepted from, or returned by, the web UI (`api/settings` shows only
+  "set (env)" / "set (file)" / "not set"). A secrets file readable by other users is
+  ignored and flagged by `doctor`.
+- A test scans the sources to make sure nothing reads browser cookies or keychains.
+
 ## [0.2.0] - unreleased
 
 Feature ideas inspired by [Token Monitor](https://github.com/Javis603/token-monitor)

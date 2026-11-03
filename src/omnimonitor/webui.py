@@ -28,8 +28,8 @@ MAX_POST_BYTES = 64 * 1024
 CSRF_HEADER = "X-OmniMonitor-CSRF"
 PAGES = {"": "stats.html", "index.html": "stats.html", "settings": "settings.html",
          "mini": "mini.html"}
-SCRIPTS = ("stats.js", "settings.js", "mini.js", "common.js")
-EXPORT_KINDS = ("daily", "daily-models", "breakdown", "events")
+SCRIPTS = ("stats.js", "settings.js", "mini.js", "common.js", "providers.js")
+EXPORT_KINDS = ("daily", "daily-models", "breakdown", "events", "providers")
 
 CSP = ("default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
        "connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; "

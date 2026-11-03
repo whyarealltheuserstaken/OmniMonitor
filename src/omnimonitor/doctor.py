@@ -67,8 +67,8 @@ def checks(cfg: Dict[str, Any], online: bool = True) -> List[Tuple[str, str, str
                         else "enabled, but %s" % row["note"]))
         elif row["found"]:
             out.append((OK, row["name"], "logs found but not enabled (optional: "
-                        "`omnimonitor config set extra_token_sources '[\"%s\"]'`)"
-                        % row["name"]))
+                        "`omnimonitor providers enable %s`)" % row["name"]))
+    out += provider_checks(cfg, online=online)
 
     if online:
         try:
@@ -79,6 +79,40 @@ def checks(cfg: Dict[str, Any], online: bool = True) -> List[Tuple[str, str, str
             out.append((FAIL, "billing", str(e)))
         except Exception as e:  # noqa: BLE001
             out.append((FAIL, "billing", "%s: %s" % (type(e).__name__, e)))
+    return out
+
+
+def provider_checks(cfg: Dict[str, Any], online: bool = True, http=None
+                    ) -> List[Tuple[str, str, str]]:
+    """Every enabled account (API) provider: key present, secrets file private, and - when
+    online - one live read. Keys are never printed."""
+    from omnimonitor import accounts, apikeys, catalog
+    out: List[Tuple[str, str, str]] = []
+    prob = apikeys.file_problem()
+    if prob:
+        out.append((FAIL, "secrets file", prob + " (the file is ignored until then)"))
+    for pid in config_mod.enabled_api_providers(cfg):
+        key, name = accounts.key_for(pid)
+        if not key:
+            out.append((FAIL, pid, "enabled, but no key: set %s in the environment or run "
+                                   "`omnimonitor secrets set %s`" % (name, name)))
+            continue
+        src = apikeys.where(name)
+        if not online:
+            out.append((OK, pid, "key set (%s); live check skipped (--offline)" % src))
+            continue
+        r = accounts.fetch(pid, cfg, http=http)
+        if r.ok:
+            shown = ", ".join("%s %s%s" % (m["label"], m["value"],
+                                           " " + m["unit"] if m["unit"] else "")
+                              for m in r.metrics[:3]) or "no figures returned"
+            out.append((OK, pid, "key set (%s); read OK: %s" % (src, shown)))
+        else:
+            out.append((FAIL, pid, "key set (%s); %s" % (src, r.error)))
+    p = cfg.get("primary_provider") or "grok"
+    if p not in ("grok", "budget") and p not in catalog.enabled_ids(cfg):
+        out.append((WARN, "primary", "primary_provider %s is not enabled - the tray falls back "
+                                     "to the Grok pool" % p))
     return out
 
 

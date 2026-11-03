@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 from omnimonitor import config as config_mod
+from omnimonitor import overview as overview_mod
 from omnimonitor.app import Controller
 from omnimonitor.icon import render_icon, tray_size
 from omnimonitor.timeutil import fmt_local, fmt_until
@@ -107,6 +108,29 @@ class TrayApp:
         return ("Today: %s tokens" % fmt_tokens(br["tokens"])) + (" (%s)" % tools
                                                                if len(br["tools"]) > 1 else "")
 
+    def _ov(self):
+        return self.ctrl.stats().get("providers") or {}
+
+    def _provider_line(self, i: int) -> str:
+        lines = overview_mod.menu_lines(self._ov())
+        return lines[i] if i < len(lines) else ""
+
+    def _provider_item(self, i: int):
+        def text(_):
+            return self._provider_line(i)
+
+        def shown(_):
+            return bool(self._provider_line(i))
+        return self.pystray.MenuItem(text, None, enabled=False, visible=shown)
+
+    def _primary_line(self) -> str:
+        p = self._ov().get("primary") or {}
+        if not p or p.get("id") == "grok":
+            return ""
+        if p.get("available"):
+            return "Tray: %s %.0f%% used" % (p["label"], p["used_percent"])
+        return "Tray: %s not available (%s)" % (p.get("name"), (p.get("reason") or "")[:50])
+
     def _error_line(self) -> str:
         return "⚠ %s" % (self.ctrl.error or "")[:90]
 
@@ -121,6 +145,10 @@ class TrayApp:
             Item(lambda _: self._pace_line(), None, enabled=False),
             Item(lambda _: self._error_line(), None, enabled=False,
                  visible=lambda _: bool(self.ctrl.error)),
+            Item(lambda _: self._primary_line(), None, enabled=False,
+                 visible=lambda _: bool(self._primary_line())),
+            Menu.SEPARATOR,
+            *[self._provider_item(i) for i in range(8)],
             Menu.SEPARATOR,
             Item("Refresh Now", self._on_refresh),
             Item("Open Stats Page", self._on_stats, default=True,
@@ -133,6 +161,7 @@ class TrayApp:
                 Item("Daily CSV", self._export("csv", "daily")),
                 Item("Per model CSV", self._export("csv", "daily-models")),
                 Item("Tool / model / project CSV", self._export("csv", "breakdown")),
+                Item("Providers CSV", self._export("csv", "providers")),
                 Item("Everything (JSON)", self._export("json", "daily")))),
             Item("Open Grok Usage Page", self._on_usage_page),
             Item("Edit Config", self._on_config),
@@ -186,12 +215,15 @@ class TrayApp:
     def update(self) -> None:
         u, err = self.ctrl.usage, self.ctrl.error
         try:
-            self.icon.icon = render_icon(u.remaining_percent if u else None,
-                                         error=bool(err) and u is None,
-                                         demo=bool(u and u.is_demo), size=tray_size(),
+            ov = self._ov()
+            value, _label = overview_mod.tray_value(ov, u.to_dict() if u else None)
+            self.icon.icon = render_icon(value, error=bool(err) and value is None,
+                                         demo=bool((u and u.is_demo) or ov.get("is_demo")),
+                                         size=tray_size(),
                                          style=self.ctrl.cfg.get("icon_style") or "ring",
                                          show=self.ctrl.cfg.get("icon_value") or "remaining")
-            self.icon.title = self._title()[:120]  # Windows tooltip limit ~128
+            # compact "today" tooltip (Windows limit ~128 chars)
+            self.icon.title = overview_mod.tooltip(ov, self._title())[:120]
             self.icon.update_menu()
         except Exception:  # noqa: BLE001
             pass

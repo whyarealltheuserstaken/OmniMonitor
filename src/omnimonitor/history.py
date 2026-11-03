@@ -111,14 +111,17 @@ class History:
             self._db.commit()
 
     # ----------------------------------------------------------------- inserts
-    def add_events(self, events: Iterable[Any]) -> int:
-        """Insert TokenEvent-like objects; duplicates (same event id + model) are ignored."""
+    def add_events(self, events: Iterable[Any], replace: bool = False) -> int:
+        """Insert TokenEvent-like objects; duplicates (same event id + model) are ignored,
+        or overwritten when ``replace`` (for logs where a later record supersedes an earlier
+        one with the same id, e.g. a streamed message rewritten with final counts)."""
         n = 0
+        verb = "INSERT OR REPLACE" if replace else "INSERT OR IGNORE"
         with self._lock:
             cur = self._db.cursor()
             for e in events:
                 cur.execute(
-                    "INSERT OR IGNORE INTO token_events(event_id, model, ts, session_id,"
+                    verb + " INTO token_events(event_id, model, ts, session_id,"
                     " input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,"
                     " reasoning_tokens, cost_usd, source, project)"
                     " VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -128,6 +131,9 @@ class History:
                 n += cur.rowcount if cur.rowcount > 0 else 0
             self._db.commit()
         return n
+
+    def upsert_events(self, events: Iterable[Any]) -> int:
+        return self.add_events(events, replace=True)
 
     def add_turns(self, turns: Iterable[Any]) -> None:
         with self._lock:

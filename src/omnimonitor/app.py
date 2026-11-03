@@ -8,16 +8,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from omnimonitor import accounts as accounts_mod
 from omnimonitor import adapters
 from omnimonitor import alerts as alerts_mod
 from omnimonitor import config as config_mod
 from omnimonitor import forecast as forecast_mod
+from omnimonitor import overview as overview_mod
 from omnimonitor import settings as settings_mod
 from omnimonitor import stats as stats_mod
 from omnimonitor.billing import UsageResult, fetch_usage_safely
 from omnimonitor.history import History
 from omnimonitor.timeutil import utcnow
-from omnimonitor.tokens import demo_events
+from omnimonitor.tokens import DEMO_TOOLS, demo_codex_limits, demo_events, demo_readings
 
 
 class Controller:
@@ -41,11 +43,14 @@ class Controller:
         self.notifier: Optional[Callable[[str, str], None]] = None  # set by the tray
         self.sent_alerts: List[Dict[str, str]] = []
         self.token_source = config_mod.effective_token_source(cfg)
+        self.readings: Dict[str, Dict[str, Any]] = {}
+        self.http = None  # tests inject a fake HTTP client for account readers
         self._open_history()
 
     def _open_history(self) -> None:
         wants = self.token_source == "grok_sessions" or (
-            self.token_source != "demo" and config_mod.extra_token_sources(self.cfg))
+            self.token_source != "demo" and (config_mod.extra_token_sources(self.cfg)
+                                             or config_mod.enabled_api_providers(self.cfg)))
         if wants and self.history is None:
             try:
                 self.history = History(self.history_file or config_mod.history_path())
@@ -57,7 +62,7 @@ class Controller:
     def tools(self) -> List[str]:
         """Token sources actually feeding the stats."""
         if self.token_source == "demo":
-            return ["grok_sessions", "claude_code", "codex"]
+            return list(DEMO_TOOLS)
         out = ["grok_sessions"] if self.token_source == "grok_sessions" else []
         if self.history is not None:
             out += config_mod.extra_token_sources(self.cfg)
@@ -92,9 +97,27 @@ class Controller:
             except Exception:  # noqa: BLE001
                 pass
         self._scan_tokens()
+        self._refresh_accounts()
         self._recompute()
         self._check_alerts()
         self._notify()
+
+    def _refresh_accounts(self, force: bool = False) -> None:
+        """Official account APIs for enabled providers (rate-limited, never raises)."""
+        if self.token_source == "demo":
+            self.readings = demo_readings(self.clock().timestamp())
+            return
+        ids = config_mod.enabled_api_providers(self.cfg)
+        if not ids:
+            self.readings = {}
+            return
+        try:
+            got = accounts_mod.refresh(self.cfg, self.history, ids, force=force, http=self.http,
+                                       now=self.clock().timestamp())
+            self.readings = {k: v.to_dict() for k, v in got.items()}
+        except Exception as e:  # noqa: BLE001
+            self.token_note = (self.token_note + "; " if self.token_note else "") + \
+                "account readers failed: %s" % e.__class__.__name__
 
     def _scan_tokens(self) -> None:
         if self.history is None or self.token_source == "demo":
@@ -120,6 +143,7 @@ class Controller:
     def _check_alerts(self) -> None:
         u = self.usage
         if u is None or u.is_demo or self.history is None:
+            self._check_provider_alerts()
             return
         try:
             billing = u.to_dict()
@@ -132,6 +156,23 @@ class Controller:
                 alerts_mod.deliver(m["title"], m["body"], self.notifier)
                 self.sent_alerts.append(m)
         except Exception:  # noqa: BLE001 - alerts must never break polling
+            pass
+        self._check_provider_alerts()
+
+    def _check_provider_alerts(self) -> None:
+        if self.token_source == "demo" or self.history is None:
+            return
+        try:
+            ov = (self._stats or {}).get("providers") or {}
+            key = alerts_mod.PROVIDER_META_KEY
+            state = alerts_mod.load_state(self.history, key)
+            msgs, new = alerts_mod.decide_providers(self.cfg, ov, state)
+            if new != state:
+                alerts_mod.save_state(self.history, new, key)
+            for m in msgs:
+                alerts_mod.deliver(m["title"], m["body"], self.notifier)
+                self.sent_alerts.append(m)
+        except Exception:  # noqa: BLE001
             pass
 
     def update_settings(self, changes: Any, web: bool = True) -> Dict[str, Any]:
@@ -151,8 +192,9 @@ class Controller:
             self.cfg["poll_interval_seconds"] = config_mod.clamp_poll(
                 self.cfg.get("poll_interval_seconds"))
         self._open_history()
-        if "extra_token_sources" in clean:
+        if "extra_token_sources" in clean or "providers" in clean:
             self._scan_tokens()
+            self._refresh_accounts()
         self._recompute()
         self._notify()
         return {"ok": True, "changed": sorted(clean)}
@@ -185,6 +227,18 @@ class Controller:
         st = stats_mod.compute(events, turns, billing, self.cfg, now, provider=provider,
                                provider_note=note, data_since=data_since,
                                snapshots=snapshots, tools=tools)
+        if self.token_source == "demo":
+            codex = demo_codex_limits(now.timestamp())
+        else:
+            codex = adapters.codex_limits(self.history) if self.history is not None else None
+        try:
+            st["providers"] = overview_mod.build(
+                events, self.cfg, now, tools=tools, readings=dict(self.readings),
+                codex_limits=codex if "codex" in tools else None, billing=billing,
+                is_demo=self.token_source == "demo")
+        except Exception as e:  # noqa: BLE001 - a bad reading must not blank the page
+            st["providers"] = {"error": "provider overview failed: %s" % e.__class__.__name__,
+                               "cards": []}
         st["status"] = self.status_dict()
         with self._lock:
             self._stats = st
@@ -203,6 +257,15 @@ class Controller:
         evs = self.export_events()
         demo = self.token_source == "demo"
         prefix = "omnimonitor-%s" % ("DEMO-" if demo else "")
+        if kind == "providers":
+            ov = self.stats().get("providers") or {}
+            if fmt == "json":
+                return (export_mod.providers_json(ov).encode("utf-8"), "application/json",
+                        prefix + "providers.json")
+            if fmt == "csv":
+                return (export_mod.to_csv(export_mod.provider_rows(ov)).encode("utf-8"),
+                        "text/csv; charset=utf-8", prefix + "providers.csv")
+            raise ValueError("unknown format")
         if fmt == "json":
             return (export_mod.to_json(evs, demo).encode("utf-8"), "application/json",
                     prefix + "export.json")

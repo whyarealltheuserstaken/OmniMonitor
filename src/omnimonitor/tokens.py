@@ -267,13 +267,57 @@ class GrokSessionsScanner:
         return stats
 
 
+DEMO_TOOL_WEIGHTS = (("grok_sessions", 0.42), ("claude_code", 0.18), ("codex", 0.12),
+                     ("gemini_cli", 0.08), ("qwen_code", 0.05), ("kimi", 0.05),
+                     ("opencode", 0.05), ("copilot_otel", 0.05))
+DEMO_TOOLS = tuple(t for t, _ in DEMO_TOOL_WEIGHTS)
+
+
+def demo_codex_limits(now_ts: float) -> Dict[str, Any]:
+    """FAKE Codex plan-limit snapshot for demo mode."""
+    return {"observed_at": now_ts - 600, "plan_type": "demo",
+            "windows": {"primary": {"used_percent": 34.0, "window_minutes": 300,
+                                    "resets_at": now_ts + 2.5 * 3600},
+                        "secondary": {"used_percent": 61.0, "window_minutes": 10080,
+                                      "resets_at": now_ts + 2.2 * 86400}}}
+
+
+def demo_readings(now_ts: float) -> Dict[str, Dict[str, Any]]:
+    """FAKE account readings for demo mode / screenshots. Every one is flagged demo."""
+    def r(pid, metrics, **kw):
+        d = {"provider": pid, "ok": True, "fetched_at": now_ts - 300, "demo": True,
+             "metrics": [{"key": k, "label": lab, "value": v, "unit": u, "kind": kind}
+                         for k, lab, v, u, kind in metrics],
+             "limit_percent": None, "resets_at": None, "period_start": None,
+             "period": "", "note": "DEMO - fake numbers", "confidence": "demo", "error": ""}
+        d.update(kw)
+        return d
+    month0 = now_ts - 12 * 86400
+    return {
+        "openrouter": r("openrouter", [("usage_daily", "Spent today (UTC)", 1.84, "USD", "spend"),
+                                       ("usage_monthly", "Spent this month", 23.4, "USD",
+                                        "spend"),
+                                       ("limit", "Key limit", 50, "USD", "limit")],
+                        limit_percent=46.8, resets_at=now_ts + 18 * 86400,
+                        period_start=month0, period="monthly"),
+        "deepseek": r("deepseek", [("balance_usd", "Balance", 17.25, "USD", "balance")],
+                      period="prepaid balance"),
+        "ollama_cloud": r("ollama_cloud", [("included_left", "Included credits left", 12.5,
+                                            "USD", "balance"),
+                                           ("allowance", "Monthly allowance", 20, "USD",
+                                            "limit")],
+                          limit_percent=37.5, resets_at=now_ts + 18 * 86400,
+                          period_start=month0, period="monthly included credits"),
+    }
+
+
 def demo_events(now_ts: float, days: int = 365, seed: int = 7
                 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """FAKE history for demo mode / screenshots. Deterministic. NOT real usage."""
     rng = random.Random(seed)
     events, turns = [], []
     models = [("demo-model-a", 0.6), ("demo-model-b", 0.25), ("demo-model-c", 0.15)]
-    tools = [("grok_sessions", 0.6), ("claude_code", 0.25), ("codex", 0.15)]
+    tools = [(t, w) for t, w in DEMO_TOOL_WEIGHTS]
     projects = [("demo-project-alpha", 0.45), ("demo-project-beta", 0.3),
                 ("demo-project-gamma", 0.15), ("demo-scratch", 0.1)]
     day0 = now_ts - days * 86400

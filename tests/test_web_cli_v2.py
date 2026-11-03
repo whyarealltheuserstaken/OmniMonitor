@@ -121,7 +121,7 @@ def test_demo_stats_have_new_sections(tmp_path):
     bd = st["breakdowns"]
     assert set(bd) == {"today", "week", "7d", "30d", "all"}
     tools = {t["name"] for t in bd["all"]["tools"]}
-    assert tools == {"Grok CLI", "Claude Code", "Codex"}
+    assert {"Grok CLI", "Claude Code", "Codex", "Gemini CLI"} <= tools
     assert sum(t["tokens"] for t in bd["all"]["tools"]) == bd["all"]["tokens"]
     assert st["cost"]["demo_prices"] is True
     assert st["burn"]["today"] >= 0
@@ -169,8 +169,8 @@ def test_cli_config_set_get_and_export(capsys, tmp_path, monkeypatch):
     assert cli.main(["breakdown", "--demo", "--range", "7d", "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["tools"]
     assert cli.main(["providers", "--json"]) == 0
-    names = [r["name"] for r in json.loads(capsys.readouterr().out)]
-    assert names == ["grok_sessions", "claude_code", "codex"]
+    ids = [r["id"] for r in json.loads(capsys.readouterr().out)]
+    assert ids[0] == "grok" and {"grok_sessions", "claude_code", "codex", "deepseek"} <= set(ids)
 
 
 def test_setup_writes_only_source_not_env_token(tmp_path, monkeypatch):

@@ -100,3 +100,36 @@ def to_json(events: List[Dict[str, Any]], is_demo: bool, tz=None) -> str:
            "daily_models": rows(events, "daily-models", tz),
            "breakdown": rows(events, "breakdown", tz)}
     return json.dumps(doc, indent=2)
+
+
+def provider_rows(ov: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """One row per provider x measurement: token ranges, limit windows and API metrics."""
+    out: List[Dict[str, Any]] = []
+    for c in ov.get("cards") or []:
+        base = {"provider": c.get("name"), "provider_id": c.get("id"),
+                "demo": bool(c.get("demo"))}
+        for rid, r in (c.get("ranges") or {}).items():
+            out.append(dict(base, measure="tokens_" + rid, value=r.get("tokens"), unit="tokens",
+                            note=""))
+            if r.get("usd") is not None:
+                out.append(dict(base, measure="usd_" + rid, value=round(r["usd"], 4),
+                                unit="USD", note="recorded or estimated"))
+        for w in c.get("limits") or []:
+            out.append(dict(base, measure="used_percent:" + str(w.get("name")),
+                            value=w.get("used_percent"), unit="%",
+                            note="resets %s" % (datetime.fromtimestamp(w["resets_at"])
+                                                .astimezone().isoformat()
+                                                if w.get("resets_at") else "unknown")))
+        for m in c.get("metrics") or []:
+            out.append(dict(base, measure=str(m.get("key")), value=m.get("value"),
+                            unit=m.get("unit") or "", note=m.get("label") or ""))
+    return out
+
+
+def providers_json(ov: Dict[str, Any]) -> str:
+    doc = {"generator": "OmniMonitor %s" % __version__,
+           "exported_at": datetime.now().astimezone().isoformat(),
+           "is_demo": bool(ov.get("is_demo")),
+           "all_tools": ov.get("all_tools"), "budgets": ov.get("budgets"),
+           "primary": ov.get("primary"), "cards": ov.get("cards") or []}
+    return json.dumps(doc, indent=2, default=str)

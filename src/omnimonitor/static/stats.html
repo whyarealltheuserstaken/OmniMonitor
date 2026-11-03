@@ -81,6 +81,10 @@
   .row:last-child { border-bottom:none; }
   .row .l { color:var(--fg); } .row .r { color:var(--mut); }
   .section { margin-top:26px; }
+  .pv-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; }
+  .pv-card { padding:14px; }
+  .pv-card .sub .na, #pv-all .sub .na, #pv-budgets .mini-v .na { font-size:12px; }
+  #pv-tabs { float:none; flex-wrap:wrap; margin:0 0 12px; display:inline-flex; }
   footer { margin-top:30px; color:var(--mut); font-size:12px; }
   a { color:#7cc4ff; }
   @media (max-width:760px) { .hero, .grid3 { grid-template-columns:1fr; }
@@ -101,6 +105,7 @@
       <a href="settings">Settings</a>
       <a href="api/export.csv?kind=daily" download>Export CSV</a>
       <a href="api/export.json" download>Export JSON</a>
+      <a href="api/export.csv?kind=providers" download>Providers CSV</a>
     </nav>
   </div>
   <div id="banners"></div>
@@ -134,6 +139,18 @@
       <div><div class="mini-k">Per active hour today</div><div class="mini-v" id="b-rate">–</div></div>
       <div><div class="mini-k">Tools reporting</div><div class="mini-v" id="b-tools">–</div></div>
     </div>
+  </div>
+
+  <div class="section card" id="providers-card" data-card="providers" hidden>
+    <h2>All AI tools <span class="sub" id="pv-primary"></span></h2>
+    <div class="grid4" id="pv-all"></div>
+    <div style="margin-top:16px"><div class="tabs" id="pv-tabs"></div></div>
+    <div id="pv-cards" class="pv-grid"></div>
+  </div>
+
+  <div class="section card" id="budgets-card" data-card="budgets" hidden>
+    <h2>Budgets <span class="sub" id="pv-budget-note"></span></h2>
+    <div class="grid3" id="pv-budgets"></div>
   </div>
 
   <div class="stats" style="margin-top:22px">
@@ -184,9 +201,10 @@
     <div id="insights"></div>
   </div>
 
-  <footer id="foot">OmniMonitor · unofficial · not affiliated with xAI or X · this page is served only on 127.0.0.1 and never leaves your computer.</footer>
+  <footer id="foot">OmniMonitor · unofficial · not affiliated with xAI, X or any listed provider · this page is served only on 127.0.0.1 and never leaves your computer.</footer>
 </main>
 <script src="common.js"></script>
+<script src="providers.js"></script>
 <script src="stats.js"></script>
 </body>
 </html>

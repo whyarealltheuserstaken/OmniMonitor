@@ -71,18 +71,74 @@ def decide(cfg: Dict[str, Any], billing: Optional[Dict[str, Any]],
     return out, new
 
 
-def load_state(history) -> Dict[str, Any]:
+PROVIDER_META_KEY = "alerts_state_providers"
+
+
+def decide_providers(cfg: Dict[str, Any], ov: Dict[str, Any], state: Dict[str, Any]
+                     ) -> Tuple[List[Dict[str, str]], Dict[str, Any]]:
+    """Per-provider limit thresholds (non-Grok cards) and USD budget alerts. Pure.
+
+    State is keyed by provider/period + window reset, so each threshold fires once per
+    window and again after the window resets. Demo data never alerts."""
+    if not cfg.get("notifications", True) or not ov or ov.get("is_demo"):
+        return [], state
+    from omnimonitor.overview import provider_thresholds
+
+    new: Dict[str, Any] = {}
+    out: List[Dict[str, str]] = []
+    for c in ov.get("cards") or []:
+        if c.get("id") == "grok" or c.get("demo"):
+            continue  # the Grok pool has its own alerts (decide)
+        ths = provider_thresholds(cfg, c["id"])
+        for w in c.get("limits") or []:
+            used = w.get("used_percent")
+            if used is None or w.get("stale"):
+                continue
+            key = "%s:%s:%s" % (c["id"], w.get("name"), w.get("resets_at") or "")
+            fired = set(float(x) for x in state.get(key, []))
+            crossed = [t for t in ths if used >= t and t not in fired]
+            if crossed:
+                out.append({"kind": "provider", "title": "%s at %.0f%%" % (c["name"], used),
+                            "body": "%s: %.0f%% of the %s used (alert at %.0f%%)."
+                                    % (c["name"], used, w.get("name") or "limit",
+                                       max(crossed))})
+                fired.update(crossed)
+            new[key] = sorted(fired)
+    b = ov.get("budgets") or {}
+    alert = float(b.get("alert_percent") or 80)
+    for period, row in (b.get("periods") or {}).items():
+        pct = row.get("percent")
+        if pct is None:
+            continue
+        key = "budget:%s:%s" % (period, row.get("starts_at"))
+        fired = set(float(x) for x in state.get(key, []))
+        for t in (alert, 100.0):
+            if pct >= t and t not in fired:
+                fired.add(t)
+                if t == 100.0 or pct < 100:
+                    out.append({"kind": "budget",
+                                "title": "%s budget %s" % (period.title(),
+                                                           "exceeded" if pct >= 100 else
+                                                           "at %.0f%%" % pct),
+                                "body": "$%.2f of your $%.2f %s budget (local logs, "
+                                        "recorded or estimated)."
+                                        % (row["spent_usd"], row["limit_usd"], period)})
+        new[key] = sorted(fired)
+    return out, new
+
+
+def load_state(history, key: str = META_KEY) -> Dict[str, Any]:
     if history is None:
         return {}
     try:
-        return json.loads(history.meta(META_KEY) or "{}") or {}
+        return json.loads(history.meta(key) or "{}") or {}
     except (ValueError, TypeError):
         return {}
 
 
-def save_state(history, state: Dict[str, Any]) -> None:
+def save_state(history, state: Dict[str, Any], key: str = META_KEY) -> None:
     if history is not None:
-        history.set_meta(META_KEY, json.dumps(state, sort_keys=True))
+        history.set_meta(key, json.dumps(state, sort_keys=True))
 
 
 def deliver(title: str, body: str, tray_notify: Optional[Callable[[str, str], None]] = None

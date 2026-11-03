@@ -11,9 +11,11 @@ import json
 import re
 from typing import Any, Callable, Dict, List, Tuple
 
+from omnimonitor import catalog
 from omnimonitor.pricing import clean_prices
 
-HIDEABLE_CARDS = ("forecast", "burn", "limit", "heatmap", "breakdown", "tools", "models",
+HIDEABLE_CARDS = ("providers", "budgets", "forecast", "burn", "limit", "heatmap", "breakdown",
+                  "tools", "models",
                   "projects", "cost", "insights")
 
 
@@ -119,11 +121,80 @@ def _path(v: Any) -> str:
     return v.strip()
 
 
+def _providers(v: Any) -> Dict[str, Dict[str, bool]]:
+    if isinstance(v, str):
+        try:
+            v = json.loads(v or "{}")
+        except ValueError:
+            raise SettingError("providers must be a JSON object") from None
+    if not isinstance(v, dict):
+        raise SettingError('expected {"provider_id": {"enabled": true|false}, ...}')
+    out = {}
+    for pid, opts in v.items():
+        if pid not in catalog.SWITCHABLE:
+            raise SettingError("unknown provider %r (see `omnimonitor providers`)" % pid)
+        if isinstance(opts, bool):
+            opts = {"enabled": opts}
+        if not isinstance(opts, dict) or set(opts) - {"enabled"}:
+            raise SettingError("%s: only {\"enabled\": true|false} is settable" % pid)
+        out[pid] = {"enabled": _bool(opts.get("enabled", False))}
+    return out
+
+
+def _provider_thresholds(v: Any) -> Dict[str, List[float]]:
+    if isinstance(v, str):
+        try:
+            v = json.loads(v or "{}")
+        except ValueError:
+            raise SettingError("provider_thresholds must be a JSON object") from None
+    if not isinstance(v, dict) or len(v) > 60:
+        raise SettingError('expected {"provider_id": [50, 80, 95], ...}')
+    out = {}
+    for pid, ths in v.items():
+        if pid not in catalog.BY_ID:
+            raise SettingError("unknown provider %r" % pid)
+        out[pid] = _thresholds(ths)
+    return out
+
+
+def _budgets(v: Any) -> Dict[str, float]:
+    if isinstance(v, str):
+        try:
+            v = json.loads(v or "{}")
+        except ValueError:
+            raise SettingError("budgets must be a JSON object") from None
+    if not isinstance(v, dict) or set(v) - {"daily", "weekly", "monthly"}:
+        raise SettingError('expected {"daily": USD, "weekly": USD, "monthly": USD} (0 = off)')
+    out = {}
+    for k in ("daily", "weekly", "monthly"):
+        x = _num(0, 1e6)(v.get(k, 0) or 0)
+        out[k] = int(x) if float(x).is_integer() else round(x, 2)
+    return out
+
+
+def _ident(maxlen: int, pattern: str) -> Callable[[Any], str]:
+    def f(v: Any) -> str:
+        if not isinstance(v, str) or len(v) > maxlen or (v and not re.fullmatch(pattern, v)):
+            raise SettingError("invalid value")
+        return v.strip()
+    return f
+
+
 # key -> (validator, writable from the web page, help)
 SCHEMA: Dict[str, Tuple[Callable[[Any], Any], bool, str]] = {
     "poll_interval_seconds": (_num(60, 3600, True), True, "seconds between billing polls"),
-    "extra_token_sources": (_list_of(("claude_code", "codex")), True,
-                            "also read Claude Code / Codex local logs"),
+    "extra_token_sources": (_list_of(tuple(i for i in catalog.LOCAL_IDS
+                                           if i != "grok_sessions")), True,
+                            "legacy list of local-log adapters (prefer `providers`)"),
+    "providers": (_providers, True, 'per-provider switches: {"id": {"enabled": true}}'),
+    "primary_provider": (_choice(*catalog.PRIMARY_CHOICES), True,
+                         "provider whose % drives the tray icon"),
+    "provider_thresholds": (_provider_thresholds, True,
+                            "per-provider alert thresholds (USED %)"),
+    "budgets": (_budgets, True, "USD budgets for local-log spend (0 = off)"),
+    "budget_alert_percent": (_num(1, 100), True, "warn when a budget reaches this %"),
+    "provider_poll_seconds": (_num(300, 86400, True), True,
+                              "seconds between account API reads (min 300)"),
     "prices": (_prices, True, "your USD-per-1M-token prices for cost estimates"),
     "notifications": (_bool, True, "desktop notifications"),
     "notify_thresholds": (_thresholds, True, "alert when weekly USED % crosses these"),
@@ -143,6 +214,19 @@ SCHEMA: Dict[str, Tuple[Callable[[Any], Any], bool, str]] = {
     "claude_home": (_path, False, "Claude Code config dir(s), comma-separated"),
     "codex_home": (_path, False, "Codex home dir(s), comma-separated"),
     "grok_home": (_path, False, "Grok CLI home dir"),
+    "gemini_home": (_path, False, "Gemini CLI home dir(s) (default ~/.gemini)"),
+    "qwen_home": (_path, False, "Qwen Code home dir(s) (default ~/.qwen)"),
+    "kimi_home": (_path, False, "Kimi sessions dir(s) (default: Kimi CLI, Kimi Code, Kimi Work)"),
+    "opencode_home": (_path, False, "opencode data dir(s) (default ~/.local/share/opencode)"),
+    "copilot_otel_path": (_path, False, "Copilot CLI OTel JSONL file or dir"),
+    "moonshot_region": (_choice("global", "cn"), False, "platform.moonshot.ai or .cn"),
+    "github_username": (_ident(39, r"[A-Za-z0-9-]+"), False,
+                        "GitHub user for Copilot premium-request usage"),
+    "copilot_premium_allowance": (_num(0, 1e6, True), False,
+                                  "your plan's monthly premium requests (for a %)"),
+    "xai_team_id": (_ident(64, r"[A-Za-z0-9_-]+"), False, "xAI team id for the balance"),
+    "cursor_email": (_ident(254, r"[^@\s]+@[^@\s]+"), False,
+                     "your email in the Cursor team (own spend row)"),
     "token_source": (_choice("auto", "grok_sessions", "demo", "none"), False,
                      "where Grok token counts come from"),
 }
@@ -183,8 +267,25 @@ def public_view(cfg: Dict[str, Any]) -> Dict[str, Any]:
     out = {k: cfg.get(k) for k in web_keys()}
     out["_readonly"] = {"source": cfg.get("source"), "token_source": cfg.get("token_source"),
                         "config_path": cfg.get("_config_path"),
-                        "hideable_cards": list(HIDEABLE_CARDS)}
+                        "hideable_cards": list(HIDEABLE_CARDS),
+                        "catalog": [{"id": p.id, "name": p.name, "family": p.family,
+                                     "kind": p.kind, "status": p.status, "shows": p.shows,
+                                     "env": list(p.env), "has_limit": p.has_limit}
+                                    for p in catalog.CATALOG if p.id in catalog.SWITCHABLE],
+                        "primary_choices": [{"id": i, "name": "Budget" if i == "budget"
+                                             else catalog.name(i)}
+                                            for i in catalog.PRIMARY_CHOICES],
+                        "keys": _key_presence()}
     return out
+
+
+def _key_presence() -> Dict[str, str]:
+    """Which API keys are set and where ('env' / 'file' / '') - never any characters."""
+    try:
+        from omnimonitor import apikeys
+        return apikeys.status()
+    except Exception:  # noqa: BLE001
+        return {}
 
 
 def parse_cli_value(raw: str) -> Any:

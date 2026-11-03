@@ -106,6 +106,7 @@
       r.appendChild(el("span", "r", i.value)); ic.appendChild(r);
     });
     $("insights-card").hidden = !(d.insights || []).length;
+    if (window.OMProviders) OMProviders.render(d);
     applyPersonal(d.personal || {});
   }
 

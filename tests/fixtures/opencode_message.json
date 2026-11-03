@@ -1,0 +1,1 @@
+{"id":"msg_oc1","sessionID":"ses_1","role":"assistant","modelID":"claude-sonnet-4-5","providerID":"anthropic","cost":0.0123,"time":{"created":1791300000000,"completed":1791300004000},"path":{"cwd":"/home/me/code/ocproj","root":"/home/me/code/ocproj"},"tokens":{"input":50,"output":300,"reasoning":20,"cache":{"read":4000,"write":100}}}

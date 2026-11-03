@@ -76,6 +76,35 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "accent_color": "#2a8bd8",
     "display_name": "",
     "hidden_cards": [],                     # e.g. ["projects", "cost"]
+    # ---- 0.3.0: more providers (all opt-in; see docs/providers.md) ---------------------
+    # {"gemini_cli": {"enabled": true}, "deepseek": {"enabled": true}, ...}
+    # API KEYS NEVER GO HERE: use environment variables or `omnimonitor secrets set`.
+    "providers": {},
+    # What the tray icon shows: "grok", "codex", "openrouter", "ollama_cloud",
+    # "github_copilot", "cursor_team" or "budget" (the tightest USD budget cap).
+    "primary_provider": "grok",
+    # Per-provider "% used" alert thresholds, e.g. {"codex": [75, 90]}. Missing ->
+    # notify_thresholds.
+    "provider_thresholds": {},
+    # USD caps on the ≈ cost of local tool usage (recorded cost, else your price table).
+    # 0 = off. Alerts at budget_alert_percent of each cap and at 100 %.
+    "budgets": {"daily": 0, "weekly": 0, "monthly": 0},
+    "budget_alert_percent": 80,
+    # How often account APIs are called (seconds, min 300). Local logs follow
+    # poll_interval_seconds.
+    "provider_poll_seconds": 900,
+    # Optional locations (empty = the tool's default / its own env var).
+    "gemini_home": "",       # $GEMINI_CLI_HOME or ~/.gemini
+    "qwen_home": "",         # ~/.qwen
+    "kimi_home": "",         # ~/.kimi (+ $KIMI_CODE_HOME or ~/.kimi-code, + Kimi Work)
+    "opencode_home": "",     # $XDG_DATA_HOME/opencode or ~/.local/share/opencode
+    "copilot_otel_path": "", # $COPILOT_OTEL_FILE_EXPORTER_PATH or ~/.copilot/otel
+    # Non-secret account settings.
+    "moonshot_region": "global",            # global (api.moonshot.ai) | cn (api.moonshot.cn)
+    "github_username": "",
+    "copilot_premium_allowance": 0,         # your plan's monthly included premium requests
+    "xai_team_id": "",
+    "cursor_email": "",                     # your row in the Cursor team spend list
 }
 
 
@@ -262,10 +291,67 @@ def codex_homes(cfg: Dict[str, Any]) -> list:
 
 
 def extra_token_sources(cfg: Dict[str, Any]) -> list:
-    v = cfg.get("extra_token_sources") or []
-    if isinstance(v, str):
-        v = [x.strip() for x in v.split(",")]
-    return [x for x in v if x in ("claude_code", "codex")]
+    """Enabled local-log adapters besides the Grok CLI (``providers`` + legacy list)."""
+    from omnimonitor import catalog
+    return [p for p in catalog.enabled_ids(cfg) if p in catalog.LOCAL_IDS]
+
+
+def enabled_api_providers(cfg: Dict[str, Any]) -> list:
+    from omnimonitor import catalog
+    return [p for p in catalog.enabled_ids(cfg) if p in catalog.API_IDS]
+
+
+def _homes(raw: str, defaults: list) -> list:
+    if raw.strip():
+        return [Path(p.strip()).expanduser() for p in raw.split(",") if p.strip()]
+    return defaults
+
+
+def gemini_homes(cfg: Dict[str, Any]) -> list:
+    raw = (cfg.get("gemini_home") or "").strip() or os.environ.get("GEMINI_CLI_HOME", "")
+    return _homes(raw, [Path.home() / ".gemini"])
+
+
+def qwen_homes(cfg: Dict[str, Any]) -> list:
+    return _homes((cfg.get("qwen_home") or "").strip(), [Path.home() / ".qwen"])
+
+
+def app_data_dir() -> Optional[Path]:
+    """Per-user app-data root on macOS / Windows (Kimi Work has no Linux build)."""
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support"
+    if os.name == "nt":
+        return Path(os.environ.get("APPDATA") or (Path.home() / "AppData" / "Roaming"))
+    return None
+
+
+def kimi_session_roots(cfg: Dict[str, Any]) -> list:
+    """Kimi CLI, Kimi Code and Kimi Work session roots (all use wire.jsonl)."""
+    raw = (cfg.get("kimi_home") or "").strip()
+    if raw:
+        return [h / "sessions" if (h / "sessions").is_dir() else h for h in _homes(raw, [])]
+    roots = [Path.home() / ".kimi" / "sessions"]
+    kc = os.environ.get("KIMI_CODE_HOME", "")
+    roots.append((Path(kc).expanduser() if kc.strip() else Path.home() / ".kimi-code") / "sessions")
+    ad = app_data_dir()
+    if ad is not None:
+        roots.append(ad / "kimi-desktop" / "daimon-share" / "daimon" / "runtime" / "kimi-code"
+                     / "home" / "sessions")
+    return roots
+
+
+def opencode_dirs(cfg: Dict[str, Any]) -> list:
+    raw = (cfg.get("opencode_home") or "").strip()
+    xdg = os.environ.get("XDG_DATA_HOME", "")
+    base = Path(xdg).expanduser() if xdg.strip() else Path.home() / ".local" / "share"
+    return _homes(raw, [base / "opencode"])
+
+
+def copilot_otel_paths(cfg: Dict[str, Any]) -> list:
+    """Copilot CLI OpenTelemetry file exports (``COPILOT_OTEL_EXPORTER_TYPE=file``)."""
+    raw = (cfg.get("copilot_otel_path") or "").strip() or os.environ.get(
+        "COPILOT_OTEL_FILE_EXPORTER_PATH", "")
+    return _homes(raw, [Path.home() / ".copilot" / "otel"])
 
 
 def effective_token_source(cfg: Dict[str, Any]) -> str:

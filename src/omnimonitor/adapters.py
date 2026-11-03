@@ -26,6 +26,11 @@ LABELS = {
     "grok_sessions": "Grok CLI",
     "claude_code": "Claude Code",
     "codex": "Codex",
+    "gemini_cli": "Gemini CLI",
+    "qwen_code": "Qwen Code",
+    "kimi": "Kimi",
+    "opencode": "opencode",
+    "copilot_otel": "Copilot CLI",
 }
 
 
@@ -147,6 +152,9 @@ def parse_codex_line(line: str, ctx: Dict[str, Any], file_key: str) -> List[Toke
         return []
     if kind != "event_msg" or payload.get("type") != "token_count":
         return []
+    snap = codex_rate_limits(payload.get("rate_limits"), _ts(obj.get("timestamp")))
+    if snap and snap["observed_at"] >= float((ctx.get("limits") or {}).get("observed_at", 0)):
+        ctx["limits"] = snap
     info = payload.get("info") if isinstance(payload.get("info"), dict) else None
     if not info:
         return []  # Codex writes info:null before the first response
@@ -178,6 +186,46 @@ def parse_codex_line(line: str, ctx: Dict[str, Any], file_key: str) -> List[Toke
                        source="codex", project=project_name(ctx.get("cwd")))]
 
 
+def _codex_window(w: Any, observed_at: float) -> Optional[Dict[str, Any]]:
+    if not isinstance(w, dict):
+        return None
+    used = w.get("used_percent")
+    if isinstance(used, bool) or not isinstance(used, (int, float)) or not 0 <= used <= 100:
+        return None
+    out: Dict[str, Any] = {"used_percent": float(used)}
+    wm = w.get("window_minutes")
+    if isinstance(wm, (int, float)) and not isinstance(wm, bool) and 0 < wm < 60 * 24 * 400:
+        out["window_minutes"] = int(wm)
+    ra = w.get("resets_at")
+    if isinstance(ra, (int, float)) and not isinstance(ra, bool) and ra > 1e9:
+        out["resets_at"] = float(ra)
+    else:
+        rin = w.get("resets_in_seconds")  # older Codex versions
+        if isinstance(rin, (int, float)) and not isinstance(rin, bool) and 0 <= rin < 4e7:
+            out["resets_at"] = observed_at + float(rin)
+    return out
+
+
+def codex_rate_limits(rl: Any, observed_at: Optional[float]) -> Optional[Dict[str, Any]]:
+    """``token_count.rate_limits`` (Codex ``RateLimitSnapshot``): the ChatGPT plan's usage
+    windows as Codex last saw them. ``primary`` is the short window (≈5 h), ``secondary``
+    the long one (≈ weekly); ``used_percent`` is 0-100 and ``resets_at`` unix seconds."""
+    if not isinstance(rl, dict) or observed_at is None:
+        return None
+    windows = {}
+    for name in ("primary", "secondary"):
+        w = _codex_window(rl.get(name), observed_at)
+        if w:
+            windows[name] = w
+    if not windows:
+        return None
+    snap: Dict[str, Any] = {"observed_at": observed_at, "windows": windows}
+    for k in ("plan_type", "limit_id", "limit_name"):
+        if isinstance(rl.get(k), str) and rl[k]:
+            snap[k] = rl[k][:60]
+    return snap
+
+
 def iter_codex_files(homes: List[Path]) -> Iterator[Path]:
     for home in homes:
         seen_rel = set()
@@ -202,6 +250,7 @@ class JsonlScanner:
 
     name = ""
     label = ""
+    replace = False  # True: a later record with the same id supersedes the earlier one
 
     def __init__(self, homes: List[Path], history):
         self.homes = [Path(h) for h in homes]
@@ -264,9 +313,14 @@ class JsonlScanner:
             except OSError:
                 stats["errors"] += 1
                 continue
-            stats["new_events"] += self.history.add_events(events)
+            stats["new_events"] += self.history.add_events(events, replace=self.replace)
+            self._after_file(ctx)
             self.history.set_scan_ctx(key, st.st_size, st.st_mtime, offset, ctx)
         return stats
+
+
+    def _after_file(self, ctx: Dict[str, Any]) -> None:
+        """Hook for scanners that also extract non-token data (e.g. Codex plan limits)."""
 
 
 class ClaudeCodeScanner(JsonlScanner):
@@ -296,6 +350,42 @@ class CodexScanner(JsonlScanner):
     def parse(self, line, ctx, key):
         return parse_codex_line(line, ctx, key)
 
+    def _after_file(self, ctx):
+        snap = ctx.get("limits")
+        if not snap or self.history is None:
+            return
+        try:
+            old = json.loads(self.history.meta(CODEX_LIMITS_META) or "{}")
+        except ValueError:
+            old = {}
+        if float(snap.get("observed_at", 0)) > float(old.get("observed_at", 0) or 0):
+            self.history.set_meta(CODEX_LIMITS_META, json.dumps(snap))
+
+
+CODEX_LIMITS_META = "limits:codex"
+
+
+def codex_limits(history) -> Optional[Dict[str, Any]]:
+    """The newest Codex plan-limit snapshot seen in any rollout file, or None."""
+    try:
+        snap = json.loads(history.meta(CODEX_LIMITS_META) or "null")
+    except (ValueError, AttributeError):
+        return None
+    return snap if isinstance(snap, dict) and snap.get("windows") else None
+
+
+def _local_classes(cfg: Dict[str, Any]) -> List[Tuple[Any, List[Path]]]:
+    from omnimonitor import local_adapters as la
+    return [
+        (ClaudeCodeScanner, config_mod.claude_homes(cfg)),
+        (CodexScanner, config_mod.codex_homes(cfg)),
+        (la.GeminiCliScanner, config_mod.gemini_homes(cfg)),
+        (la.QwenCodeScanner, config_mod.qwen_homes(cfg)),
+        (la.KimiScanner, config_mod.kimi_session_roots(cfg)),
+        (la.OpencodeScanner, config_mod.opencode_dirs(cfg)),
+        (la.CopilotOtelScanner, config_mod.copilot_otel_paths(cfg)),
+    ]
+
 
 def scanners(cfg: Dict[str, Any], history, include_grok: bool = True) -> List[Any]:
     """Enabled scanners, Grok first."""
@@ -303,10 +393,9 @@ def scanners(cfg: Dict[str, Any], history, include_grok: bool = True) -> List[An
     if include_grok:
         out.append(GrokSessionsScanner(config_mod.grok_home(cfg), history))
     extra = config_mod.extra_token_sources(cfg)
-    if "claude_code" in extra:
-        out.append(ClaudeCodeScanner(config_mod.claude_homes(cfg), history))
-    if "codex" in extra:
-        out.append(CodexScanner(config_mod.codex_homes(cfg), history))
+    for cls, homes in _local_classes(cfg):
+        if cls.name in extra:
+            out.append(cls(homes, history))
     return out
 
 
@@ -320,10 +409,12 @@ def describe(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
     rows.append({"name": "grok_sessions", "label": LABELS["grok_sessions"],
                  "enabled": ts == "grok_sessions", "found": ok,
                  "paths": [str(config_mod.grok_home(cfg) / "sessions")], "note": why})
-    for cls, homes in ((ClaudeCodeScanner, config_mod.claude_homes(cfg)),
-                       (CodexScanner, config_mod.codex_homes(cfg))):
+    for cls, homes in _local_classes(cfg):
         sc = cls(homes, None)
-        ok, why = sc.available()
+        try:
+            ok, why = sc.available()
+        except OSError as e:
+            ok, why = False, "cannot read: %s" % e.__class__.__name__
         rows.append({"name": sc.name, "label": sc.label, "enabled": sc.name in extra,
                      "found": ok, "paths": [str(r) for r in sc.roots()], "note": why})
     return rows

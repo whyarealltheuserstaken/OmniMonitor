@@ -7,6 +7,14 @@ it can also count **Claude Code** and **Codex** tokens from their local logs, br
 by tool / model / project, estimate cost from **your own** price table, project your weekly
 pace, alert you at thresholds, export CSV/JSON and be personalized from a settings page.
 
+Since 0.3.0 it monitors **many more AI tools and accounts, all opt-in**: Gemini CLI, Qwen
+Code, Kimi CLI / Kimi Code / Kimi Work, opencode and the GitHub Copilot CLI from their local
+logs, plus official usage / balance APIs for Claude (Anthropic Admin), OpenAI, xAI, DeepSeek,
+Kimi (Moonshot), GitHub Copilot, Cursor teams, OpenRouter and Ollama Cloud, with USD
+budgets, per-provider alerts and a tray icon that can follow the provider you pick. The full
+matrix, including what is **not** supported and why, is in
+[docs/providers.md](docs/providers.md).
+
 Runs on **macOS** (Apple Silicon and Intel), **Windows 10/11** and **Linux** (GNOME/KDE). It
 is the standalone successor to the old SwiftBar plugin in [`legacy/`](legacy/), so SwiftBar
 is no longer needed.
@@ -40,6 +48,43 @@ by Javis (MIT License, © 2026 Javis), an Electron desktop widget for token usag
 AI tools. OmniMonitor copies **no code, text, icons or images** from it. Everything is our own
 Python re-implementation of the ideas. See [docs/inspiration-notes.md](docs/inspiration-notes.md)
 for what we adopted, what we built differently and why.
+
+## What's new in 0.3.0
+
+- **33-entry provider matrix** ([docs/providers.md](docs/providers.md), generated from the
+  code): 12 supported, 6 partial and 15 not supported, each with source, auth, what's shown,
+  reset period, confidence and doc links. Unsupported entries say why and what would be
+  needed. `omnimonitor providers` prints the same table.
+- **New local-log adapters (read-only, incremental):** Gemini CLI, Qwen Code, Kimi CLI /
+  Kimi Code / Kimi Work, opencode (JSON files or `opencode.db` opened read-only) and
+  GitHub Copilot CLI (OpenTelemetry file export). **Codex plan limits:** the 5-hour and
+  weekly % that Codex itself writes to its logs.
+- **New account adapters (official APIs, your own key):** Anthropic Admin cost report,
+  OpenAI organization costs, xAI prepaid balance, DeepSeek balance, Moonshot (Kimi API)
+  balance, GitHub Copilot premium requests, Cursor team spend, OpenRouter key credits and
+  limits, Ollama Cloud balance. Called at most every 5 minutes (default 15), HTTPS only, to an
+  allow-list of hosts, no redirects. The last good reading is kept when a call fails.
+- **Per-provider switches and a primary picker:** `omnimonitor providers enable|disable|primary`
+  or the Providers table in Settings. The tray shows the primary provider's % (Grok, Codex,
+  Copilot, Cursor team, OpenRouter, Ollama Cloud or your tightest budget). When the primary
+  has no reading, the tray falls back to the Grok pool and says so.
+- **Unified provider cards** on the stats page: one card per enabled provider with tokens
+  and cost today / 7 days / 30 days, limit %, pace, reset time, balances and errors, plus
+  **all-tools totals**.
+- **USD budgets:** daily, weekly and monthly caps on the ≈ cost of local tool usage, with
+  alerts at `budget_alert_percent` and at 100 %.
+- **Per-provider alert thresholds** (`provider_thresholds`), e.g. `{"codex": [75, 90]}`.
+- **Compact tray tooltip** ("OmniMonitor - Grok weekly pool 38% used · today 1.2M tok · $3.40") and one menu line per
+  enabled provider.
+- **API keys** only from environment variables or a chmod-600 secrets file
+  (`omnimonitor secrets set NAME`, input hidden). They are never accepted from or shown in the
+  web UI, which shows only whether a key is set and where it came from (env / file).
+- **Config export / import** (`omnimonitor config export [FILE]`, `config import FILE`):
+  validated settings only, never tokens, keys or environment overrides.
+- **`omnimonitor doctor`** now checks every enabled provider: log folders found for local
+  adapters; key present, secrets file private and one live read for account adapters
+  (skip the live read with `--offline`).
+- **Exports** include provider readings (`export --kind providers`, CSV or JSON).
 
 ## What's new in 0.2.0
 
@@ -279,6 +324,24 @@ to defaults and shows the error in the menu. See [`config.example.json`](config.
 | `accent_color` | `"#2a8bd8"` | `#rrggbb` for bars, heatmap and buttons |
 | `display_name` | `""` | title of the stats page |
 | `hidden_cards` | `[]` | any of `forecast`, `burn`, `limit`, `heatmap`, `breakdown`, `tools`, `models`, `projects`, `cost`, `insights` |
+| `providers` | `{}` | per-provider switches, e.g. `{"gemini_cli": {"enabled": true}, "deepseek": {"enabled": true}}`. Ids: `omnimonitor providers`. Entries here override `extra_token_sources` |
+| `primary_provider` | `"grok"` | what the tray icon shows: `grok`, `codex`, `github_copilot`, `cursor_team`, `openrouter`, `ollama_cloud` or `budget` |
+| `provider_thresholds` | `{}` | per-provider USED % alerts, e.g. `{"codex": [75, 90]}`; missing = `notify_thresholds` |
+| `budgets` | `{"daily": 0, "weekly": 0, "monthly": 0}` | USD caps on the ≈ cost of local tool usage (recorded cost, else your `prices`); 0 = off |
+| `budget_alert_percent` | `80` | warn at this % of each budget (and again at 100 %) |
+| `provider_poll_seconds` | `900` | how often account APIs are called; minimum **300** |
+| `gemini_home` / `qwen_home` / `kimi_home` / `opencode_home` / `copilot_otel_path` | `""` | override log locations; empty = the tool's own default / env var (`$GEMINI_CLI_HOME`, `$KIMI_CODE_HOME`, `$XDG_DATA_HOME`, `$COPILOT_OTEL_FILE_EXPORTER_PATH`) |
+| `moonshot_region` | `"global"` | `global` (api.moonshot.ai, USD) or `cn` (api.moonshot.cn, CNY) |
+| `github_username` / `copilot_premium_allowance` | `""` / `0` | for the Copilot premium-request API; the % is shown only if you enter your plan's monthly allowance |
+| `xai_team_id` / `cursor_email` | `""` | xAI team id for the balance call; your row in the Cursor team spend list |
+
+**API keys never go in `config.json`.** Set them as environment variables or with
+`omnimonitor secrets set NAME` (stored in `secrets.json` next to the config, chmod 600; a
+secrets file readable by other users is ignored). Variables: `ANTHROPIC_ADMIN_KEY`,
+`OPENAI_ADMIN_KEY`, `XAI_MANAGEMENT_KEY` (+ `XAI_TEAM_ID`), `DEEPSEEK_API_KEY`,
+`MOONSHOT_API_KEY`, `GITHUB_COPILOT_TOKEN` (or `GITHUB_TOKEN`), `CURSOR_ADMIN_KEY`,
+`OPENROUTER_API_KEY`, `OLLAMA_API_KEY`. `omnimonitor secrets list` shows which are set and
+where from, never the values.
 
 **Settings page / `config set`:** the settings page can change only the personalization,
 data and notification keys above (plus `poll_interval_seconds`, `estimate_*` and
@@ -321,10 +384,16 @@ app keeps reading the old dir instead. Uninstall the old package with
   token itself, and never reads browser cookies, the macOS Keychain or other apps' stores.
   When the token is stale, it runs the official `grok models` command (no shell) and lets
   the CLI refresh its own login.
-- Claude Code / Codex logs are read only if you enable them, read-only, and only token
-  counts, model names, timestamps, session ids and the project **folder name** are stored.
-- The only network request goes to the billing endpoint. There is no telemetry and no
-  update check.
+- Other tools' logs (Claude Code, Codex, Gemini CLI, Qwen Code, Kimi, opencode, Copilot
+  OTel) are read only if you enable them, read-only, and only token counts, cost, model
+  names, timestamps, session ids and the project **folder name** are stored.
+- Network requests go to the Grok billing endpoint and, **only for account providers you
+  enable and give a key**, to their official API hosts (HTTPS, fixed allow-list, no
+  redirects, at most every 5 minutes). Keys come from env vars or the chmod-600
+  `secrets.json` and are never sent to the web page or written to logs or exports. There is
+  no telemetry and no update check.
+- OmniMonitor never reads browser cookies, keychains or other apps' login sessions to reach
+  a provider; providers that only expose usage that way are listed as not supported.
 - The stats page binds to **127.0.0.1 only**, on a random port, under a random per-run URL
   secret. It also checks the `Host` header (DNS-rebinding guard) and sends a strict CSP. The
   only write is `POST …/api/settings`, which also requires a matching `Origin`, a per-run CSRF
@@ -350,7 +419,8 @@ Start with `omnimonitor doctor`.
 | No icon on Linux | See the [AppIndicator caveat](#linux). Use `serve --open` meanwhile |
 | No icon on Windows | Check the hidden-icons overflow (^) |
 | Stats page won't open | `omnimonitor serve` prints the URL. The secret changes on every run, so old bookmarks stop working |
-| Claude Code / Codex missing | Enable them (`extra_token_sources` or the settings page), then check `omnimonitor providers` |
+| A tool is missing | Enable it (`omnimonitor providers enable ID` or Settings → Providers), then run `omnimonitor doctor` |
+| An account provider shows "key rejected" / "HTTP 4xx" | Check the key type in [docs/providers.md](docs/providers.md) (several need an *admin* or *management* key, not a normal API key) |
 | Cost says "no estimate" | Expected until you add prices for those models (`prices`). Nothing is bundled |
 | No desktop alerts | `omnimonitor notify-test`. Alerts are off in demo mode, and Linux needs a notification daemon |
 | Numbers look stale | The menu marks stale data. Polling is ≥ 60 s; use **Refresh Now** |

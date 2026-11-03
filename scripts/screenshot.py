@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SHOTS = [  # (page, file, width, height)
     ("", "screenshot-stats.png", 1100, int(os.environ.get("STATS_HEIGHT", "2300"))),
     ("mini", "screenshot-mini.png", 420, 560),
-    ("settings", "screenshot-settings.png", 1000, 1500),
+    ("settings", "screenshot-settings.png", 1000, 2300),
 ]
 
 

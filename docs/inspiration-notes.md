@@ -94,3 +94,21 @@ more). Highlights:
   a per-run CSRF token in a custom header, JSON-only POST, an allow-list of keys. Keys that
   run commands or hold secrets (`command`, `grok_refresh_command`, `token`,
   `grok_billing_url`, file paths) are **not** editable from the browser.
+
+## 0.3.0: more providers
+
+Henry asked for "all popular" tools. Token Monitor and
+[tokscale](https://github.com/junhoyeo/tokscale) (both MIT) were used only as a map of
+*which* tools keep usage logs and where. Every reader in `local_adapters.py` was written
+from scratch against the tools' own documentation or open-source code (links in
+[providers.md](providers.md)) and tested with synthetic fixtures. No code, tables or
+test data were copied.
+
+Built differently on purpose:
+
+* **No cookie / keychain / session scraping.** Some tools read dashboard cookies or app
+  OAuth tokens to show consumer plan limits (Claude, ChatGPT, Cursor, Antigravity). We list
+  those as *not supported* with the reason, instead of borrowing credentials.
+* **No bundled prices.** Costs come from what the tool recorded, or your own `prices`.
+* **Account APIs only with a key you create**, on a fixed host allow-list, rate-limited.
+* **The matrix is generated from code**, so the docs cannot drift from what ships.
