@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+*.spec
+.venv*/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+# never commit real configs or tokens
+config.json
+!legacy/swiftbar/config.example.json
+*.sqlite3
+.DS_Store
+Thumbs.db

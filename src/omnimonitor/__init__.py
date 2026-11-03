@@ -1,0 +1,13 @@
+"""OmniMonitor: unofficial cross-platform tray app for Grok / X Super weekly usage."""
+
+__version__ = "0.1.0"
+APP_NAME = "omnimonitor"
+APP_DISPLAY_NAME = "OmniMonitor"
+APP_ID = "com.omnimonitor.tray"
+
+# Names used before the project was renamed to OmniMonitor. Kept so existing installs keep
+# working: the old config dir is migrated (or read as a fallback) and old autostart entries
+# are cleaned up.
+LEGACY_APP_NAME = "grok-usage-tray"
+LEGACY_APP_ID = "io.github.grok-usage-tray"
+LEGACY_ENV_PREFIX = "GROK_USAGE_TRAY_"

@@ -1,0 +1,5 @@
+{"config": {"currentPeriod": {"type": "USAGE_PERIOD_TYPE_WEEKLY", "start": "2026-11-02T00:00:00Z", "end": "2026-11-09T00:00:00Z"},
+  "creditUsagePercent": 28.5,
+  "productUsage": [{"product": "GrokBuild", "usagePercent": 20.0}, {"product": "GrokChat", "usagePercent": 8.5}],
+  "onDemandCap": {"val": "0"}, "isUnifiedBillingUser": true,
+  "billingPeriodStart": "2026-10-15T00:00:00Z", "billingPeriodEnd": "2026-11-15T00:00:00Z"}}

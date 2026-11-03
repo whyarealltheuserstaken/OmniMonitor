@@ -1,0 +1,13 @@
+{
+  "source": "demo",
+  "usage_page_url": "https://grok.com/dashboard",
+  "token": "",
+  "token_file": "",
+  "grok_auth_file": "",
+  "grok_refresh_command": "",
+  "refresh_timeout_seconds": 60,
+  "refresh_skew_seconds": 300,
+  "command": "",
+  "timeout_seconds": 15,
+  "use_sf_symbols": false
+}

@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omnimonitor"
+version = "0.1.0"
+description = "Unofficial cross-platform tray app for your Grok weekly usage, with local token stats. Not affiliated with xAI or X."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "OmniMonitor contributors" }]
+keywords = ["grok", "xai", "tray", "menubar", "usage", "tokens"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Environment :: MacOS X",
+  "Environment :: Win32 (MS Windows)",
+  "Environment :: X11 Applications",
+  "Topic :: Utilities",
+]
+dependencies = [
+  "pystray>=0.19",
+  "Pillow>=9.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "ruff>=0.4"]
+
+[project.scripts]
+omnimonitor = "omnimonitor.cli:main"
+
+[project.gui-scripts]
+omnimonitor-gui = "omnimonitor.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/whyarealltheuserstaken/OmniMonitor"
+Issues = "https://github.com/whyarealltheuserstaken/OmniMonitor/issues"
+Changelog = "https://github.com/whyarealltheuserstaken/OmniMonitor/blob/main/CHANGELOG.md"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+omnimonitor = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I"]
+ignore = ["B008", "B904", "E501"]  # B904: we deliberately re-raise as user-facing UsageError

@@ -1,0 +1,13 @@
+{
+  "source": "grok_cli_billing",
+  "token_source": "auto",
+  "poll_interval_seconds": 120,
+  "usage_page_url": "https://grok.com/dashboard",
+  "grok_home": "",
+  "grok_auth_file": "",
+  "grok_refresh_command": "auto",
+  "web_port": 0,
+  "estimate_weekly_limit": true,
+  "estimate_min_used_percent": 5.0,
+  "heatmap_weeks": 53
+}

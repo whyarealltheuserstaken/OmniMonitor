@@ -1,0 +1,81 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write   # to create the GitHub Release
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14        # Apple Silicon
+            asset: omnimonitor-macos-arm64
+          - os: macos-15-intel  # Intel (macos-13 runners were retired Dec 2025)
+            asset: omnimonitor-macos-x86_64
+          - os: windows-latest
+            asset: omnimonitor-windows-x86_64
+          - os: ubuntu-latest
+            asset: omnimonitor-linux-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install . "pyinstaller>=6"
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          pyinstaller --noconfirm --windowed --name omnimonitor \
+            --osx-bundle-identifier com.omnimonitor.tray \
+            --collect-data omnimonitor --hidden-import pystray._darwin \
+            scripts/pyinstaller_entry.py
+          # menu-bar-only app: no Dock icon
+          /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" dist/omnimonitor.app/Contents/Info.plist
+          cd dist && ditto -c -k --keepParent omnimonitor.app ../${{ matrix.asset }}.zip
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --name omnimonitor `
+            --collect-data omnimonitor --hidden-import pystray._win32 `
+            scripts/pyinstaller_entry.py
+          Compress-Archive -Path dist/omnimonitor.exe -DestinationPath ${{ matrix.asset }}.zip
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          pyinstaller --noconfirm --onefile --name omnimonitor \
+            --collect-data omnimonitor \
+            --hidden-import pystray._xorg --hidden-import pystray._appindicator \
+            scripts/pyinstaller_entry.py
+          tar -C dist -czf ${{ matrix.asset }}.tar.gz omnimonitor
+      - name: Smoke test (non-GUI command)
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "macOS" ]; then B=dist/omnimonitor.app/Contents/MacOS/omnimonitor
+          elif [ "${{ runner.os }}" = "Windows" ]; then B=dist/omnimonitor.exe
+          else B=dist/omnimonitor; fi
+          "$B" --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}.*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - run: (cd artifacts && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt)
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+          draft: true   # review, then publish by hand

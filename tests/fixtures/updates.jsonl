@@ -1,0 +1,8 @@
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"(prompt text is never stored)"}},"_meta":{"agentTimestampMs":1762300000000,"eventId":"e0"}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk"},"_meta":{"agentTimestampMs":1762300030000,"eventId":"e1"}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"turn_completed","usage":{"modelUsage":{"grok-build":{"inputTokens":12000,"cachedReadTokens":9000,"cacheCreationTokens":0,"outputTokens":800,"reasoningTokens":300,"costUsdTicks":150000000}}}},"_meta":{"agentTimestampMs":1762300090000,"eventId":"e2"}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk"},"_meta":{"agentTimestampMs":1762386400000,"eventId":"e3"}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"turn_completed","durationMs":45000,"usage":{"modelUsage":{"grok-build":{"inputTokens":5000,"outputTokens":500},"grok-fast":{"inputTokens":1000,"outputTokens":100,"cachedReadTokens":99999}}}},"_meta":{"agentTimestampMs":1762386440000,"eventId":"e4"}}}
+not json at all
+{"jsonrpc":"2.0","method":"session/update","params":{"update":{"sessionUpdate":"turn_completed","usage":{"modelUsage":{"weird":{"inputTokens":1e15,"outputTokens":1}}}},"_meta":{"agentTimestampMs":1762386500000,"eventId":"e5"}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"update":{"sessionUpdate":"turn_completed","usage":{"modelUsage":{"grok-build":{"inputTokens":"oops","outputTokens":10}}}}}}
