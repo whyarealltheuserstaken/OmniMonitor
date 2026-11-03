@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnimonitor"
-version = "0.1.0"
+version = "0.2.0"
 description = "Unofficial cross-platform tray app for your Grok weekly usage, with local token stats. Not affiliated with xAI or X."
 readme = "README.md"
 requires-python = ">=3.9"

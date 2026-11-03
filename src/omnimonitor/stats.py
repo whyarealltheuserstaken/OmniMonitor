@@ -11,8 +11,8 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 NA_NO_PROVIDER = "Token stats are off (token_source = none)."
-NA_NO_DATA = ("No token data recorded yet. Token counts come only from the Grok CLI's local "
-              "session logs on this computer.")
+NA_NO_DATA = ("No token data recorded yet. Token counts come only from local CLI logs on "
+              "this computer (Grok CLI, plus Claude Code / Codex if you enabled them).")
 NA_LIMIT = ("xAI does not expose a weekly token limit - only a usage percentage. "
             "See README > Token stats.")
 
@@ -99,10 +99,69 @@ def _na(reason: str) -> Dict[str, Any]:
     return {"value": None, "reason": reason}
 
 
+def is_grok(e: Dict[str, Any]) -> bool:
+    return (e.get("source") or "grok_sessions") == "grok_sessions"
+
+
+def group(events: Iterable[Dict[str, Any]], key: str, prices: Dict[str, Any],
+          limit: int = 12) -> List[Dict[str, Any]]:
+    """Per-tool / model / project rows with real counts and labeled costs."""
+    from omnimonitor.adapters import label as tool_label
+    from omnimonitor.pricing import estimate_event_cost
+
+    acc: Dict[str, Dict[str, Any]] = {}
+    for e in events:
+        k = e.get(key) or ("grok_sessions" if key == "source" else "")
+        a = acc.setdefault(k, {"tokens": 0, "events": 0, "input": 0, "output": 0,
+                               "cache_read": 0, "recorded_usd": None, "estimated_usd": None,
+                               "unpriced_tokens": 0, "sessions": set()})
+        t = event_total(e)
+        a["tokens"] += t
+        a["events"] += 1
+        a["input"] += int(e.get("input_tokens") or 0)
+        a["output"] += int(e.get("output_tokens") or 0)
+        a["cache_read"] += int(e.get("cache_read_tokens") or 0)
+        a["sessions"].add(e.get("session_id"))
+        if e.get("cost_usd") is not None:
+            a["recorded_usd"] = (a["recorded_usd"] or 0.0) + float(e["cost_usd"])
+        c = estimate_event_cost(e, prices)
+        if c is None:
+            a["unpriced_tokens"] += t
+        else:
+            a["estimated_usd"] = (a["estimated_usd"] or 0.0) + c
+    total = sum(a["tokens"] for a in acc.values()) or 1
+    rows = []
+    for k, a in sorted(acc.items(), key=lambda kv: -kv[1]["tokens"])[:limit]:
+        name = tool_label(k) if key == "source" else (k or "(unknown)")
+        rows.append({"key": k, "name": name, "tokens": a["tokens"], "share": a["tokens"] / total,
+                     "events": a["events"], "sessions": len(a["sessions"]),
+                     "input": a["input"], "output": a["output"],
+                     "cache_hit": (a["cache_read"] / a["input"]) if a["input"] else None,
+                     "recorded_usd": a["recorded_usd"], "estimated_usd": a["estimated_usd"],
+                     "unpriced_tokens": a["unpriced_tokens"]})
+    return rows
+
+
+def ranges(now: datetime, week: Optional[Tuple[float, float, str]], tz=None
+           ) -> List[Tuple[str, str, float, float]]:
+    """(id, label, start_ts, end_ts)."""
+    local = now.astimezone(tz) if tz else now.astimezone()
+    midnight = local.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+    end = now.timestamp() + 1
+    out = [("today", "Today", midnight, end)]
+    if week:
+        out.append(("week", "This billing week", week[0], week[1]))
+    out += [("7d", "Last 7 days", end - 7 * 86400, end),
+            ("30d", "Last 30 days", end - 30 * 86400, end),
+            ("all", "All time", 0.0, end)]
+    return out
+
+
 def compute(events: List[Dict[str, Any]], turns: List[Dict[str, Any]],
             billing: Optional[Dict[str, Any]], cfg: Dict[str, Any], now: datetime,
             provider: str, provider_note: str = "", data_since: Optional[float] = None,
-            tz=None) -> Dict[str, Any]:
+            tz=None, snapshots: Optional[List[Dict[str, Any]]] = None,
+            tools: Optional[List[str]] = None) -> Dict[str, Any]:
     """Build the JSON the stats page / tray menu render."""
     now_local = now.astimezone(tz) if tz else now.astimezone()
     today = now_local.date()
@@ -145,6 +204,7 @@ def compute(events: List[Dict[str, Any]], turns: List[Dict[str, Any]],
 
         # ---- this week
         start_ts = end_ts = None
+        label = ""
         if billing and billing.get("period_start") and billing.get("resets_at"):
             from omnimonitor.timeutil import parse_time
             ps, pe = parse_time(billing["period_start"]), parse_time(billing["resets_at"])
@@ -155,7 +215,8 @@ def compute(events: List[Dict[str, Any]], turns: List[Dict[str, Any]],
             start_ts = end_ts - 7 * 86400
             label = "last 7 days (billing week unknown)"
         wk = tokens_between(events, start_ts, end_ts)
-        out["week_tokens"] = {"value": wk, "window": label}
+        grok_wk = tokens_between([e for e in events if is_grok(e)], start_ts, end_ts)
+        out["week_tokens"] = {"value": wk, "window": label, "grok_value": grok_wk}
 
     # ---- weekly limit (Y)
     limit: Dict[str, Any] = {"value": None, "reason": NA_LIMIT, "estimate": None}
@@ -173,12 +234,13 @@ def compute(events: List[Dict[str, Any]], turns: List[Dict[str, Any]],
             if str(p.get("product")).lower() == "grokbuild" and p.get("used_percent"):
                 pct, basis = p["used_percent"], "Grok Build share"
                 break
-        est, why = estimate_weekly_limit(out["week_tokens"]["value"], pct,
+        # Only Grok CLI tokens count against the Grok pool - never Claude Code / Codex.
+        est, why = estimate_weekly_limit(out["week_tokens"]["grok_value"], pct,
                                          float(cfg.get("estimate_min_used_percent", 5.0)))
         if est:
             limit["estimate"] = {
                 "value": est, "basis": basis, "used_percent": pct,
-                "caveat": ("ESTIMATE: local CLI tokens this week ÷ %s %% used. Credits are "
+                "caveat": ("ESTIMATE: local Grok CLI tokens this week ÷ %s %% used. Credits are "
                            "weighted by model and caching, and usage outside this computer's "
                            "Grok CLI isn't in the logs, so this can be far off." % basis)}
         else:
@@ -219,4 +281,49 @@ def compute(events: List[Dict[str, Any]], turns: List[Dict[str, Any]],
     out["top_models"] = top_models
     out["top_plugins"] = []  # not present in any known local data -> section hidden
     out["insights"] = insights
+    _extras(out, events, billing, cfg, now, tz, snapshots, tools, bool(reason), is_demo)
     return out
+
+
+def _extras(out, events, billing, cfg, now, tz, snapshots, tools, no_data, is_demo) -> None:
+    """0.2.0 additions: breakdowns, cost, forecast, burn rate, personalization."""
+    from omnimonitor import forecast as fc
+    from omnimonitor.adapters import label as tool_label
+    from omnimonitor.pricing import DEMO_PRICES, clean_prices, summarize_cost
+
+    prices = clean_prices(cfg.get("prices"))
+    prices_demo = False
+    if is_demo and not prices:
+        prices, prices_demo = dict(DEMO_PRICES), True
+    out["tools"] = [{"key": t, "name": tool_label(t)} for t in (tools or [])]
+    week = None
+    if billing and billing.get("period_start") and billing.get("resets_at"):
+        from omnimonitor.timeutil import parse_time
+        ps, pe = parse_time(billing["period_start"]), parse_time(billing["resets_at"])
+        if ps and pe and ps < pe:
+            week = (ps.timestamp(), pe.timestamp(), "This billing week")
+    br: Dict[str, Any] = {}
+    cost: Dict[str, Any] = {}
+    if events and not no_data:
+        for rid, rlabel, a, b in ranges(now, week, tz):
+            evs = [e for e in events if a <= e["ts"] < b]
+            br[rid] = {"label": rlabel, "tokens": sum(event_total(e) for e in evs),
+                       "tools": group(evs, "source", prices),
+                       "models": group(evs, "model", prices),
+                       "projects": group(evs, "project", prices)}
+            cost[rid] = summarize_cost(evs, prices)
+            cost[rid]["label"] = rlabel
+    out["breakdowns"] = br
+    out["cost"] = {"ranges": cost, "priced_models": len(prices), "demo_prices": prices_demo,
+                   "note": ("DEMO prices" if prices_demo else
+                            "Estimates use YOUR price table (config \"prices\"). "
+                            "Recorded = cost the CLI wrote in its own logs.")
+                   if prices else "No price table set - add one in Settings to estimate cost."}
+    out["forecast"] = fc.pace(billing, now, snapshots)
+    out["burn"] = fc.burn_rate(events, now, tz) if events and not no_data else None
+    out["personal"] = {"display_name": str(cfg.get("display_name") or "")[:40],
+                       "theme": cfg.get("theme") if cfg.get("theme") in (
+                           "dark", "light", "auto") else "dark",
+                       "accent_color": cfg.get("accent_color") or "#2a8bd8",
+                       "hidden_cards": [c for c in (cfg.get("hidden_cards") or [])
+                                        if isinstance(c, str)]}

@@ -44,9 +44,20 @@ class History:
         secure_file(self.path)
         with self._lock:
             self._db.executescript(SCHEMA)
+            self._migrate()
             self._db.execute("INSERT OR IGNORE INTO meta(key, value) VALUES('installed_at', ?)",
                              (str(time.time()),))
             self._db.commit()
+
+    def _migrate(self) -> None:
+        """0.2.0: add token_events.project and scan_state.ctx_json to older databases."""
+        def cols(table):
+            return {r[1] for r in self._db.execute("PRAGMA table_info(%s)" % table)}
+        if "project" not in cols("token_events"):
+            self._db.execute("ALTER TABLE token_events ADD COLUMN project TEXT")
+        if "ctx_json" not in cols("scan_state"):
+            self._db.execute("ALTER TABLE scan_state ADD COLUMN ctx_json TEXT")
+        self._db.execute("UPDATE token_events SET source='grok_sessions' WHERE source IS NULL")
 
     def close(self) -> None:
         with self._lock:
@@ -74,8 +85,29 @@ class History:
     def set_scan_state(self, path: str, size: int, mtime: float, offset: int,
                        turn_start_ms: Optional[float]) -> None:
         with self._lock:
-            self._db.execute("INSERT OR REPLACE INTO scan_state VALUES(?,?,?,?,?)",
-                             (path, size, mtime, offset, turn_start_ms))
+            self._db.execute("INSERT OR REPLACE INTO scan_state(path, size, mtime, offset,"
+                             " turn_start_ms, ctx_json) VALUES(?,?,?,?,?,"
+                             " (SELECT ctx_json FROM scan_state WHERE path=?))",
+                             (path, size, mtime, offset, turn_start_ms, path))
+            self._db.commit()
+
+    def scan_ctx(self, path: str) -> Dict[str, Any]:
+        """Per-file parser context for adapters that need state across lines (e.g. Codex)."""
+        with self._lock:
+            row = self._db.execute("SELECT ctx_json FROM scan_state WHERE path=?",
+                                   (path,)).fetchone()
+        try:
+            v = json.loads(row[0]) if row and row[0] else {}
+        except ValueError:
+            v = {}
+        return v if isinstance(v, dict) else {}
+
+    def set_scan_ctx(self, path: str, size: int, mtime: float, offset: int,
+                     ctx: Dict[str, Any]) -> None:
+        with self._lock:
+            self._db.execute("INSERT OR REPLACE INTO scan_state(path, size, mtime, offset,"
+                             " turn_start_ms, ctx_json) VALUES(?,?,?,?,NULL,?)",
+                             (path, size, mtime, offset, json.dumps(ctx)))
             self._db.commit()
 
     # ----------------------------------------------------------------- inserts
@@ -86,10 +118,13 @@ class History:
             cur = self._db.cursor()
             for e in events:
                 cur.execute(
-                    "INSERT OR IGNORE INTO token_events VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT OR IGNORE INTO token_events(event_id, model, ts, session_id,"
+                    " input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,"
+                    " reasoning_tokens, cost_usd, source, project)"
+                    " VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                     (e.event_id, e.model, e.ts, e.session_id, e.input_tokens, e.output_tokens,
                      e.cache_read_tokens, e.cache_creation_tokens, e.reasoning_tokens,
-                     e.cost_usd, e.source))
+                     e.cost_usd, e.source, getattr(e, "project", "") or None))
                 n += cur.rowcount if cur.rowcount > 0 else 0
             self._db.commit()
         return n
@@ -119,10 +154,11 @@ class History:
         with self._lock:
             rows = self._db.execute(
                 "SELECT ts, session_id, model, input_tokens, output_tokens, cache_read_tokens,"
-                " cache_creation_tokens, reasoning_tokens, cost_usd FROM token_events"
-                " ORDER BY ts").fetchall()
+                " cache_creation_tokens, reasoning_tokens, cost_usd, source, project"
+                " FROM token_events ORDER BY ts").fetchall()
         keys = ("ts", "session_id", "model", "input_tokens", "output_tokens",
-                "cache_read_tokens", "cache_creation_tokens", "reasoning_tokens", "cost_usd")
+                "cache_read_tokens", "cache_creation_tokens", "reasoning_tokens", "cost_usd",
+                "source", "project")
         return [dict(zip(keys, r)) for r in rows]
 
     def turns(self) -> List[Dict[str, Any]]:
@@ -141,3 +177,12 @@ class History:
             return None
         return dict(zip(("ts", "used_percent", "raw_used_percent", "period_start",
                          "period_end", "products_json"), row))
+
+    def billing_snapshots(self, since_ts: float = 0.0) -> List[Dict[str, Any]]:
+        """Real snapshots only (demo values are never stored), oldest first."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT ts, used_percent, raw_used_percent, period_start, period_end"
+                " FROM billing_snapshots WHERE ts >= ? ORDER BY ts", (since_ts,)).fetchall()
+        return [dict(zip(("ts", "used_percent", "raw_used_percent", "period_start",
+                          "period_end"), r)) for r in rows]

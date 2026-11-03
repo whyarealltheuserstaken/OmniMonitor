@@ -129,3 +129,32 @@ def test_linux_autostart_roundtrip(tmp_path, monkeypatch):
     assert ok and autostart.linux_desktop_path().exists()
     ok, _ = autostart.uninstall()
     assert ok and not autostart.linux_desktop_path().exists()
+
+
+def test_controller_real_billing_with_claude_logs_and_alert(tmp_path):
+    import shutil
+    from datetime import datetime, timezone
+    home = tmp_path / ".claude" / "projects" / "-x-alpha"
+    home.mkdir(parents=True)
+    shutil.copy(FIXTURES / "claude_session.jsonl", home / "s.jsonl")
+    s = mock_server()
+    try:
+        cfg = real_cfg(tmp_path, s.server_address[1])
+        cfg.update({"extra_token_sources": ["claude_code"], "claude_home": str(tmp_path / ".claude"),
+                    "notifications": True, "notify_thresholds": [25], "notify_on_pace": False})
+        got = []
+        ctrl = Controller(cfg, tmp_path / "h.sqlite3",
+                          clock=lambda: datetime(2026, 11, 4, 12, tzinfo=timezone.utc))
+        ctrl.notifier = lambda body, title: got.append((title, body))
+        ctrl.refresh()
+        ctrl.refresh()
+        assert [m["kind"] for m in ctrl.sent_alerts] == ["threshold"]  # once, not twice
+        assert got and "28%" in got[0][0]
+        assert "claude_code" in ctrl.tools()
+        st = ctrl.stats()
+        tools = {t["name"]: t["tokens"] for t in st["breakdowns"]["all"]["tools"]}
+        assert tools == {"Claude Code": 32410 + 32150}
+        assert st["weekly_limit"]["estimate"] is None  # Claude tokens never count for Grok
+        assert st["forecast"]["average"]["status"] in ("ahead", "behind", "on pace")
+    finally:
+        s.shutdown()

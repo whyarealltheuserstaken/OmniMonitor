@@ -7,13 +7,14 @@ import subprocess
 import sys
 import threading
 import webbrowser
+from pathlib import Path
 from typing import Optional
 
 from omnimonitor import config as config_mod
 from omnimonitor.app import Controller
 from omnimonitor.icon import render_icon, tray_size
 from omnimonitor.timeutil import fmt_local, fmt_until
-from omnimonitor.webui import StatsServer
+from omnimonitor.webui import StatsServer, for_controller
 
 
 def open_path(path: str) -> None:
@@ -46,13 +47,19 @@ class TrayApp:
         self.ctrl = ctrl
         self.server: Optional[StatsServer] = None
         try:
-            self.server = StatsServer(ctrl.stats, int(ctrl.cfg.get("web_port") or 0)).start()
+            self.server = for_controller(ctrl, int(ctrl.cfg.get("web_port") or 0)).start()
         except Exception as e:  # noqa: BLE001
             ctrl.token_note = (ctrl.token_note + "; " if ctrl.token_note else "") + \
                 "stats page unavailable: %s" % e
         self.icon = pystray.Icon("omnimonitor", render_icon(None, size=tray_size()),
                                  "OmniMonitor · Grok usage", menu=self._menu())
         ctrl.add_listener(self.update)
+        ctrl.notifier = self._notify_os
+
+    def _notify_os(self, body: str, title: str) -> None:
+        if not getattr(self.icon, "HAS_NOTIFICATION", False):
+            raise RuntimeError("tray backend has no notifications")
+        self.icon.notify(body, title)
 
     # ------------------------------------------------------------- text helpers
     def _title(self) -> str:
@@ -81,6 +88,25 @@ class TrayApp:
                                                     fmt_tokens(lim["estimate"]["value"]))
         return "Tokens this week: %s (limit not exposed)" % fmt_tokens(wk)
 
+    def _pace_line(self) -> str:
+        avg = (self.ctrl.stats().get("forecast") or {}).get("average") or {}
+        if avg.get("value", 0) is None or "percent_at_reset" not in avg:
+            return "Pace: not available"
+        p = avg["percent_at_reset"]
+        if avg.get("runs_out_at"):
+            from omnimonitor.timeutil import parse_time
+            return "Pace: runs out %s (estimate)" % fmt_local(parse_time(avg["runs_out_at"]))
+        return "Pace: ≈%.0f%% used at reset (estimate)" % min(p, 999)
+
+    def _today_line(self) -> str:
+        br = (self.ctrl.stats().get("breakdowns") or {}).get("today")
+        if not br:
+            return "Today: not available"
+        tools = ", ".join("%s %s" % (t["name"], fmt_tokens(t["tokens"]))
+                          for t in br["tools"][:3])
+        return ("Today: %s tokens" % fmt_tokens(br["tokens"])) + (" (%s)" % tools
+                                                               if len(br["tools"]) > 1 else "")
+
     def _error_line(self) -> str:
         return "⚠ %s" % (self.ctrl.error or "")[:90]
 
@@ -91,12 +117,23 @@ class TrayApp:
             Item(lambda _: self._title(), None, enabled=False),
             Item(lambda _: self._reset_line(), None, enabled=False),
             Item(lambda _: self._tokens_line(), None, enabled=False),
+            Item(lambda _: self._today_line(), None, enabled=False),
+            Item(lambda _: self._pace_line(), None, enabled=False),
             Item(lambda _: self._error_line(), None, enabled=False,
                  visible=lambda _: bool(self.ctrl.error)),
             Menu.SEPARATOR,
             Item("Refresh Now", self._on_refresh),
             Item("Open Stats Page", self._on_stats, default=True,
                  enabled=lambda _: self.server is not None),
+            Item("Open Mini View", self._page("mini"),
+                 enabled=lambda _: self.server is not None),
+            Item("Settings…", self._page("settings"),
+                 enabled=lambda _: self.server is not None),
+            Item("Export", Menu(
+                Item("Daily CSV", self._export("csv", "daily")),
+                Item("Per model CSV", self._export("csv", "daily-models")),
+                Item("Tool / model / project CSV", self._export("csv", "breakdown")),
+                Item("Everything (JSON)", self._export("json", "daily")))),
             Item("Open Grok Usage Page", self._on_usage_page),
             Item("Edit Config", self._on_config),
             Menu.SEPARATOR,
@@ -109,6 +146,25 @@ class TrayApp:
     def _on_stats(self, *_):
         if self.server:
             webbrowser.open(self.server.url)
+
+    def _page(self, rel: str):
+        def go(*_):
+            if self.server:
+                webbrowser.open(self.server.url + rel)
+        return go
+
+    def _export(self, fmt: str, kind: str):
+        def go(*_):
+            try:
+                body, _ct, fname = self.ctrl.export(kind, fmt)
+                folder = Path.home() / "Downloads"
+                folder = folder if folder.is_dir() else Path.home()
+                out = folder / fname
+                out.write_bytes(body)
+                open_path(str(folder))
+            except Exception as e:  # noqa: BLE001
+                self.ctrl.token_note = "export failed: %s" % e
+        return go
 
     def _on_usage_page(self, *_):
         webbrowser.open(self.ctrl.cfg.get("usage_page_url") or config_mod.DEFAULT_USAGE_PAGE)
@@ -132,7 +188,9 @@ class TrayApp:
         try:
             self.icon.icon = render_icon(u.remaining_percent if u else None,
                                          error=bool(err) and u is None,
-                                         demo=bool(u and u.is_demo), size=tray_size())
+                                         demo=bool(u and u.is_demo), size=tray_size(),
+                                         style=self.ctrl.cfg.get("icon_style") or "ring",
+                                         show=self.ctrl.cfg.get("icon_value") or "remaining")
             self.icon.title = self._title()[:120]  # Windows tooltip limit ~128
             self.icon.update_menu()
         except Exception:  # noqa: BLE001

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from omnimonitor import __version__
@@ -58,6 +59,17 @@ def checks(cfg: Dict[str, Any], online: bool = True) -> List[Tuple[str, str, str
                 else "no Grok CLI session logs under %s - token stats will be 'not available'"
                 % sess))
 
+    from omnimonitor.adapters import describe
+    for row in describe(cfg)[1:]:
+        if row["enabled"]:
+            out.append((OK if row["found"] else WARN, row["name"],
+                        "enabled, logs found under %s" % ", ".join(row["paths"]) if row["found"]
+                        else "enabled, but %s" % row["note"]))
+        elif row["found"]:
+            out.append((OK, row["name"], "logs found but not enabled (optional: "
+                        "`omnimonitor config set extra_token_sources '[\"%s\"]'`)"
+                        % row["name"]))
+
     if online:
         try:
             r = fetch_grok_cli_billing(cfg)
@@ -103,9 +115,11 @@ def setup(cfg: Dict[str, Any], assume_yes: bool = False) -> int:
         if ans not in ("", "y", "yes"):
             print("Unchanged.")
             return 0
-    new = {k: v for k, v in cfg.items() if not str(k).startswith("_")}
-    new["source"] = "grok_cli_billing"
-    path = config_mod.save_config(new)
+    # Update only the FILE: the in-memory cfg may hold env overrides (OMNIMONITOR_TOKEN,
+    # OMNIMONITOR_SOURCE) that must never be written to disk.
+    target = cfg.get("_config_path")
+    path = config_mod.update_config_file({"source": "grok_cli_billing"},
+                                         Path(target) if target else None)
     print("Saved %s (source = grok_cli_billing). Start the tray with `omnimonitor`." % path)
     print("Optional: `omnimonitor install-autostart` to start it at login.")
     return 0

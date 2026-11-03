@@ -27,6 +27,7 @@ import json
 import math
 import os
 import random
+import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
@@ -51,6 +52,7 @@ class TokenEvent:
     reasoning_tokens: int = 0
     cost_usd: Optional[float] = None
     source: str = "grok_sessions"
+    project: str = ""             # basename of the working directory, "" if unknown
 
     @property
     def total(self) -> int:
@@ -152,6 +154,25 @@ def parse_update_line(line: str, session_id: str, path_hint: str = ""
     return ts, events, {"event_id": base_id, "ts": ts, "duration_s": dur}
 
 
+def project_name(cwd: Any) -> str:
+    """Basename of a working directory - only the folder name is stored, never the path."""
+    if not isinstance(cwd, str) or not cwd.strip():
+        return ""
+    name = cwd.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
+    return name[:120]
+
+
+def grok_project(updates_path: Path) -> str:
+    """<GROK_HOME>/sessions/<url-encoded cwd>/<session-id>/updates.jsonl -> cwd basename."""
+    try:
+        enc = updates_path.parent.parent.name
+    except (AttributeError, IndexError):
+        return ""
+    if enc == "sessions":
+        return ""
+    return project_name(urllib.parse.unquote(enc))
+
+
 def iter_update_files(grok_home: Path) -> Iterator[Path]:
     root = grok_home / "sessions"
     if not root.is_dir():
@@ -199,6 +220,7 @@ class GrokSessionsScanner:
             if budget <= 0:
                 break
             session_id = path.parent.name
+            project = grok_project(path)
             events: List[TokenEvent] = []
             turns: List[TurnRecord] = []
             try:
@@ -223,6 +245,8 @@ class GrokSessionsScanner:
                             if ts is not None and turn_start is None:
                                 turn_start = ts * 1000.0
                             continue
+                        for ev in evs:
+                            ev.project = project
                         events.extend(evs)
                         dur, src = turn["duration_s"], "reported"
                         if dur is None and turn_start is not None:
@@ -249,6 +273,9 @@ def demo_events(now_ts: float, days: int = 365, seed: int = 7
     rng = random.Random(seed)
     events, turns = [], []
     models = [("demo-model-a", 0.6), ("demo-model-b", 0.25), ("demo-model-c", 0.15)]
+    tools = [("grok_sessions", 0.6), ("claude_code", 0.25), ("codex", 0.15)]
+    projects = [("demo-project-alpha", 0.45), ("demo-project-beta", 0.3),
+                ("demo-project-gamma", 0.15), ("demo-scratch", 0.1)]
     day0 = now_ts - days * 86400
     for d in range(days):
         recent = d >= days - 6  # keep the last week active so the demo shows a streak
@@ -261,12 +288,15 @@ def demo_events(now_ts: float, days: int = 365, seed: int = 7
             if ts > now_ts:
                 ts = now_ts - rng.uniform(60, 6 * 3600)
             m = rng.choices([m for m, _ in models], [w for _, w in models])[0]
+            tool = rng.choices([t for t, _ in tools], [w for _, w in tools])[0]
+            proj = rng.choices([p for p, _ in projects], [w for _, w in projects])[0]
             inp = int(rng.lognormvariate(11.5, 1.0))
             out = int(inp * rng.uniform(0.02, 0.12))
             events.append({"ts": ts, "session_id": "demo-%d" % d, "model": m,
                            "input_tokens": inp, "output_tokens": out,
                            "cache_read_tokens": int(inp * 0.7), "cache_creation_tokens": 0,
-                           "reasoning_tokens": int(out * 0.4), "cost_usd": None})
+                           "reasoning_tokens": int(out * 0.4), "cost_usd": None,
+                           "source": tool, "project": proj})
             turns.append({"ts": ts, "session_id": "demo-%d" % d,
                           "duration_s": rng.lognormvariate(4.5, 1.1),
                           "duration_source": "demo"})

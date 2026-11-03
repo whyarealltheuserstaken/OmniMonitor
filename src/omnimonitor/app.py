@@ -6,14 +6,18 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from omnimonitor import adapters
+from omnimonitor import alerts as alerts_mod
 from omnimonitor import config as config_mod
+from omnimonitor import forecast as forecast_mod
+from omnimonitor import settings as settings_mod
 from omnimonitor import stats as stats_mod
 from omnimonitor.billing import UsageResult, fetch_usage_safely
 from omnimonitor.history import History
 from omnimonitor.timeutil import utcnow
-from omnimonitor.tokens import GrokSessionsScanner, demo_events
+from omnimonitor.tokens import demo_events
 
 
 class Controller:
@@ -22,6 +26,7 @@ class Controller:
         self.cfg = cfg
         self.clock = clock
         self._lock = threading.RLock()
+        self._scan_lock = threading.Lock()  # web "save settings" and the poll loop both scan
         self._wake = threading.Event()
         self._stop = threading.Event()
         self._listeners: List[Callable[[], None]] = []
@@ -32,13 +37,31 @@ class Controller:
         self.token_note = ""
         self._stats: Optional[Dict[str, Any]] = None
         self.history: Optional[History] = None
+        self.history_file = history_file
+        self.notifier: Optional[Callable[[str, str], None]] = None  # set by the tray
+        self.sent_alerts: List[Dict[str, str]] = []
         self.token_source = config_mod.effective_token_source(cfg)
-        if self.token_source == "grok_sessions":
+        self._open_history()
+
+    def _open_history(self) -> None:
+        wants = self.token_source == "grok_sessions" or (
+            self.token_source != "demo" and config_mod.extra_token_sources(self.cfg))
+        if wants and self.history is None:
             try:
-                self.history = History(history_file or config_mod.history_path())
+                self.history = History(self.history_file or config_mod.history_path())
             except Exception as e:  # noqa: BLE001
                 self.token_note = "history database unavailable: %s" % e
-                self.token_source = "none"
+                if self.token_source == "grok_sessions":
+                    self.token_source = "none"
+
+    def tools(self) -> List[str]:
+        """Token sources actually feeding the stats."""
+        if self.token_source == "demo":
+            return ["grok_sessions", "claude_code", "codex"]
+        out = ["grok_sessions"] if self.token_source == "grok_sessions" else []
+        if self.history is not None:
+            out += config_mod.extra_token_sources(self.cfg)
+        return out
 
     # ------------------------------------------------------------------ polling
     def add_listener(self, fn: Callable[[], None]) -> None:
@@ -70,31 +93,85 @@ class Controller:
                 pass
         self._scan_tokens()
         self._recompute()
+        self._check_alerts()
         self._notify()
 
     def _scan_tokens(self) -> None:
-        if self.token_source != "grok_sessions" or self.history is None:
+        if self.history is None or self.token_source == "demo":
             return
-        scanner = GrokSessionsScanner(config_mod.grok_home(self.cfg), self.history)
-        ok, why = scanner.available()
-        if not ok:
-            self.token_note = why
+        with self._scan_lock:
+            self._scan_tokens_locked()
+
+    def _scan_tokens_locked(self) -> None:
+        notes = []
+        for sc in adapters.scanners(self.cfg, self.history,
+                                    include_grok=self.token_source == "grok_sessions"):
+            name = getattr(sc, "label", "") or adapters.label(getattr(sc, "name", ""))
+            ok, why = sc.available()
+            if not ok:
+                notes.append(why)
+                continue
+            try:
+                sc.scan()
+            except Exception as e:  # noqa: BLE001
+                notes.append("could not read %s logs: %s" % (name or "Grok CLI", e))
+        self.token_note = "; ".join(notes)
+
+    def _check_alerts(self) -> None:
+        u = self.usage
+        if u is None or u.is_demo or self.history is None:
             return
         try:
-            scanner.scan()
-            self.token_note = ""
+            billing = u.to_dict()
+            fc = (self._stats or {}).get("forecast")
+            state = alerts_mod.load_state(self.history)
+            msgs, new = alerts_mod.decide(self.cfg, billing, fc, state)
+            if new != state:
+                alerts_mod.save_state(self.history, new)
+            for m in msgs:
+                alerts_mod.deliver(m["title"], m["body"], self.notifier)
+                self.sent_alerts.append(m)
+        except Exception:  # noqa: BLE001 - alerts must never break polling
+            pass
+
+    def update_settings(self, changes: Any, web: bool = True) -> Dict[str, Any]:
+        """Validate (allow-list), write to the config file, apply live. Never raises."""
+        clean, errors = settings_mod.apply(self.cfg, changes, web=web)
+        if errors:
+            return {"ok": False, "errors": errors}
+        if not clean:
+            return {"ok": True, "changed": []}
+        try:
+            if self.cfg.get("_config_path"):
+                config_mod.update_config_file(clean, Path(self.cfg["_config_path"]))
         except Exception as e:  # noqa: BLE001
-            self.token_note = "could not read Grok CLI session logs: %s" % e
+            return {"ok": False, "errors": {"_": "could not save config: %s" % e}}
+        with self._lock:
+            self.cfg.update(clean)
+            self.cfg["poll_interval_seconds"] = config_mod.clamp_poll(
+                self.cfg.get("poll_interval_seconds"))
+        self._open_history()
+        if "extra_token_sources" in clean:
+            self._scan_tokens()
+        self._recompute()
+        self._notify()
+        return {"ok": True, "changed": sorted(clean)}
 
     def _recompute(self) -> None:
         now = self.clock()
         billing = self.usage.to_dict() if self.usage else None
         data_since = None
+        snapshots: List[Dict[str, Any]] = []
         if self.token_source == "demo":
             events, turns = demo_events(now.timestamp())
             note = "DEMO - fake token history"
-        elif self.token_source == "grok_sessions" and self.history is not None:
+        elif self.history is not None:
             events, turns = self.history.events(), self.history.turns()
+            try:
+                snapshots = self.history.billing_snapshots(
+                    now.timestamp() - forecast_mod.RECENT_WINDOW_H * 3600 - 60)
+            except Exception:  # noqa: BLE001
+                snapshots = []
             note = self.token_note
             try:
                 data_since = float(self.history.meta("installed_at") or 0) or None
@@ -102,13 +179,37 @@ class Controller:
                 data_since = None
         else:
             events, turns, note = [], [], self.token_note
-        st = stats_mod.compute(events, turns, billing, self.cfg, now,
-                               provider=self.token_source if self.token_source in (
-                                   "demo", "grok_sessions") else "none",
-                               provider_note=note, data_since=data_since)
+        tools = self.tools()
+        provider = self.token_source if self.token_source in ("demo", "grok_sessions") else (
+            "local_logs" if tools else "none")
+        st = stats_mod.compute(events, turns, billing, self.cfg, now, provider=provider,
+                               provider_note=note, data_since=data_since,
+                               snapshots=snapshots, tools=tools)
         st["status"] = self.status_dict()
         with self._lock:
             self._stats = st
+
+    def export_events(self) -> List[Dict[str, Any]]:
+        if self.token_source == "demo":
+            return demo_events(self.clock().timestamp())[0]
+        if self.history is not None:
+            return self.history.events()
+        return []
+
+    def export(self, kind: str, fmt: str) -> Tuple[bytes, str, str]:
+        """-> (body, content type, download file name). Raises ValueError on bad kind."""
+        from omnimonitor import export as export_mod
+
+        evs = self.export_events()
+        demo = self.token_source == "demo"
+        prefix = "omnimonitor-%s" % ("DEMO-" if demo else "")
+        if fmt == "json":
+            return (export_mod.to_json(evs, demo).encode("utf-8"), "application/json",
+                    prefix + "export.json")
+        if fmt == "csv":
+            body = export_mod.to_csv(export_mod.rows(evs, kind))
+            return body.encode("utf-8"), "text/csv; charset=utf-8", "%s%s.csv" % (prefix, kind)
+        raise ValueError("unknown format")
 
     def stats(self) -> Dict[str, Any]:
         with self._lock:
