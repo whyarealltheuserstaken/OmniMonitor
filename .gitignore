@@ -12,7 +12,8 @@ venv/
 .coverage
 htmlcov/
 # never commit real configs or tokens
-config.json
+/config.json
+**/omnimonitor/config.json
 !legacy/swiftbar/config.example.json
 *.sqlite3
 .DS_Store

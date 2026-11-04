@@ -37,7 +37,8 @@ class FakeHttp:
 def test_apikeys_env_wins_file_is_private_and_values_never_listed(monkeypatch):
     path = apikeys.secrets_path()
     apikeys.set_secret("DEEPSEEK_API_KEY", FAKE + "\n")
-    assert stat.S_IMODE(path.stat().st_mode) & 0o077 == 0
+    if os.name == "posix":  # chmod is a no-op on Windows (per-user %APPDATA% ACLs)
+        assert stat.S_IMODE(path.stat().st_mode) & 0o077 == 0
     assert apikeys.get("DEEPSEEK_API_KEY") == FAKE and apikeys.where("DEEPSEEK_API_KEY") == "file"
     monkeypatch.setenv("DEEPSEEK_API_KEY", "from-env")
     assert apikeys.get("DEEPSEEK_API_KEY") == "from-env" and apikeys.where(
