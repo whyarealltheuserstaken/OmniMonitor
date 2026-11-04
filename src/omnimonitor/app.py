@@ -45,6 +45,7 @@ class Controller:
         self.token_source = config_mod.effective_token_source(cfg)
         self.readings: Dict[str, Dict[str, Any]] = {}
         self.http = None  # tests inject a fake HTTP client for account readers
+        self._installer = None  # setup wizard; created lazily (tests inject one)
         self._open_history()
 
     def _open_history(self) -> None:
@@ -242,6 +243,35 @@ class Controller:
         st["status"] = self.status_dict()
         with self._lock:
             self._stats = st
+
+    # ------------------------------------------------------------ setup wizard
+    @property
+    def installer(self):
+        if self._installer is None:
+            from omnimonitor import deps
+            self._installer = deps.Installer(log_path=config_mod.config_dir() / "setup-log.jsonl")
+        return self._installer
+
+    def setup_status(self) -> Dict[str, Any]:
+        from omnimonitor import deps
+        st = deps.status(self.cfg)
+        st["history"] = self.installer.history(20)
+        st["demo"] = self.cfg.get("source") == "demo"
+        return st
+
+    def setup_prepare(self, body: Any) -> Dict[str, Any]:
+        dep = body.get("dep") if isinstance(body, dict) else None
+        if not isinstance(dep, str):
+            return {"ok": False, "error": "dep required"}
+        return self.installer.prepare(dep)
+
+    def setup_run(self, body: Any) -> Dict[str, Any]:
+        if not isinstance(body, dict):
+            return {"ok": False, "error": "bad request"}
+        res = self.installer.run(str(body.get("token") or ""), str(body.get("sha256") or ""),
+                                 dry_run=bool(body.get("dry_run")))
+        self.poke()
+        return res
 
     def export_events(self) -> List[Dict[str, Any]]:
         if self.token_source == "demo":

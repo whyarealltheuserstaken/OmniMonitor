@@ -465,6 +465,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("notify-test", help="show a test desktop notification")
     s = sub.add_parser("net-check", help="test an HTTPS request with the app's CA bundle")
     s.add_argument("url", nargs="?", default="https://api.github.com/")
+    s = sub.add_parser("deps", help="CLI tools for enabled providers; install one (official)")
+    s.add_argument("action", nargs="?", choices=["list", "install"], default="list")
+    s.add_argument("id", nargs="?")
+    s.add_argument("--dry-run", action="store_true", help="download + verify, don't run")
+    s.add_argument("--json", action="store_true")
     sub.add_parser("log-path", help="print the log file path")
     s = sub.add_parser("window", help="native app window (started by the tray; URL on stdin)")
     s.add_argument("--smoke", action="store_true",
@@ -491,6 +496,52 @@ def _safe_console() -> None:
 def _clean_argv(argv: List[str]) -> List[str]:
     """Finder / LaunchServices may pass -psn_0_12345 to GUI apps; argparse would reject it."""
     return [a for a in argv if not a.startswith("-psn_")]
+
+
+def cmd_deps(args, input_fn=input) -> int:
+    """List CLI tools needed by enabled providers; optionally install one (official script,
+    shown with its SHA256, confirmed by typing 'yes', run as the current user)."""
+    import getpass
+
+    from omnimonitor import config as config_mod
+    from omnimonitor import deps
+    cfg = _load(args)
+    if getattr(args, "action", None) != "install":
+        st = deps.status(cfg)
+        if args.json:
+            print(json.dumps(st, indent=2))
+            return 0
+        if not st["deps"]:
+            print("No enabled provider needs a command-line tool.")
+        for r in st["deps"]:
+            print("%-10s %-9s %s" % (r["id"], "ok" if r["installed"] else "MISSING",
+                                     r["path"] or (r["installer"] or r["manual"] or r["docs"])))
+        return 1 if st["missing"] else 0
+    inst = deps.Installer(log_path=config_mod.config_dir() / "setup-log.jsonl")
+    plan = inst.prepare(args.id or "")
+    if not plan.get("ok"):
+        print("error: " + plan.get("error", "?"), file=sys.stderr)
+        if plan.get("manual"):
+            print("manual install: " + plan["manual"], file=sys.stderr)
+        return 1
+    print("Source:  " + plan["url"])
+    print("Command: " + plan["command_str"])
+    print("SHA256:  " + plan["sha256"])
+    print("--- first lines ---\n" + plan["preview"] + "\n---")
+    if not args.dry_run:
+        try:
+            ans = input_fn("Run this installer as %s? type 'yes': " % getpass.getuser())
+        except EOFError:
+            ans = ""
+        if ans.strip().lower() != "yes":
+            inst.cancel(plan["token"])
+            print("Not run.")
+            return 1
+    res = inst.run(plan["token"], plan["sha256"], dry_run=args.dry_run)
+    if res.get("output"):
+        print(res["output"])
+    print("ok" if res.get("ok") else "failed: " + str(res.get("error") or "rc %s" % res.get("rc")))
+    return 0 if res.get("ok") else 1
 
 
 def cmd_net_check(args) -> int:
@@ -552,7 +603,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(log_path())
         return 0
     handlers = {"export": cmd_export, "providers": cmd_providers, "breakdown": cmd_breakdown,
-                "config": cmd_config, "notify-test": cmd_notify_test, "secrets": cmd_secrets}
+                "config": cmd_config, "notify-test": cmd_notify_test, "secrets": cmd_secrets, "deps": cmd_deps}
     if cmd in handlers:
         return handlers[cmd](args)
     return 2

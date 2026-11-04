@@ -311,6 +311,26 @@ script). Run it again after moving or reinstalling. Both commands also remove an
 
 ---
 
+## Setup: installing provider CLIs
+
+The **Setup** screen (sidebar → Setup, or Settings → *Re-run setup*; CLI: `omnimonitor deps`)
+lists only the command-line tools that the providers you switched on actually need, and whether
+each is installed. For a missing one you can click **Review installer**:
+
+1. OmniMonitor downloads the vendor's **official** install script over HTTPS from its documented
+   address (allow-listed hosts only; redirects to any other host are refused) into a private
+   temp file (mode 600). Nothing is piped to a shell.
+2. You see the source URL, the exact command, the file's **SHA256** and its first lines.
+3. Only after you tick the confirmation and click **Run installer** does it run that exact file
+   (re-hashed first; refused if it changed) as **your user** - never with sudo, and never while
+   OmniMonitor runs as root. The temp file is then deleted. *Dry run* checks everything without
+   running.
+
+Every step is logged to `setup-log.jsonl` in the config directory and shown on the Setup page.
+Gemini CLI has no official script installer, so only manual instructions (npm/Homebrew) are shown.
+From a terminal: `omnimonitor deps`, `omnimonitor deps install claude --dry-run`,
+`omnimonitor deps install claude` (asks you to type `yes`).
+
 ## Configuration
 
 `omnimonitor config-path` shows where the config lives:
