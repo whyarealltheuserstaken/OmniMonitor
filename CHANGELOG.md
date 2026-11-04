@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [0.3.0] - unreleased
+## [0.3.0] - 2026-11-03
 
 More providers, all opt-in. Format knowledge (not code) was cross-checked against the
 public documentation and open-source CLIs linked in `docs/providers.md`; ideas from
@@ -45,6 +45,9 @@ public documentation and open-source CLIs linked in `docs/providers.md`; ideas f
 ### Changed
 - `extra_token_sources` still works; explicit `providers` entries take precedence.
 - Demo mode also shows demo provider cards, prices and budgets, all labelled DEMO.
+
+### Fixed
+- CLI no longer crashes with UnicodeEncodeError on non-UTF-8 consoles (Windows cp1252).
 
 ### Security
 - API keys are never accepted from, or returned by, the web UI (`api/settings` shows only
