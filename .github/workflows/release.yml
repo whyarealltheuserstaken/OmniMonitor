@@ -3,6 +3,12 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # build + smoke-test the binaries on PRs that touch packaging or app startup (no release)
+  pull_request:
+    paths: [".github/workflows/release.yml", "scripts/**", "pyproject.toml",
+            "src/omnimonitor/tray.py", "src/omnimonitor/cli.py", "src/omnimonitor/net.py",
+            "src/omnimonitor/applog.py"]
+  workflow_dispatch:
 
 permissions:
   contents: write   # to create the GitHub Release
@@ -35,10 +41,18 @@ jobs:
         run: |
           pyinstaller --noconfirm --windowed --name omnimonitor \
             --osx-bundle-identifier com.omnimonitor.tray \
-            --collect-data omnimonitor --hidden-import pystray._darwin \
+            --collect-data omnimonitor --collect-data certifi \
+            --hidden-import pystray._darwin \
+            --hidden-import AppKit --hidden-import Foundation --hidden-import objc \
+            --hidden-import PyObjCTools.AppHelper --hidden-import PyObjCTools.MachSignals \
             scripts/pyinstaller_entry.py
           # menu-bar-only app: no Dock icon
-          /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" dist/omnimonitor.app/Contents/Info.plist
+          P=dist/omnimonitor.app/Contents/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "$P"
+          V=$(python -c "import omnimonitor; print(omnimonitor.__version__)")
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $V" "$P"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $V" "$P" || \
+            /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $V" "$P"
           # Info.plist changed after PyInstaller signed it: re-sign ad-hoc so the bundle seal is valid
           codesign --force --deep --sign - dist/omnimonitor.app
           codesign --verify --deep --strict --verbose=2 dist/omnimonitor.app
@@ -47,14 +61,14 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           pyinstaller --noconfirm --onefile --windowed --name omnimonitor `
-            --collect-data omnimonitor --hidden-import pystray._win32 `
+            --collect-data omnimonitor --collect-data certifi --hidden-import pystray._win32 `
             scripts/pyinstaller_entry.py
           Compress-Archive -Path dist/omnimonitor.exe -DestinationPath ${{ matrix.asset }}.zip
       - name: Build (Linux)
         if: runner.os == 'Linux'
         run: |
           pyinstaller --noconfirm --onefile --name omnimonitor \
-            --collect-data omnimonitor \
+            --collect-data omnimonitor --collect-data certifi \
             --hidden-import pystray._xorg --hidden-import pystray._appindicator \
             scripts/pyinstaller_entry.py
           tar -C dist -czf ${{ matrix.asset }}.tar.gz omnimonitor
@@ -62,6 +76,9 @@ jobs:
         shell: bash
         env:
           OMNIMONITOR_HOME: ${{ runner.temp }}/omni-home
+          OMNIMONITOR_LOG_DIR: ${{ runner.temp }}/omni-logs
+          OMNIMONITOR_NO_BROWSER: "1"
+          SSL_CERT_FILE: ""   # prove the bundled certifi is used, not a runner setting
         run: |
           set -euo pipefail
           T="${{ runner.temp }}/smoke"; rm -rf "$T"; mkdir -p "$T"
@@ -80,11 +97,41 @@ jobs:
             # --windowed exe has no console: check the exit code and capture via a file
             "$B" --version > "$T/v.txt" 2>&1; cat "$T/v.txt" || true
             "$B" status --demo > "$T/s.txt" 2>&1; cat "$T/s.txt" || true
+            "$B" net-check > "$T/n.txt" 2>&1; cat "$T/n.txt" || true
           else
             "$B" --version | tee "$T/v.txt"
-            grep -q "${GITHUB_REF_NAME#v}" "$T/v.txt"
+            if [ "${GITHUB_REF_TYPE}" = "tag" ]; then grep -q "${GITHUB_REF_NAME#v}" "$T/v.txt"; fi
             "$B" status --demo
             "$B" providers > /dev/null
+            # TLS: a real HTTPS request from the frozen binary, must use the bundled certifi
+            "$B" net-check | tee "$T/n.txt"
+            grep -q "CA bundle: certifi" "$T/n.txt"
+          fi
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            # Tray: launch the real app (`run`, demo data) for ~10 s. GitHub macOS runners have
+            # a logged-in GUI session, so AppKit/NSStatusBar is live; this catches the
+            # main-thread SIGTRAP and import errors. It cannot see the menu bar itself.
+            L="${{ runner.temp }}/omni-logs/omnimonitor.log"
+            "$B" run --demo & PID=$!
+            ok=0
+            for i in $(seq 1 40); do
+              sleep 1
+              if ! kill -0 $PID 2>/dev/null; then
+                set +e; wait $PID; RC=$?; set -e
+                echo "tray app exited early with status $RC (>128 = signal $((RC-128)))"
+                cat "${{ runner.temp }}/omni-logs/"*.log || true; exit 1
+              fi
+              if grep -q "tray icon visible" "$L" 2>/dev/null; then ok=$i; break; fi
+            done
+            sleep 5   # keep it running a bit after the icon is shown (poller + first update)
+            alive=0; kill -0 $PID 2>/dev/null && alive=1
+            kill $PID 2>/dev/null || true; wait $PID 2>/dev/null || true
+            echo "--- log"; cat "$L"
+            [ "$alive" = 1 ] || { echo "tray app died after showing the icon"; exit 1; }
+            [ "$ok" != 0 ] || { echo "tray icon not shown within 40 s"; exit 1; }
+            echo "tray icon visible after ${ok}s, still running 5 s later"
+            if [ -s "${{ runner.temp }}/omni-logs/crash.log" ]; then
+              cat "${{ runner.temp }}/omni-logs/crash.log"; exit 1; fi
           fi
           ls -la ${{ matrix.asset }}.*
       - uses: actions/upload-artifact@v4
@@ -94,6 +141,7 @@ jobs:
 
   release:
     needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

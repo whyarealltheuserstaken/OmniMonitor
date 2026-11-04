@@ -1,6 +1,6 @@
 """OmniMonitor: unofficial cross-platform tray app for Grok / X Super weekly usage."""
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 APP_NAME = "omnimonitor"
 APP_DISPLAY_NAME = "OmniMonitor"
 APP_ID = "com.omnimonitor.tray"

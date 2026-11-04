@@ -31,6 +31,15 @@ def checks(cfg: Dict[str, Any], online: bool = True) -> List[Tuple[str, str, str
     out.append((WARN if cfg.get("source") == "demo" else OK, "source",
                 "%s%s" % (cfg.get("source"), " (FAKE demo numbers - run `omnimonitor setup`)"
                           if cfg.get("source") == "demo" else "")))
+    from omnimonitor.applog import log_path
+    from omnimonitor.net import ca_source
+    kind, detail = ca_source()
+    out.append((OK if kind != "system" or sys.platform not in ("darwin",) else WARN, "tls",
+                "CA bundle: %s (%s)%s" % (kind, detail, "" if kind != "system" or
+                                         sys.platform != "darwin" else
+                                         " - install certifi if HTTPS fails with "
+                                         "CERTIFICATE_VERIFY_FAILED")))
+    out.append((OK, "log file", str(log_path())))
     try:
         import pystray  # noqa: F401
         out.append((OK, "tray backend", "pystray importable"))
