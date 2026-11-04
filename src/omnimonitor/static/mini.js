@@ -19,7 +19,7 @@
       var rem = Math.round(u.remaining_percent);
       $("remaining").textContent = rem + "%";
       $("barfill").style.width = rem + "%"; $("barfill").style.background = color(rem);
-      $("reset").textContent = u.resets_at ? "Resets " + OM.fmtDate(u.resets_at) : "Reset time not reported";
+      $("reset").textContent = u.resets_at ? "Resets " + (OM.fmtCountdown(u.resets_at) ? OM.fmtCountdown(u.resets_at) + " · " : "") + OM.fmtDate(u.resets_at) : "Reset time not reported";
     } else { $("remaining").textContent = "–"; $("reset").textContent = st.error || "No data yet"; }
     var rows = $("rows"); rows.textContent = "";
     var a = (d.forecast || {}).average || {}, why = (d.lifetime_tokens || {}).reason;

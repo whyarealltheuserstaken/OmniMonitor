@@ -19,8 +19,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from omnimonitor import apikeys, catalog
-from omnimonitor.net import ssl_context
+from omnimonitor import apikeys, catalog, net
 
 ALLOWED_HOSTS = {
     "api.deepseek.com", "openrouter.ai", "api.moonshot.ai", "api.moonshot.cn", "ollama.com",
@@ -79,9 +78,11 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def _extra_host_ok(url: str) -> bool:
-    """The user's own LiteLLM proxy (LITELLM_BASE_URL, env/secrets only)."""
+    """Official status pages, and the user's own LiteLLM proxy (LITELLM_BASE_URL)."""
     from omnimonitor.accounts_v6 import litellm_host_ok
-    return litellm_host_ok(url)
+    from omnimonitor.status import HOSTS
+    u = urllib.parse.urlsplit(url)
+    return (u.scheme == "https" and u.hostname in HOSTS) or litellm_host_ok(url)
 
 
 def default_http(method: str, url: str, headers: Dict[str, str],
@@ -92,7 +93,7 @@ def default_http(method: str, url: str, headers: Dict[str, str],
     req = urllib.request.Request(url, data=body, method=method,
                                  headers=dict(headers, **{"User-Agent": USER_AGENT,
                                                           "Accept": "application/json"}))
-    opener = urllib.request.build_opener(_NoRedirect, urllib.request.HTTPSHandler(context=ssl_context()))
+    opener = net.build_opener(_NoRedirect)
     try:
         with opener.open(req, timeout=TIMEOUT) as r:
             raw = r.read(MAX_BODY + 1)
