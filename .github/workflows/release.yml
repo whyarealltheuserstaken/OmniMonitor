@@ -39,6 +39,9 @@ jobs:
             scripts/pyinstaller_entry.py
           # menu-bar-only app: no Dock icon
           /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" dist/omnimonitor.app/Contents/Info.plist
+          # Info.plist changed after PyInstaller signed it: re-sign ad-hoc so the bundle seal is valid
+          codesign --force --deep --sign - dist/omnimonitor.app
+          codesign --verify --deep --strict --verbose=2 dist/omnimonitor.app
           cd dist && ditto -c -k --keepParent omnimonitor.app ../${{ matrix.asset }}.zip
       - name: Build (Windows)
         if: runner.os == 'Windows'
@@ -67,7 +70,7 @@ jobs:
             B="$T/omnimonitor.app/Contents/MacOS/omnimonitor"
             archs=$(lipo -archs "$B"); echo "architectures: $archs"
             case " $archs " in *" ${{ matrix.arch }} "*) ;; *) echo "wrong arch"; exit 1;; esac
-            codesign --verify --verbose "$T/omnimonitor.app" || true   # ad-hoc signed only
+            codesign --verify --deep --strict --verbose=2 "$T/omnimonitor.app"   # ad-hoc signature must be valid
           elif [ "${{ runner.os }}" = "Windows" ]; then
             unzip -q "${{ matrix.asset }}.zip" -d "$T"; B="$T/omnimonitor.exe"
           else
