@@ -60,7 +60,13 @@ jobs:
           # Info.plist changed after PyInstaller signed it: re-sign ad-hoc so the bundle seal is valid
           codesign --force --deep --sign - dist/omnimonitor.app
           codesign --verify --deep --strict --verbose=2 dist/omnimonitor.app
-          cd dist && ditto -c -k --keepParent omnimonitor.app ../${{ matrix.asset }}.zip
+          cd dist && ditto -c -k --keepParent omnimonitor.app ../${{ matrix.asset }}.zip && cd ..
+          # .dmg: the same signed app plus an Applications symlink for drag-to-install
+          rm -rf dmgroot && mkdir dmgroot
+          ditto dist/omnimonitor.app dmgroot/omnimonitor.app
+          ln -s /Applications dmgroot/Applications
+          hdiutil create -volname "OmniMonitor $V" -srcfolder dmgroot -fs HFS+ \
+            -format UDZO -ov ${{ matrix.asset }}.dmg
       - name: Build (Windows)
         if: runner.os == 'Windows'
         run: |
@@ -77,6 +83,16 @@ jobs:
             --hidden-import pystray._xorg --hidden-import pystray._appindicator \
             scripts/pyinstaller_entry.py
           tar -C dist -czf ${{ matrix.asset }}.tar.gz omnimonitor
+          # AppImage: same onefile binary in an AppDir, built with the official appimagetool
+          A=OmniMonitor.AppDir; rm -rf $A; mkdir -p $A/usr/bin
+          cp dist/omnimonitor $A/usr/bin/omnimonitor
+          printf '#!/bin/sh\nexec "$(dirname "$(readlink -f "$0")")/usr/bin/omnimonitor" "$@"\n' > $A/AppRun
+          chmod +x $A/AppRun $A/usr/bin/omnimonitor
+          printf '[Desktop Entry]\nType=Application\nName=OmniMonitor\nComment=AI usage monitor\nExec=omnimonitor\nIcon=omnimonitor\nCategories=Utility;\nTerminal=false\n' > $A/omnimonitor.desktop
+          python -c "from omnimonitor.icon import render_icon; render_icon(70, size=256).save('$A/omnimonitor.png')"
+          curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+          ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool --no-appstream $A ${{ matrix.asset }}.AppImage
       - name: Smoke test the packaged artifact (non-GUI commands)
         shell: bash
         env:
@@ -93,10 +109,29 @@ jobs:
             archs=$(lipo -archs "$B"); echo "architectures: $archs"
             case " $archs " in *" ${{ matrix.arch }} "*) ;; *) echo "wrong arch"; exit 1;; esac
             codesign --verify --deep --strict --verbose=2 "$T/omnimonitor.app"   # ad-hoc signature must be valid
+            # .dmg: verify, mount read-only, check layout, signature, arch and run the app from it
+            hdiutil verify "${{ matrix.asset }}.dmg"
+            M="$T/dmg"; mkdir -p "$M"
+            hdiutil attach -nobrowse -readonly -mountpoint "$M" "${{ matrix.asset }}.dmg"
+            [ "$(readlink "$M/Applications")" = "/Applications" ] || { echo "no Applications link"; exit 1; }
+            codesign --verify --deep --strict --verbose=2 "$M/omnimonitor.app"
+            codesign -dv "$M/omnimonitor.app" 2>&1 | grep -q "Signature=adhoc"
+            MB="$M/omnimonitor.app/Contents/MacOS/omnimonitor"
+            case " $(lipo -archs "$MB") " in *" ${{ matrix.arch }} "*) ;; *) echo "dmg: wrong arch"; exit 1;; esac
+            "$MB" --version | tee "$T/dv.txt"
+            if [ "${GITHUB_REF_TYPE}" = "tag" ]; then grep -q "${GITHUB_REF_NAME#v}" "$T/dv.txt"; fi
+            "$MB" net-check | grep -q "CA bundle: certifi"
+            hdiutil detach "$M"
           elif [ "${{ runner.os }}" = "Windows" ]; then
             unzip -q "${{ matrix.asset }}.zip" -d "$T"; B="$T/omnimonitor.exe"
           else
             tar -C "$T" -xzf "${{ matrix.asset }}.tar.gz"; B="$T/omnimonitor"
+            # AppImage (runners have no FUSE: extract-and-run)
+            chmod +x "${{ matrix.asset }}.AppImage"
+            APPIMAGE_EXTRACT_AND_RUN=1 "./${{ matrix.asset }}.AppImage" --version | tee "$T/av.txt"
+            if [ "${GITHUB_REF_TYPE}" = "tag" ]; then grep -q "${GITHUB_REF_NAME#v}" "$T/av.txt"; fi
+            APPIMAGE_EXTRACT_AND_RUN=1 "./${{ matrix.asset }}.AppImage" net-check | grep -q "CA bundle: certifi"
+            APPIMAGE_EXTRACT_AND_RUN=1 "./${{ matrix.asset }}.AppImage" status --demo
           fi
           if [ "${{ runner.os }}" = "Windows" ]; then
             # --windowed exe has no console: check the exit code and capture via a file
@@ -160,6 +195,12 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - name: Tag must match the package version
+        run: |
+          V=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/omnimonitor/__init__.py)
+          [ "v$V" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != v$V"; exit 1; }
+          test -s "docs/release-notes/$GITHUB_REF_NAME.md"
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -168,5 +209,5 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*
-          generate_release_notes: true
-          draft: true   # review, then publish by hand
+          body_path: docs/release-notes/${{ github.ref_name }}.md
+          draft: false

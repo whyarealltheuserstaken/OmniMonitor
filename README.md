@@ -53,6 +53,22 @@ AI tools. OmniMonitor copies **no code, text, icons or images** from it. Everyth
 Python re-implementation of the ideas. See [docs/inspiration-notes.md](docs/inspiration-notes.md)
 for what we adopted, what we built differently and why.
 
+## What's new in 0.4.0
+
+- **Native app window** (pywebview) with an app-style UI: sidebar, dashboard charts, providers, stats and settings.
+- **Setup wizard** (`omnimonitor setup` and in the app) that detects provider CLIs and can install them with each vendor's official installer.
+- **More providers.** The matrix now has 56 entries: 13 supported, 11 partial, 11 experimental and 21 not supported, each with a reason ([docs/providers.md](docs/providers.md)).
+  - New local logs: Claude Code transcripts with ≈5-hour block estimates, Kimi Work shareDir, Pi, Goose and Hermes (partial), and Grok CLI unified log, Antigravity, DeepSeek Harness, OpenClaw, Amp, Factory Droid, Cline, Roo Code and Kilo Code (experimental).
+  - New API readers (your own key, env var or `secrets.json` only): Vercel AI Gateway (supported), DeepInfra, Fireworks and xAI month-to-date spend plus spending limit (partial), and Venice and self-hosted LiteLLM (experimental).
+  - Documented as not supported, with the reason: z.ai, Volcengine, Hugging Face and Amazon Bedrock.
+- **Service status badges** (opt-in, off by default) from official status pages: Claude, OpenAI, GitHub, Cursor, Fireworks and Vercel.
+- **Reset countdowns** next to every reset time.
+- **Proxy support** (`proxy_url`, CLI or config only).
+- **`omnimonitor statusline [--json]`**: an offline one-line summary for shell prompts and tmux.
+- Packaging: macOS `.dmg` files (ad-hoc signed app with an Applications link) and a Linux AppImage, in addition to the zip and tar.gz.
+
+See [CHANGELOG.md](CHANGELOG.md) for details and for what isn't verified yet.
+
 ## What's new in 0.3.1
 
 Fixes for the prebuilt apps: the macOS menu-bar app no longer crashes on launch ("trace trap"),
@@ -181,9 +197,9 @@ why. Nothing is made up or silently estimated.
 
 ## Install
 
-You need **Python 3.9+**. Prebuilt binaries are planned via
-[GitHub Releases](https://github.com/whyarealltheuserstaken/OmniMonitor/releases) (see
-[Maintaining](#maintaining)). Until those are published, install from source:
+You need **Python 3.9+**. Prebuilt binaries are on
+[GitHub Releases](https://github.com/whyarealltheuserstaken/OmniMonitor/releases/latest)
+(macOS `.dmg`/`.zip`, Linux AppImage/`.tar.gz`, Windows `.zip`). Or install from source:
 
 ```bash
 git clone https://github.com/whyarealltheuserstaken/OmniMonitor.git
@@ -196,8 +212,9 @@ omnimonitor --demo                     # try it with fake data
 
 **Prebuilt app (no Python needed):** download from
 [Releases](https://github.com/whyarealltheuserstaken/OmniMonitor/releases/latest):
-`omnimonitor-macos-arm64.zip` for Apple Silicon (M1–M4), `omnimonitor-macos-x86_64.zip` for
-Intel. Unzip it and move `omnimonitor.app` to `/Applications`. The app is **not signed or
+`omnimonitor-macos-arm64.dmg` for Apple Silicon (M1–M4), `omnimonitor-macos-x86_64.dmg` for
+Intel (the same app as a `.zip` is attached too). Open the `.dmg` and drag `omnimonitor.app` onto
+the Applications link (or unzip the `.zip` and move the app to `/Applications`). The app is **not signed or
 notarized**, so macOS blocks the first launch. Either:
 
 * **Finder:** right-click (Control-click) `omnimonitor.app` → **Open** → **Open**. On macOS 15
@@ -229,6 +246,11 @@ items (notch or full bar), use Bartender/Ice or Control Center settings to show 
 
 ### Windows 10/11
 
+**Prebuilt:** download `omnimonitor-windows-x86_64.zip`, unzip it and run `omnimonitor.exe`. It is
+unsigned, so SmartScreen may warn: **More info → Run anyway**.
+
+**From source:**
+
 ```powershell
 py -m pip install --user .
 omnimonitor setup
@@ -239,6 +261,12 @@ On Windows 11 the icon can land in the "hidden icons" overflow (^). Drag it onto
 taskbar to pin it.
 
 ### Linux
+
+**Prebuilt (x86_64):** `chmod +x omnimonitor-linux-x86_64.AppImage && ./omnimonitor-linux-x86_64.AppImage`
+(needs FUSE 2; without it run with `--appimage-extract-and-run`). Or unpack
+`omnimonitor-linux-x86_64.tar.gz` and run `./omnimonitor`.
+
+**From source:**
 
 ```bash
 python3 -m pip install --user .     # Debian/Ubuntu may need: pipx install .
@@ -517,8 +545,8 @@ with a fixture. **Never return made-up numbers.**
 **Releases:** bump `__version__` (in `src/omnimonitor/__init__.py`) and
 `pyproject.toml`, update `CHANGELOG.md`, then tag `vX.Y.Z` and push the tag.
 `.github/workflows/release.yml` builds PyInstaller binaries (`omnimonitor-<os>-<arch>`, e.g.
-`omnimonitor-macos-arm64.zip`, `omnimonitor-windows-x86_64.zip`, `omnimonitor-linux-x86_64.tar.gz`) on macOS 14 (arm64), macOS 15 Intel
-(`macos-15-intel`; GitHub retired `macos-13`), Windows and Ubuntu, and attaches them to a GitHub Release. The binaries are
+`omnimonitor-macos-arm64.dmg`/`.zip`, `omnimonitor-windows-x86_64.zip`, `omnimonitor-linux-x86_64.AppImage`/`.tar.gz`) on macOS 14 (arm64), macOS 15 Intel
+(`macos-15-intel`; GitHub retired `macos-13`), Windows and Ubuntu, and attaches them with `SHA256SUMS.txt` to a GitHub Release whose notes come from `docs/release-notes/vX.Y.Z.md`. The binaries are
 unsigned, so macOS Gatekeeper and Windows SmartScreen will warn until signing is set up.
 
 ---
