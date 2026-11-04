@@ -1,28 +1,32 @@
 # OmniMonitor
 
-**Unofficial** tray / menu-bar app that shows how much of your **Grok weekly usage pool** is
-left, plus **local token stats** (tokens this week, lifetime, peak day, longest task, streaks
-and a GitHub-style heatmap) on a private page served only to your own computer. Since 0.2.0
-it can also count **Claude Code** and **Codex** tokens from their local logs, break usage down
-by tool / model / project, estimate cost from **your own** price table, project your weekly
-pace, alert you at thresholds, export CSV/JSON and be personalized from a settings page.
+**Local-first tray app that monitors AI usage, limits and spend across Grok, Claude,
+ChatGPT/Codex, Gemini, DeepSeek, Qwen, Kimi, Cursor, Copilot and more. No cookies, no
+scraping.**
 
-Since 0.3.0 it monitors **many more AI tools and accounts, all opt-in**: Gemini CLI, Qwen
-Code, Kimi CLI / Kimi Code / Kimi Work, opencode and the GitHub Copilot CLI from their local
-logs, plus official usage / balance APIs for Claude (Anthropic Admin), OpenAI, xAI, DeepSeek,
-Kimi (Moonshot), GitHub Copilot, Cursor teams, OpenRouter and Ollama Cloud, with USD
-budgets, per-provider alerts and a tray icon that can follow the provider you pick. The full
-matrix, including what is **not** supported and why, is in
+OmniMonitor reads two kinds of sources, both **opt-in**:
+
+* **Local logs** written by the AI tools on your own computer (read-only): Grok CLI,
+  Claude Code, Codex, Gemini CLI, Qwen Code, Kimi CLI / Kimi Code / Kimi Work, opencode and
+  the GitHub Copilot CLI.
+* **Official account APIs** with your own key: Anthropic Admin, OpenAI, xAI, DeepSeek,
+  Moonshot (Kimi), GitHub Copilot, Cursor teams, OpenRouter and Ollama Cloud, plus the Grok
+  weekly usage pool.
+
+It shows remaining limits, tokens by tool / model / project, estimated cost from **your own**
+price table, weekly pace, threshold alerts and CSV/JSON export on a private page served only
+to your own computer. It never reads browser cookies or keychains, and shows "not available"
+instead of guessing. The full matrix, including what is **not** supported and why, is in
 [docs/providers.md](docs/providers.md).
 
 Runs on **macOS** (Apple Silicon and Intel), **Windows 10/11** and **Linux** (GNOME/KDE). It
 is the standalone successor to the old SwiftBar plugin in [`legacy/`](legacy/), so SwiftBar
 is no longer needed.
 
-> **Unofficial. Not affiliated with, endorsed by, or supported by xAI or X.** "Grok" is a
-> trademark of its owner and is mentioned here only to describe what the app works with.
-> This app reads an **undocumented** endpoint used by the official Grok CLI, so it may break
-> at any time. See the [disclaimer](#disclaimer).
+> **Unofficial. Not affiliated with, endorsed by, or supported by xAI, X, Anthropic, OpenAI,
+> Google or any other listed provider.** Product names are trademarks of their owners and are
+> mentioned only to describe what the app works with. The Grok weekly pool comes from an
+> **undocumented** endpoint used by the official Grok CLI, so it may break at any time. See the [disclaimer](#disclaimer).
 >
 > *OmniMonitor was previously called `grok-usage-tray`.* Existing configs and autostart
 > entries are migrated automatically; see [Upgrading from grok-usage-tray](#upgrading-from-grok-usage-tray).

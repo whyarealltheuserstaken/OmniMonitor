@@ -314,7 +314,7 @@ class Controller:
         self._wake.set()
 
     def start_background(self) -> threading.Thread:
-        t = threading.Thread(target=self.run_loop, name="grok-usage-poll", daemon=True)
+        t = threading.Thread(target=self.run_loop, name="omnimonitor-poll", daemon=True)
         t.start()
         return t
 

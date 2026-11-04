@@ -178,7 +178,7 @@ class StatsServer:
         return "http://127.0.0.1:%d/s/%s/" % (self.port, self.secret)
 
     def start(self) -> "StatsServer":
-        self._thread = threading.Thread(target=self.httpd.serve_forever, name="grok-usage-web",
+        self._thread = threading.Thread(target=self.httpd.serve_forever, name="omnimonitor-web",
                                         daemon=True)
         self._thread.start()
         return self

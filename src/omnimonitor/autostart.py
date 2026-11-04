@@ -85,7 +85,7 @@ def _desktop_quote(arg: str) -> str:
 
 def desktop_entry(argv: List[str]) -> str:
     return ("[Desktop Entry]\nType=Application\nName=%s\n"
-            "Comment=Unofficial Grok weekly usage in your tray\n"
+            "Comment=AI usage, limits and spend in your tray\n"
             "Exec=%s\nTerminal=false\nX-GNOME-Autostart-enabled=true\n"
             "X-GNOME-Autostart-Delay=10\n") % (APP_DISPLAY_NAME,
                                                 " ".join(_desktop_quote(a) for a in argv))
