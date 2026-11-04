@@ -98,6 +98,39 @@ cacheWriteTokens, outputTokens, reasoningTokens ⊂ output}. `.credentials.yaml`
 On macOS/Windows, `kimi-desktop/daimon-storage.json` → `shareDir` (absolute paths only) is
 honoured before the default `kimi-desktop/daimon-share`.
 
+### `pi` and `openclaw`
+Pi session JSONL (`~/.pi/agent/sessions/**`, `$PI_CODING_AGENT_DIR`,
+`$PI_CODING_AGENT_SESSION_DIR`, `~/.omp`): assistant `message.usage` {input (uncached),
+output (incl. reasoning), cacheRead, cacheWrite, cost.total}. Forks copy parent entries, so
+entry `id` is the dedupe key. OpenClaw (`~/.openclaw/agents/**`, legacy `~/.clawdbot`,
+`~/.moltbot`) uses the same transcripts (experimental); delivery-mirror rows are skipped and
+OpenAI-style `prompt_tokens` usage is accepted.
+
+### `goose`
+Read-only `sessions/sessions.db`, table `sessions` (from block/goose `session_manager.rs`).
+One event per session (upserted as totals grow), dated at `created_at`; `accumulated_*`
+columns are preferred over the per-context ones. Input is gross (cache not added again).
+
+### `hermes`
+Read-only `$HERMES_HOME/state.db` plus `profiles/*/state.db`, per the Hermes developer
+guide. Per-session totals: input = input + cache read + cache write; output = output +
+reasoning; cost = actual, else estimated.
+
+### `amp`, `droid` (experimental)
+Amp `threads/*.json` `usageLedger.events[]` (cache from the target message's usage; credits
+are not converted to dollars). Factory Droid `sessions/**/<id>.settings.json` `tokenUsage`
+session totals; cwd from the sibling `.jsonl` `session_start`.
+
+### `cline`, `roo_code`, `kilo_code` (experimental)
+`<VS Code|Cursor>/User/globalStorage/<extension>/tasks/*/ui_messages.json`,
+`say == "api_req_started"` rows whose `text` JSON holds tokensIn/Out, cacheReads/Writes,
+cost. Cline's tokensIn excludes cache; Roo/Kilo may include it (detected per row). Model
+from the `<model>` tag in `api_conversation_history.json`, otherwise "unknown".
+
+### Not supported (researched)
+Zed, Kiro, MiniMax Agent, Devin CLI, LM Studio and the local Ollama server: no documented
+local usage log or usage API could be verified; see providers.md for each reason.
+
 ## Adding an adapter
 
 1. Write `parse_<tool>_line(line, ctx, file_key) -> List[TokenEvent]` in `adapters.py`

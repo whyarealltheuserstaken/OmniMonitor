@@ -28,7 +28,7 @@ only. Please report a mismatch with a redacted sample.
 
 ## Summary
 
-35 entries: 12 supported, 6 partial, 3 experimental, 14 not supported.
+47 entries: 12 supported, 9 partial, 9 experimental, 17 not supported.
 
 | Family | Provider | id | Status | Source | Shows | Tray % |
 |---|---|---|---|---|---|---|
@@ -65,8 +65,20 @@ only. Please report a mismatch with a redacted sample.
 | Windsurf | Windsurf | `windsurf` | ❌ not supported | – | Usage APIs are Enterprise-only (service key) and report acceptances/credits per team, not personal usage; no local usage log | – |
 | Mistral | Mistral (Le Chat / API) | `mistral` | ❌ not supported | – | No public usage or billing API; usage is only in the console | – |
 | Perplexity | Perplexity | `perplexity` | ❌ not supported | – | No public usage or billing API; usage is only in the API console | – |
-| Amp | Amp | `amp` | ❌ not supported | – | Usage is shown in ampcode.com settings (signed-in) | – |
-| Zed | Zed AI | `zed` | ❌ not supported | – | Agent threads are stored compressed in a private SQLite schema; plan usage is only in the signed-in account page | – |
+| Pi | Pi coding agent | `pi` | 🟡 partial | local logs | tokens (incl. cache), models, projects, cost as logged by Pi | – |
+| OpenClaw | OpenClaw | `openclaw` | 🧪 experimental | local logs | tokens (incl. cache), models, cost as logged | – |
+| Block | Goose | `goose` | 🟡 partial | local logs | tokens per session (incl. cache), models, projects, cost | – |
+| Nous Research | Hermes Agent | `hermes` | 🟡 partial | local logs | tokens per session (incl. cache, reasoning), models, cost | – |
+| Amp | Amp | `amp` | 🧪 experimental | local logs | tokens (incl. cache), models | – |
+| Factory | Factory Droid | `droid` | 🧪 experimental | local logs | tokens per session (incl. cache, thinking), models, projects | – |
+| Cline | Cline | `cline` | 🧪 experimental | local logs | tokens (incl. cache), cost as logged, model when found | – |
+| Roo Code | Roo Code | `roo_code` | 🧪 experimental | local logs | tokens (incl. cache), cost as logged, model when found | – |
+| Kilo Code | Kilo Code | `kilo_code` | 🧪 experimental | local logs | tokens (incl. cache), cost as logged, model when found | – |
+| Zed | Zed AI | `zed` | ❌ not supported | – | Agent threads are stored zstd-compressed in a private SQLite schema without per-request token counts we could verify; plan usage is only in the signed-in account page | – |
+| AWS | Kiro | `kiro` | ❌ not supported | – | Usage (credits) is shown only in the signed-in Kiro app/account; no documented local usage log or personal usage API | – |
+| MiniMax | MiniMax Agent / Code | `minimax_agent` | ❌ not supported | – | No documented local usage log or public balance/usage endpoint could be verified | – |
+| Cognition | Devin CLI | `devin_cli` | ❌ not supported | – | ACU usage is only in the signed-in Devin web app; the CLI's local files are undocumented and could not be verified | – |
+| LM Studio | LM Studio (local) | `lmstudio` | ❌ not supported | – | Local models have no quota; the server returns usage per response but keeps no documented usage log to read | – |
 
 ## Supported, partial and experimental providers
 
@@ -367,6 +379,134 @@ only. Please report a mismatch with a redacted sample.
 | Can drive the tray % | no |
 | Docs | [opencode.ai](https://opencode.ai/docs/) |
 
+### Pi coding agent (`pi`)
+
+| | |
+|---|---|
+| Status | 🟡 partial |
+| Source | ~/.pi/agent/sessions/**/*.jsonl ($PI_CODING_AGENT_DIR, $PI_CODING_AGENT_SESSION_DIR; also ~/.omp fork) |
+| Auth | none |
+| Shows | tokens (incl. cache), models, projects, cost as logged by Pi |
+| Reset period | n/a (history) |
+| Confidence / testing | medium: format read from the open-source pi-mono session code; synthetic fixtures. Forked sessions are de-duplicated by entry id |
+| Key variables | – |
+| Can drive the tray % | no |
+| Docs | [github.com](https://github.com/badlogic/pi-mono) |
+
+### OpenClaw (`openclaw`)
+
+| | |
+|---|---|
+| Status | 🧪 experimental |
+| Source | ~/.openclaw/agents/**/*.jsonl (legacy ~/.clawdbot, ~/.moltbot) |
+| Auth | none |
+| Shows | tokens (incl. cache), models, cost as logged |
+| Reset period | n/a (history) |
+| Confidence / testing | low-medium: Pi-format transcripts; OpenClaw's own layout is not documented |
+| Key variables | – |
+| Can drive the tray % | no |
+| Docs | [token-adapters.md](../docs/token-adapters.md) |
+| Note | Delivery-mirror rows are skipped so replies are not counted twice. |
+
+### Goose (`goose`)
+
+| | |
+|---|---|
+| Status | 🟡 partial |
+| Source | <goose data dir>/sessions/sessions.db, opened read-only ($GOOSE_PATH_ROOT/data, ~/.local/share/goose, %APPDATA%\Block\goose\data) |
+| Auth | none |
+| Shows | tokens per session (incl. cache), models, projects, cost |
+| Reset period | n/a (history) |
+| Confidence / testing | medium: schema read from block/goose session_manager.rs; totals are per session, dated when the session started |
+| Key variables | – |
+| Can drive the tray % | no |
+| Docs | [github.com](https://github.com/block/goose) |
+
+### Hermes Agent (`hermes`)
+
+| | |
+|---|---|
+| Status | 🟡 partial |
+| Source | $HERMES_HOME or ~/.hermes/state.db (+ profiles/*/state.db), opened read-only |
+| Auth | none |
+| Shows | tokens per session (incl. cache, reasoning), models, cost |
+| Reset period | n/a (history) |
+| Confidence / testing | medium: sessions schema is in the official developer guide; totals are per session, dated at started_at |
+| Key variables | – |
+| Can drive the tray % | no |
+| Docs | [hermes-agent.nousresearch.com](https://hermes-agent.nousresearch.com/docs/developer-guide/session-storage) |
+
+### Amp (`amp`)
+
+| | |
+|---|---|
+| Status | 🧪 experimental |
+| Source | ~/.local/share/amp/threads/*.json (usageLedger) |
+| Auth | none |
+| Shows | tokens (incl. cache), models |
+| Reset period | n/a (history) |
+| Confidence / testing | low: thread files are undocumented; Amp credits are not shown as dollars |
+| Key variables | – |
+| Can drive the tray % | no |
+| Docs | [token-adapters.md](../docs/token-adapters.md) |
+| Note | Plan/credit balance is only on ampcode.com and is not read. |
+
+### Factory Droid (`droid`)
+
+| | |
+|---|---|
+| Status | 🧪 experimental |
+| Source | ~/.factory/sessions/**/*.settings.json (tokenUsage) |
+| Auth | none |
+| Shows | tokens per session (incl. cache, thinking), models, projects |
+| Reset period | n/a (history) |
+| Confidence / testing | low: undocumented session files; session totals only |
+| Key variables | – |
+| Can drive the tray % | no |
+| Docs | [token-adapters.md](../docs/token-adapters.md) |
+
+### Cline (`cline`)
+
+| | |
+|---|---|
+| Status | 🧪 experimental |
+| Source | <VS Code\|Cursor>/User/globalStorage/saoudrizwan.claude-dev/tasks/*/ui_messages.json |
+| Auth | none |
+| Shows | tokens (incl. cache), cost as logged, model when found |
+| Reset period | n/a (history) |
+| Confidence / testing | low-medium: api_req_started records from the open-source extension; model is parsed from environment details and may show as unknown |
+| Key variables | – |
+| Can drive the tray % | no |
+| Docs | [github.com](https://github.com/cline/cline) |
+
+### Roo Code (`roo_code`)
+
+| | |
+|---|---|
+| Status | 🧪 experimental |
+| Source | <VS Code\|Cursor>/User/globalStorage/rooveterinaryinc.roo-cline/tasks/*/ui_messages.json |
+| Auth | none |
+| Shows | tokens (incl. cache), cost as logged, model when found |
+| Reset period | n/a (history) |
+| Confidence / testing | low-medium: same record format as Cline (a fork) |
+| Key variables | – |
+| Can drive the tray % | no |
+| Docs | [github.com](https://github.com/RooCodeInc/Roo-Code) |
+
+### Kilo Code (`kilo_code`)
+
+| | |
+|---|---|
+| Status | 🧪 experimental |
+| Source | <VS Code\|Cursor>/User/globalStorage/kilocode.kilo-code/tasks/*/ui_messages.json |
+| Auth | none |
+| Shows | tokens (incl. cache), cost as logged, model when found |
+| Reset period | n/a (history) |
+| Confidence / testing | low-medium: same record format as Cline (a fork) |
+| Key variables | – |
+| Can drive the tray % | no |
+| Docs | [github.com](https://github.com/Kilo-Org/kilocode) |
+
 ## Not supported (and what would be needed)
 
 | Provider | id | Why not | What would be needed | Docs |
@@ -383,8 +523,11 @@ only. Please report a mismatch with a redacted sample.
 | Windsurf | `windsurf` | Usage APIs are Enterprise-only (service key) and report acceptances/credits per team, not personal usage; no local usage log. | An Enterprise service key; an adapter could be added on request. | [docs.windsurf.com](https://docs.windsurf.com/windsurf/accounts/api-reference/api-introduction) |
 | Mistral (Le Chat / API) | `mistral` | No public usage or billing API; usage is only in the console. | An official API. | – |
 | Perplexity | `perplexity` | No public usage or billing API; usage is only in the API console. | An official API. | – |
-| Amp | `amp` | Usage is shown in ampcode.com settings (signed-in). Local thread files exist but their format is not documented and could not be verified. | A documented usage log or API. | – |
-| Zed AI | `zed` | Agent threads are stored compressed in a private SQLite schema; plan usage is only in the signed-in account page. | A documented usage log or API. | – |
+| Zed AI | `zed` | Agent threads are stored zstd-compressed in a private SQLite schema without per-request token counts we could verify; plan usage is only in the signed-in account page. | A documented usage log or API. | – |
+| Kiro | `kiro` | Usage (credits) is shown only in the signed-in Kiro app/account; no documented local usage log or personal usage API. | A documented usage log or API. | – |
+| MiniMax Agent / Code | `minimax_agent` | No documented local usage log or public balance/usage endpoint could be verified. | An official usage or balance API. | – |
+| Devin CLI | `devin_cli` | ACU usage is only in the signed-in Devin web app; the CLI's local files are undocumented and could not be verified. | A documented usage log or API. | – |
+| LM Studio (local) | `lmstudio` | Local models have no quota; the server returns usage per response but keeps no documented usage log to read. | n/a (local, unmetered) | – |
 
 ## Adding a provider
 

@@ -246,13 +246,83 @@ CATALOG: Tuple[ProviderInfo, ...] = (
     _P("perplexity", "Perplexity", "Perplexity", "none", NOT_SUPPORTED,
        reason="No public usage or billing API; usage is only in the API console.",
        needs="An official API."),
-    _P("amp", "Amp", "Amp", "none", NOT_SUPPORTED,
-       reason="Usage is shown in ampcode.com settings (signed-in). Local thread files exist but "
-              "their format is not documented and could not be verified.",
-       needs="A documented usage log or API."),
+    # ------------------------------------------------------------ 0.4 batch 1b (local)
+    _P("pi", "Pi coding agent", "Pi", "local_logs", PARTIAL,
+       shows="tokens (incl. cache), models, projects, cost as logged by Pi",
+       source="~/.pi/agent/sessions/**/*.jsonl ($PI_CODING_AGENT_DIR, "
+              "$PI_CODING_AGENT_SESSION_DIR; also ~/.omp fork)",
+       reset="n/a (history)",
+       confidence="medium: format read from the open-source pi-mono session code; synthetic "
+                  "fixtures. Forked sessions are de-duplicated by entry id",
+       docs=("https://github.com/badlogic/pi-mono",)),
+    _P("openclaw", "OpenClaw", "OpenClaw", "local_logs", EXPERIMENTAL,
+       shows="tokens (incl. cache), models, cost as logged",
+       source="~/.openclaw/agents/**/*.jsonl (legacy ~/.clawdbot, ~/.moltbot)",
+       reset="n/a (history)",
+       confidence="low-medium: Pi-format transcripts; OpenClaw's own layout is not documented",
+       docs=("docs/token-adapters.md",),
+       extra={"note": "Delivery-mirror rows are skipped so replies are not counted twice."}),
+    _P("goose", "Goose", "Block", "local_logs", PARTIAL,
+       shows="tokens per session (incl. cache), models, projects, cost",
+       source="<goose data dir>/sessions/sessions.db, opened read-only "
+              "($GOOSE_PATH_ROOT/data, ~/.local/share/goose, %APPDATA%\\Block\\goose\\data)",
+       reset="n/a (history)",
+       confidence="medium: schema read from block/goose session_manager.rs; totals are per "
+                  "session, dated when the session started",
+       docs=("https://github.com/block/goose",)),
+    _P("hermes", "Hermes Agent", "Nous Research", "local_logs", PARTIAL,
+       shows="tokens per session (incl. cache, reasoning), models, cost",
+       source="$HERMES_HOME or ~/.hermes/state.db (+ profiles/*/state.db), opened read-only",
+       reset="n/a (history)",
+       confidence="medium: sessions schema is in the official developer guide; totals are per "
+                  "session, dated at started_at",
+       docs=("https://hermes-agent.nousresearch.com/docs/developer-guide/session-storage",)),
+    _P("amp", "Amp", "Amp", "local_logs", EXPERIMENTAL,
+       shows="tokens (incl. cache), models",
+       source="~/.local/share/amp/threads/*.json (usageLedger)",
+       reset="n/a (history)",
+       confidence="low: thread files are undocumented; Amp credits are not shown as dollars",
+       docs=("docs/token-adapters.md",),
+       extra={"note": "Plan/credit balance is only on ampcode.com and is not read."}),
+    _P("droid", "Factory Droid", "Factory", "local_logs", EXPERIMENTAL,
+       shows="tokens per session (incl. cache, thinking), models, projects",
+       source="~/.factory/sessions/**/*.settings.json (tokenUsage)",
+       reset="n/a (history)", confidence="low: undocumented session files; session totals only",
+       docs=("docs/token-adapters.md",)),
+    _P("cline", "Cline", "Cline", "local_logs", EXPERIMENTAL,
+       shows="tokens (incl. cache), cost as logged, model when found",
+       source="<VS Code|Cursor>/User/globalStorage/saoudrizwan.claude-dev/tasks/*/ui_messages.json",
+       reset="n/a (history)",
+       confidence="low-medium: api_req_started records from the open-source extension; model "
+                  "is parsed from environment details and may show as unknown",
+       docs=("https://github.com/cline/cline",)),
+    _P("roo_code", "Roo Code", "Roo Code", "local_logs", EXPERIMENTAL,
+       shows="tokens (incl. cache), cost as logged, model when found",
+       source="<VS Code|Cursor>/User/globalStorage/rooveterinaryinc.roo-cline/tasks/*/"
+              "ui_messages.json",
+       reset="n/a (history)", confidence="low-medium: same record format as Cline (a fork)",
+       docs=("https://github.com/RooCodeInc/Roo-Code",)),
+    _P("kilo_code", "Kilo Code", "Kilo Code", "local_logs", EXPERIMENTAL,
+       shows="tokens (incl. cache), cost as logged, model when found",
+       source="<VS Code|Cursor>/User/globalStorage/kilocode.kilo-code/tasks/*/ui_messages.json",
+       reset="n/a (history)", confidence="low-medium: same record format as Cline (a fork)",
+       docs=("https://github.com/Kilo-Org/kilocode",)),
     _P("zed", "Zed AI", "Zed", "none", NOT_SUPPORTED,
-       reason="Agent threads are stored compressed in a private SQLite schema; plan usage is only "
-              "in the signed-in account page.", needs="A documented usage log or API."),
+       reason="Agent threads are stored zstd-compressed in a private SQLite schema without "
+              "per-request token counts we could verify; plan usage is only in the signed-in "
+              "account page.", needs="A documented usage log or API."),
+    _P("kiro", "Kiro", "AWS", "none", NOT_SUPPORTED,
+       reason="Usage (credits) is shown only in the signed-in Kiro app/account; no documented "
+              "local usage log or personal usage API.", needs="A documented usage log or API."),
+    _P("minimax_agent", "MiniMax Agent / Code", "MiniMax", "none", NOT_SUPPORTED,
+       reason="No documented local usage log or public balance/usage endpoint could be verified.",
+       needs="An official usage or balance API."),
+    _P("devin_cli", "Devin CLI", "Cognition", "none", NOT_SUPPORTED,
+       reason="ACU usage is only in the signed-in Devin web app; the CLI's local files are "
+              "undocumented and could not be verified.", needs="A documented usage log or API."),
+    _P("lmstudio", "LM Studio (local)", "LM Studio", "none", NOT_SUPPORTED,
+       reason="Local models have no quota; the server returns usage per response but keeps no "
+              "documented usage log to read.", needs="n/a (local, unmetered)"),
 )
 
 BY_ID: Dict[str, ProviderInfo] = {p.id: p for p in CATALOG}

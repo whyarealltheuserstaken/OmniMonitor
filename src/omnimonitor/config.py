@@ -99,6 +99,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "kimi_home": "",         # ~/.kimi (+ $KIMI_CODE_HOME or ~/.kimi-code, + Kimi Work)
     "antigravity_home": "",  # ~/.gemini/antigravity-cli etc. (experimental)
     "dsh_home": "",          # $DSH_HOME or ~/.dsh (experimental)
+    "pi_home": "", "openclaw_home": "", "goose_home": "", "hermes_home": "",
+    "amp_home": "", "factory_home": "", "vscode_storage": "",
     "opencode_home": "",     # $XDG_DATA_HOME/opencode or ~/.local/share/opencode
     "copilot_otel_path": "", # $COPILOT_OTEL_FILE_EXPORTER_PATH or ~/.copilot/otel
     # Non-secret account settings.
@@ -373,6 +375,78 @@ def dsh_roots(cfg: Dict[str, Any]) -> list:
     home = Path(env).expanduser() if env else Path.home() / ".dsh"
     return [h / "sessions" if (h / "sessions").is_dir() else h for h in _homes(raw, [home])] \
         if raw else [home / "sessions"]
+
+
+def _env_path(name: str) -> Optional[Path]:
+    v = os.environ.get(name, "").strip()
+    return Path(v).expanduser() if v else None
+
+
+def _xdg_data() -> Path:
+    x = os.environ.get("XDG_DATA_HOME", "").strip()
+    return Path(x).expanduser() if x else Path.home() / ".local" / "share"
+
+
+def _appdata() -> Optional[Path]:
+    return _env_path("APPDATA")
+
+
+def pi_roots(cfg: Dict[str, Any]) -> list:
+    d = []
+    if _env_path("PI_CODING_AGENT_SESSION_DIR"):
+        d.append(_env_path("PI_CODING_AGENT_SESSION_DIR"))
+    base = _env_path("PI_CODING_AGENT_DIR")
+    d.append((base or Path.home() / ".pi" / "agent") / "sessions")
+    d.append(Path.home() / ".omp" / "agent" / "sessions")
+    return _homes((cfg.get("pi_home") or "").strip(), d)
+
+
+def openclaw_roots(cfg: Dict[str, Any]) -> list:
+    return _homes((cfg.get("openclaw_home") or "").strip(),
+                  [Path.home() / n / "agents" for n in
+                   (".openclaw", ".clawdbot", ".moltbot", ".moldbot")])
+
+
+def goose_roots(cfg: Dict[str, Any]) -> list:
+    d = []
+    root = _env_path("GOOSE_PATH_ROOT")
+    if root and root.is_absolute():
+        d.append(root / "data" / "sessions")
+    d += [_xdg_data() / "goose" / "sessions",
+          _xdg_data() / "Block" / "goose" / "sessions",
+          Path.home() / "Library" / "Application Support" / "goose" / "sessions",
+          Path.home() / "Library" / "Application Support" / "Block.goose" / "sessions"]
+    if _appdata():
+        d.append(_appdata() / "Block" / "goose" / "data" / "sessions")
+    return _homes((cfg.get("goose_home") or "").strip(), d)
+
+
+def hermes_roots(cfg: Dict[str, Any]) -> list:
+    env = _env_path("HERMES_HOME")
+    d = [env] if env else [Path.home() / ".hermes"]
+    la = _env_path("LOCALAPPDATA")
+    if la and not env:
+        d.append(la / "hermes")
+    return _homes((cfg.get("hermes_home") or "").strip(), d)
+
+
+def amp_roots(cfg: Dict[str, Any]) -> list:
+    return _homes((cfg.get("amp_home") or "").strip(), [_xdg_data() / "amp" / "threads"])
+
+
+def factory_roots(cfg: Dict[str, Any]) -> list:
+    return _homes((cfg.get("factory_home") or "").strip(),
+                  [Path.home() / ".factory" / "sessions"])
+
+
+def vscode_storage_roots(cfg: Dict[str, Any]) -> list:
+    """``User/globalStorage`` dirs of VS Code and Cursor (Cline / Roo / Kilo live there)."""
+    bases = [Path.home() / ".config", Path.home() / "Library" / "Application Support"]
+    if _appdata():
+        bases.append(_appdata())
+    d = [b / e / "User" / "globalStorage" for b in bases for e in ("Code", "Cursor")]
+    d.append(Path.home() / ".vscode-server" / "data" / "User" / "globalStorage")
+    return _homes((cfg.get("vscode_storage") or "").strip(), d)
 
 
 def opencode_dirs(cfg: Dict[str, Any]) -> list:
