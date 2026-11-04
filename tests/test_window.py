@@ -109,3 +109,22 @@ def test_child_command_frozen(monkeypatch):
 def test_env_disables_window(monkeypatch):
     monkeypatch.setenv("OMNIMONITOR_NO_WINDOW", "1")
     assert window.webview_available() is False
+
+
+def test_stats_served_event_set_by_api(tmp_path, monkeypatch):
+    """Window smoke relies on the server flagging that the page's script fetched api/stats."""
+    import urllib.request
+
+    from omnimonitor.webui import StatsServer
+
+    srv = StatsServer(lambda: {"ok": True}).start()
+    try:
+        assert not srv.stats_served.is_set()
+        with urllib.request.urlopen(srv.url, timeout=5) as r:
+            r.read()
+        assert not srv.stats_served.is_set()
+        with urllib.request.urlopen(srv.url + "api/stats", timeout=5) as r:
+            r.read()
+        assert srv.stats_served.is_set()
+    finally:
+        srv.stop()

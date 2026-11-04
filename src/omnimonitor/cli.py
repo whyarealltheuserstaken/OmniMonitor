@@ -123,7 +123,7 @@ def cmd_window(args) -> int:
         ctrl = Controller(_load(args))
         srv = for_controller(ctrl, 0).start()
         try:
-            return window.run_window(srv.url, smoke=True)
+            return window.run_window(srv.url, smoke=True, timeout_s=45, served=srv.stats_served)
         finally:
             srv.stop()
     url = window.read_url_from_stdin()
