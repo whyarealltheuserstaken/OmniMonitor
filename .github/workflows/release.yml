@@ -50,6 +50,9 @@ jobs:
           # menu-bar-only app: no Dock icon
           P=dist/omnimonitor.app/Contents/Info.plist
           /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "$P"
+          # the app window loads the local dashboard over http://127.0.0.1 (never remote http)
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$P"
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true" "$P"
           V=$(python -c "import omnimonitor; print(omnimonitor.__version__)")
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $V" "$P"
           /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $V" "$P" || \

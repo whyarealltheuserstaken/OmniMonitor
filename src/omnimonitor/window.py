@@ -113,21 +113,36 @@ def run_window(url: str, smoke: bool = False, timeout_s: float = 60.0) -> int:
                                 min_size=MIN_SIZE, text_select=True)
     result = {"rc": 1}
     if smoke:
+        seen = {"shown": False, "loaded": False, "err": None, "title": None, "ready": None}
+        win.events.shown += lambda *a: seen.__setitem__("shown", True)
+        win.events.loaded += lambda *a: seen.__setitem__("loaded", True)
+
+        def watchdog():
+            # evaluate_js blocks until the page has loaded; never hang CI forever
+            time.sleep(timeout_s + 15)
+            print("WINDOW FAILED: watchdog timeout; state=%r" % seen, flush=True)
+            os._exit(1)
+
+        threading.Thread(target=watchdog, daemon=True).start()
+
         def check():
             t0 = time.monotonic()
             while time.monotonic() - t0 < timeout_s:
+                if not seen["loaded"]:
+                    time.sleep(0.5)
+                    continue
                 try:
-                    title = win.evaluate_js("document.title")
-                    ready = win.evaluate_js("document.readyState")
+                    seen["title"] = title = win.evaluate_js("document.title")
+                    seen["ready"] = ready = win.evaluate_js("document.readyState")
                     if title and "OmniMonitor" in str(title) and ready == "complete":
                         print("WINDOW OK: %s" % title, flush=True)
                         result["rc"] = 0
                         break
-                except Exception:  # noqa: BLE001
-                    pass
+                except Exception as e:  # noqa: BLE001
+                    seen["err"] = repr(e)[:200]
                 time.sleep(0.5)
             else:
-                print("WINDOW FAILED: page did not load", flush=True)
+                print("WINDOW FAILED: page did not load; state=%r" % seen, flush=True)
             win.destroy()
         webview.start(check, private_mode=True)
         return result["rc"]
