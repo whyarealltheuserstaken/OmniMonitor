@@ -9,13 +9,15 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from omnimonitor import accounts as accounts_mod
-from omnimonitor import adapters
+from omnimonitor import adapters, catalog
 from omnimonitor import alerts as alerts_mod
 from omnimonitor import config as config_mod
 from omnimonitor import forecast as forecast_mod
+from omnimonitor import net as net_mod
 from omnimonitor import overview as overview_mod
 from omnimonitor import settings as settings_mod
 from omnimonitor import stats as stats_mod
+from omnimonitor import status as status_mod
 from omnimonitor.billing import UsageResult, fetch_usage_safely
 from omnimonitor.history import History
 from omnimonitor.timeutil import utcnow
@@ -27,6 +29,8 @@ class Controller:
                  clock: Callable[[], datetime] = utcnow):
         self.cfg = cfg
         self.clock = clock
+        net_mod.configure(cfg)
+        self.service_status: Dict[str, Dict[str, Any]] = {}
         self._lock = threading.RLock()
         self._scan_lock = threading.Lock()  # web "save settings" and the poll loop both scan
         self._wake = threading.Event()
@@ -107,7 +111,9 @@ class Controller:
         """Official account APIs for enabled providers (rate-limited, never raises)."""
         if self.token_source == "demo":
             self.readings = demo_readings(self.clock().timestamp())
+            self.service_status = {}
             return
+        self._refresh_status()
         ids = config_mod.enabled_api_providers(self.cfg)
         if not ids:
             self.readings = {}
@@ -119,6 +125,16 @@ class Controller:
         except Exception as e:  # noqa: BLE001
             self.token_note = (self.token_note + "; " if self.token_note else "") + \
                 "account readers failed: %s" % e.__class__.__name__
+
+    def _refresh_status(self) -> None:
+        """Opt-in official status-page badges (cached 5 min; never raises)."""
+        try:
+            ids = set(self.tools()) | set(config_mod.enabled_api_providers(self.cfg)) | {"grok"}
+            fams = {catalog.get(i).family for i in ids if catalog.get(i)}
+            self.service_status = status_mod.fetch_all(self.cfg, fams, http=self.http,
+                                                       now=self.clock().timestamp())
+        except Exception:  # noqa: BLE001
+            self.service_status = {}
 
     def _scan_tokens(self) -> None:
         if self.history is None or self.token_source == "demo":
@@ -190,6 +206,7 @@ class Controller:
             return {"ok": False, "errors": {"_": "could not save config: %s" % e}}
         with self._lock:
             self.cfg.update(clean)
+            net_mod.configure(self.cfg)
             self.cfg["poll_interval_seconds"] = config_mod.clamp_poll(
                 self.cfg.get("poll_interval_seconds"))
         self._open_history()
@@ -240,6 +257,13 @@ class Controller:
         except Exception as e:  # noqa: BLE001 - a bad reading must not blank the page
             st["providers"] = {"error": "provider overview failed: %s" % e.__class__.__name__,
                                "cards": []}
+        ss = dict(self.service_status)
+        if isinstance(st.get("providers"), dict):
+            st["providers"]["service_status"] = ss
+            for c in st["providers"].get("cards") or []:
+                fam = c.get("family")
+                if fam in ss:
+                    c["service"] = ss[fam]
         st["status"] = self.status_dict()
         with self._lock:
             self._stats = st

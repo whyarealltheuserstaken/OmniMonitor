@@ -6,6 +6,7 @@
   var tab = "all", last = null;
   function $(id) { return document.getElementById(id); }
   function fmtTs(ts) { return ts ? OM.fmtDate(new Date(ts * 1000).toISOString()) : ""; }
+  function resets(ts) { var c = OM.fmtCountdown(ts); return "resets " + (c ? c + " (" + fmtTs(ts) + ")" : fmtTs(ts)); }
   function usd(v, reason) { return v === null || v === undefined ? OM.na(reason || "no recorded cost and no matching price") : document.createTextNode(fmtUsd(v)); }
   function pillFor(status) {
     var cls = { ok: "ok", high: "warn", warn: "warn", over: "bad" }[status] || "ok";
@@ -58,7 +59,7 @@
       }
       d.appendChild(v);
       if (r.percent !== null && r.percent !== undefined) d.appendChild(meter(r.percent, usedColor(r.percent)));
-      d.appendChild(el("div", "sub", (r.note ? r.note + " · " : "") + "resets " + fmtTs(r.resets_at)));
+      d.appendChild(el("div", "sub", (r.note ? r.note + " · " : "") + resets(r.resets_at)));
       g.appendChild(d);
     });
     $("pv-budget-note").textContent = (b.basis || "") + (any ? "" : " · set budgets in Settings");
@@ -76,7 +77,7 @@
       i.style.background = usedColor(used); m.appendChild(i); d.appendChild(m);
     }
     var bits = [];
-    if (w.resets_at) bits.push("resets " + fmtTs(w.resets_at));
+    if (w.resets_at) bits.push(resets(w.resets_at));
     if (w.pace) {
       bits.push("≈" + Math.round(w.pace.projected_percent) + "% at reset (estimate, " + Math.round(w.pace.elapsed_percent) + "% of window gone)");
       if (w.pace.runs_out_at) bits.push("≈ runs out " + fmtTs(w.pace.runs_out_at));
@@ -90,7 +91,15 @@
     var box = el("div", "card pv-card");
     box.setAttribute("data-provider", c.id);
     var h = el("div", "t"); h.style.display = "flex"; h.style.justifyContent = "space-between";
-    h.appendChild(el("strong", "", c.name));
+    var nm = el("strong", "", c.name);
+    if (c.service) {
+      var lvl = c.service.indicator, cls = lvl === "none" ? "ok" : lvl === "minor" || lvl === "maintenance" ? "warn" : "bad";
+      var a = el("a", "pill " + cls, lvl === "none" ? "operational" : c.service.level + (c.service.stale ? " (stale)" : ""));
+      a.href = c.service.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+      a.title = "Official status page: " + (c.service.description || ""); a.style.marginLeft = "6px";
+      nm.appendChild(a);
+    }
+    h.appendChild(nm);
     h.appendChild(el("span", "sub", (c.demo ? "DEMO · " : "") + ({ local_logs: "local logs", api: "account API", billing: "Grok billing" }[c.kind] || c.kind)));
     box.appendChild(h);
     if (c.error) box.appendChild(el("div", "sub est", "⚠ " + c.error));

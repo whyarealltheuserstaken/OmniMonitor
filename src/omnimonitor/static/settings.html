@@ -167,6 +167,8 @@
       <div class="checks"><label><input type="checkbox" id="notifications"> enabled</label>
         <label><input type="checkbox" id="notify_on_reset"> when the week resets</label>
         <label><input type="checkbox" id="notify_on_pace"> when on pace to run out (estimate)</label></div></div>
+      <div class="row"><label for="status_badges">Service status</label><div>
+        <label><input type="checkbox" id="status_badges"> opt-in: show incident badges from official status pages (Claude, OpenAI, GitHub, Cursor, Fireworks, Vercel; one GET per page every 5 min)</label></div></div>
     <div class="field"><label class="k" for="notify_thresholds">Alert at % used<div class="h">Comma-separated, e.g. 50, 80, 95.</div></label>
       <div><input type="text" id="notify_thresholds"></div></div>
     <div class="field"><label class="k" for="provider_thresholds">Per-provider alert %<div class="h">Optional overrides for providers with limits, e.g. <code>{"codex": [80, 95], "openrouter": [90]}</code>. Others use the list above.</div></label>

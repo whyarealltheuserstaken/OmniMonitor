@@ -51,3 +51,50 @@ def ssl_context() -> ssl.SSLContext:
 def reset_for_tests() -> None:
     global _CTX, _SOURCE
     _CTX, _SOURCE = None, ""
+
+
+# ----------------------------------------------------------------------------- proxy
+# ``proxy_url`` (config file / CLI only) wins; otherwise urllib's standard HTTPS_PROXY /
+# HTTP_PROXY / NO_PROXY environment variables apply. Credentials are refused in the config
+# (it is not a secrets file): use the environment variables for an authenticated proxy.
+_PROXY = ""
+
+
+def validate_proxy(raw: str) -> str:
+    import urllib.parse
+    raw = (raw or "").strip()
+    if not raw:
+        return ""
+    u = urllib.parse.urlsplit(raw)
+    if u.scheme not in ("http", "https") or not u.hostname:
+        raise ValueError("proxy must be http://host:port or https://host:port")
+    if u.username or u.password:
+        raise ValueError("no credentials in proxy_url; set HTTPS_PROXY in the environment")
+    if u.path not in ("", "/") or u.query or u.fragment:
+        raise ValueError("proxy_url must be just scheme://host:port")
+    try:
+        _ = u.port
+    except ValueError:
+        raise ValueError("bad proxy port") from None
+    return raw.rstrip("/")
+
+
+def configure(cfg) -> None:
+    global _PROXY
+    try:
+        _PROXY = validate_proxy(str((cfg or {}).get("proxy_url") or ""))
+    except ValueError:
+        _PROXY = ""
+
+
+def proxy_url() -> str:
+    return _PROXY
+
+
+def build_opener(*handlers):
+    """urllib opener with the app's CA bundle and proxy setting."""
+    import urllib.request
+    proxy = urllib.request.ProxyHandler({"https": _PROXY, "http": _PROXY}) if _PROXY \
+        else urllib.request.ProxyHandler()  # env HTTPS_PROXY / NO_PROXY
+    return urllib.request.build_opener(proxy, urllib.request.HTTPSHandler(context=ssl_context()),
+                                       *handlers)

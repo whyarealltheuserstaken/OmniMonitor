@@ -18,6 +18,8 @@ def _load(args) -> dict:
     if getattr(args, "demo", False):
         cfg["source"] = "demo"
         cfg["token_source"] = "demo"
+    from omnimonitor import net
+    net.configure(cfg)
     return cfg
 
 
@@ -349,6 +351,29 @@ def cmd_blocks(args) -> int:
     return 0
 
 
+def cmd_statusline(args) -> int:
+    """One line for a shell prompt or editor status bar (offline, no network)."""
+    import time as _time
+
+    from omnimonitor import blocks as blocks_mod
+    from omnimonitor import statusline as sl
+    ctrl = _ctrl(args)
+    now = _time.time()
+    hist = ctrl.history
+    evs = hist.events() if hist is not None else []
+    src = None if args.source == "all" else (args.source,)
+    ov = ctrl.stats().get("providers") or {}
+    p = sl.parts(hist.last_billing() if hist is not None else None, ov.get("today"),
+                 blocks_mod.active_block(evs, src, now), now)
+    if ctrl.token_source == "demo":
+        p["demo"] = True
+    if args.json:
+        print(json.dumps(p))
+    else:
+        print(("DEMO " if p.get("demo") else "") + sl.render(p, now))
+    return 0
+
+
 def cmd_config(args) -> int:
     from omnimonitor import settings as settings_mod
     cfg = _load(args)
@@ -490,6 +515,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--source", default="claude_code", help="token source id, or 'all'")
     s.add_argument("--last", type=int, default=10)
     s.add_argument("--json", action="store_true")
+    s = sub.add_parser("statusline", help="one-line summary for prompts/status bars (offline)")
+    s.add_argument("--source", default="all", help="token source for the ≈5h block, or 'all'")
+    s.add_argument("--json", action="store_true")
     s = sub.add_parser("config", help="get/set validated settings")
     s.add_argument("action", choices=("get", "set", "keys", "export", "import"))
     s.add_argument("key", nargs="?")
@@ -581,7 +609,7 @@ def cmd_net_check(args) -> int:
     import urllib.error
     import urllib.request
 
-    from omnimonitor.net import ca_source, ssl_context
+    from omnimonitor.net import ca_source
     kind, detail = ca_source()
     print("CA bundle: %s (%s)" % (kind, detail))
     url = args.url
@@ -590,7 +618,10 @@ def cmd_net_check(args) -> int:
         return 2
     req = urllib.request.Request(url, headers={"User-Agent": "omnimonitor/" + __version__})
     try:
-        with urllib.request.urlopen(req, timeout=15, context=ssl_context()) as r:  # noqa: S310
+        from omnimonitor.net import build_opener, proxy_url
+        if proxy_url():
+            print("Proxy: %s" % proxy_url())
+        with build_opener().open(req, timeout=15) as r:
             print("HTTPS OK: %s -> %s" % (url, r.status))
             return 0
     except urllib.error.HTTPError as e:
@@ -634,7 +665,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         from omnimonitor.applog import log_path
         print(log_path())
         return 0
-    handlers = {"export": cmd_export, "providers": cmd_providers, "breakdown": cmd_breakdown, "blocks": cmd_blocks,
+    handlers = {"export": cmd_export, "providers": cmd_providers, "breakdown": cmd_breakdown, "blocks": cmd_blocks, "statusline": cmd_statusline,
                 "config": cmd_config, "notify-test": cmd_notify_test, "secrets": cmd_secrets, "deps": cmd_deps}
     if cmd in handlers:
         return handlers[cmd](args)

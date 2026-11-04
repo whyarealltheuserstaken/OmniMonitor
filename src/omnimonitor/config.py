@@ -109,6 +109,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "copilot_premium_allowance": 0,         # your plan's monthly included premium requests
     "xai_team_id": "",
     "fireworks_account_id": "",
+    "status_badges": False,
+    "proxy_url": "",
     "cursor_email": "",                     # your row in the Cursor team spend list
 }
 

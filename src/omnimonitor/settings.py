@@ -172,6 +172,13 @@ def _budgets(v: Any) -> Dict[str, float]:
     return out
 
 
+def _proxy(v: Any) -> str:
+    from omnimonitor.net import validate_proxy
+    if not isinstance(v, str):
+        raise ValueError("expected a string")
+    return validate_proxy(v)
+
+
 def _ident(maxlen: int, pattern: str) -> Callable[[Any], str]:
     def f(v: Any) -> str:
         if not isinstance(v, str) or len(v) > maxlen or (v and not re.fullmatch(pattern, v)):
@@ -199,6 +206,7 @@ SCHEMA: Dict[str, Tuple[Callable[[Any], Any], bool, str]] = {
     "notifications": (_bool, True, "desktop notifications"),
     "notify_thresholds": (_thresholds, True, "alert when weekly USED % crosses these"),
     "notify_on_reset": (_bool, True, "alert when the weekly pool resets"),
+    "status_badges": (_bool, True, "opt-in: show official status-page badges (network)"),
     "notify_on_pace": (_bool, True, "alert when on pace to run out before reset (estimate)"),
     "icon_style": (_choice("ring", "pie", "bar", "number"), True, "tray icon style"),
     "icon_value": (_choice("remaining", "used"), True, "tray icon shows remaining or used"),
@@ -234,6 +242,8 @@ SCHEMA: Dict[str, Tuple[Callable[[Any], Any], bool, str]] = {
     "copilot_premium_allowance": (_num(0, 1e6, True), False,
                                   "your plan's monthly premium requests (for a %)"),
     "xai_team_id": (_ident(64, r"[A-Za-z0-9_-]+"), False, "xAI team id for the balance"),
+    "proxy_url": (_proxy, False, "HTTP(S) proxy for all requests, http://host:port "
+                  "(default: HTTPS_PROXY env)"),
     "fireworks_account_id": (_ident(64, r"[A-Za-z0-9_-]+"), False,
                              "Fireworks account id for the spend summary"),
     "cursor_email": (_ident(254, r"[^@\s]+@[^@\s]+"), False,

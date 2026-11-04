@@ -19,6 +19,14 @@
     return d.toLocaleString(undefined, iso.length === 10 ? { month: "short", day: "numeric", year: "numeric" }
       : { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
   }
+  // "in 2d 4h" style countdown to a unix-seconds or ISO time; "" when unknown or past.
+  function fmtCountdown(t) {
+    if (!t) return "";
+    var ms = (typeof t === "number" ? t * 1000 : new Date(t).getTime()) - Date.now();
+    if (!(ms > 0)) return "";
+    var m = Math.floor(ms / 60000), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60);
+    return "in " + (d ? d + "d " + h + "h" : h ? h + "h " + (m % 60) + "m" : (m % 60) + "m");
+  }
   function el(tag, cls, text) {
     var e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -54,6 +62,6 @@
       return r.json().then(function (j) { return { ok: r.ok, status: r.status, body: j }; });
     });
   }
-  window.OM = { fmtTokens: fmtTokens, fmtUsd: fmtUsd, fmtDate: fmtDate, el: el, na: na,
+  window.OM = { fmtTokens: fmtTokens, fmtUsd: fmtUsd, fmtDate: fmtDate, fmtCountdown: fmtCountdown, el: el, na: na,
                 applyTheme: applyTheme, getJSON: getJSON };
 })();

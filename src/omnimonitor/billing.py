@@ -34,7 +34,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from omnimonitor import __version__
 from omnimonitor.config import DEFAULT_BILLING_URL, grok_auth_file, grok_home
-from omnimonitor.net import ssl_context
 from omnimonitor.timeutil import parse_time, utcnow
 
 
@@ -301,7 +300,8 @@ def billing_request(url: str, token: str, timeout: float) -> str:
         "User-Agent": "omnimonitor/%s" % __version__,
     })
     try:
-        with urllib.request.urlopen(req, timeout=timeout, context=ssl_context()) as r:  # noqa: S310 (checked above)
+        from omnimonitor.net import build_opener
+        with build_opener().open(req, timeout=timeout) as r:  # checked above
             return r.read(2_000_000).decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
         if e.code in (401, 403):

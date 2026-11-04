@@ -177,10 +177,9 @@ class _SameHostRedirects(urllib.request.HTTPRedirectHandler):
 
 def _default_fetch(url: str, dep: Dep) -> Tuple[bytes, str]:
     from omnimonitor import __version__
-    from omnimonitor.net import ssl_context
+    from omnimonitor.net import build_opener
 
-    opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ssl_context()),
-                                         _SameHostRedirects(dep))
+    opener = build_opener(_SameHostRedirects(dep))
     req = urllib.request.Request(url, headers={"User-Agent": "omnimonitor/" + __version__})
     with opener.open(req, timeout=30) as r:
         data = r.read(MAX_SCRIPT_BYTES + 1)

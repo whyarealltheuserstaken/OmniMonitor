@@ -52,7 +52,7 @@
       $("remaining").textContent = rem + "%";
       $("barfill").style.width = rem + "%";
       $("barfill").style.background = color(rem);
-      $("reset").textContent = u.resets_at ? "Resets " + fmtDate(u.resets_at) : "Reset time not reported";
+      $("reset").textContent = u.resets_at ? "Resets " + (OM.fmtCountdown(u.resets_at) ? OM.fmtCountdown(u.resets_at) + " · " : "") + fmtDate(u.resets_at) : "Reset time not reported";
       var parts = (u.products || []).map(function (p) { return p.product + " " + Math.round(p.used_percent) + "% used"; });
       if (u.raw_used_percent > 100) parts.push("reported " + u.raw_used_percent.toFixed(1) + "% (over pool)");
       $("products").textContent = parts.join(" · ");

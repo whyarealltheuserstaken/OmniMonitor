@@ -537,3 +537,17 @@ service. Background research: [docs/research.md](docs/research.md).
 
 [MIT](LICENSE). Feature ideas credited to [Token Monitor](https://github.com/Javis603/token-monitor)
 (MIT, © 2026 Javis); no code from it is included.
+
+## Status line, proxy, status badges and alerts
+
+- **`omnimonitor statusline`** prints one offline line for shell prompts / tmux / editor status bars, e.g.
+  `Grok 42% used, resets in 1d 4h (as of 2h ago) | ≈5h block 1.2M tok $3.10, 2h 14m left | today 3.4M tok $5.20`.
+  It reads only local history (no network). `--json` prints the same data as JSON. Cost and the 5-hour block are estimates (marked `≈`).
+- **Proxy:** set `proxy_url` (http/https `host:port`, no credentials) with `omnimonitor config set proxy_url http://host:3128`
+  or in the config file. It is not settable from the web UI. Without it, the standard `HTTPS_PROXY`/`NO_PROXY` env vars apply.
+- **Service status badges (opt-in, off by default):** enable "Service status" in Settings to show incident badges from
+  official Statuspage JSON for Claude, OpenAI, GitHub (Copilot), Cursor, Fireworks and Vercel. One request per page every 5 minutes.
+  Providers without a verified machine-readable status page show no badge.
+- **Reset countdowns** appear next to every reset time in the dashboard, mini view and stats.
+- **Alerts:** per-provider thresholds and monthly budgets (Settings → Alerts) send desktop notifications;
+  `notify_on_reset` and `notify_on_pace` (estimate) are optional.
