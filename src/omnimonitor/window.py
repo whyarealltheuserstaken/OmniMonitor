@@ -83,6 +83,7 @@ class WindowLauncher:
         except Exception as e:  # noqa: BLE001
             return self._fallback(url, "could not start window: %s" % e)
         self.proc, self.last_mode = proc, "window"
+        log.info("app window process started pid=%s", getattr(proc, "pid", "?"))
         threading.Thread(target=self._watch, args=(proc, url), daemon=True,
                          name="omnimonitor-window-watch").start()
         return "window"
@@ -92,6 +93,7 @@ class WindowLauncher:
         while time.monotonic() < deadline:
             rc = proc.poll()
             if rc is not None:
+                log.info("app window process exited rc=%s", rc)
                 if rc != 0:
                     self._fallback(url, "window process exited with %s" % rc)
                 return

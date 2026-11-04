@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- Installing the Grok CLI from the in-app Setup wizard and logging in left the app on demo numbers: the wizard never switched `source` away from `demo`, the running app never re-read `config.json`, and `doctor` reported `grok_cli_billing` even when the config still said `demo`.
+  - The app now reloads `config.json` when it changes (for example after `omnimonitor setup` in a terminal).
+  - The Setup page shows the Grok login state, the exact `grok login` command, a Re-check button and **Use my real Grok usage** (switches only after a successful billing read).
+  - `doctor` reports the configured source honestly and adds a "running app" section from `app-state.json`, flagging app vs config mismatches.
+  - Every poll is logged (source, % remaining or error, duration), as are Refresh clicks and the window process.
+  - Token stats explain why they are unavailable and mention the experimental unified-log provider when that log exists.
+
 ## [0.4.0] - 2026-11-04
 
 ### Added

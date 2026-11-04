@@ -197,6 +197,7 @@ class TrayApp:
         )
 
     def _on_refresh(self, *_):
+        log.info("Refresh Now clicked")
         threading.Thread(target=self.ctrl.refresh, daemon=True).start()
 
     def _open(self, rel: str = "") -> None:
