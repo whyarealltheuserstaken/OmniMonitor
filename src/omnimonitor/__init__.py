@@ -1,6 +1,6 @@
 """OmniMonitor: local-first tray app that monitors AI usage, limits and spend across many providers."""
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 APP_NAME = "omnimonitor"
 APP_DISPLAY_NAME = "OmniMonitor"
 APP_ID = "com.omnimonitor.tray"

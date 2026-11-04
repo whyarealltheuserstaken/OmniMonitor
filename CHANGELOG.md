@@ -4,6 +4,30 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-11-04
+
+### Added
+- **Native app window** (pywebview) with an app-style UI: sidebar, dashboard charts, providers, stats and settings.
+- **Setup wizard** (`omnimonitor setup` and in the app) that detects provider CLIs and can install them with each vendor's official installer.
+- **More providers.** The matrix now has 56 entries: 13 supported, 11 partial, 11 experimental and 21 not supported, each with a reason ([docs/providers.md](docs/providers.md)).
+  - New local logs: Claude Code transcripts with ≈5-hour block estimates, Kimi Work shareDir, Pi, Goose and Hermes (partial), and Grok CLI unified log, Antigravity, DeepSeek Harness, OpenClaw, Amp, Factory Droid, Cline, Roo Code and Kilo Code (experimental).
+  - New API readers (your own key, env var or `secrets.json` only): Vercel AI Gateway (supported), DeepInfra, Fireworks and xAI month-to-date spend plus spending limit (partial), and Venice and self-hosted LiteLLM (experimental).
+  - Documented as not supported, with the reason: z.ai, Volcengine, Hugging Face and Amazon Bedrock.
+- **Service status badges** (opt-in, off by default) from official status pages: Claude, OpenAI, GitHub, Cursor, Fireworks and Vercel.
+- **Reset countdowns** next to every reset time.
+- **Proxy support** (`proxy_url`, CLI or config only).
+- **`omnimonitor statusline [--json]`**: an offline one-line summary for shell prompts and tmux.
+- Packaging: macOS `.dmg` files (ad-hoc signed app with an Applications link) and a Linux AppImage, in addition to the zip and tar.gz.
+
+### Changed
+- The tray, the window and the CLI share one outbound HTTP opener (proxy, certifi CA bundle, host allow-list, no redirects).
+- Release CI publishes a non-draft release with `SHA256SUMS.txt`, mounts and checks each `.dmg`, and runs the AppImage.
+
+### Not verified
+- Nobody has run the window or tray on a real desktop yet; only CI runners have.
+- The new providers are tested against mocked responses only, not real accounts.
+- The binaries are unsigned (macOS ad-hoc only) and not notarized.
+
 ## [0.3.1] - 2026-11-03
 
 ### Fixed
