@@ -3,6 +3,7 @@
   "use strict";
   var $ = function (id) { return document.getElementById(id); }, el = OM.el;
   var csrf = "", initial = null;
+  if (window.OMApp) OMApp.shell("settings");
   var BOOLS = ["notifications", "notify_on_reset", "notify_on_pace", "estimate_weekly_limit"];
   var TEXTS = ["display_name", "theme", "accent_color", "icon_style", "icon_value", "primary_provider"];
   var NUMS = ["heatmap_weeks", "poll_interval_seconds", "estimate_min_used_percent",

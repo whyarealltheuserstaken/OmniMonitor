@@ -94,7 +94,7 @@
 <link rel="icon" href="data:,">
 </head>
 <body>
-<main>
+<main id="top">
   <div class="top">
     <div>
       <h1><span id="title">OmniMonitor</span> <span class="h1sub" id="title-sub">· AI usage</span></h1>
@@ -161,6 +161,18 @@
     <div class="stat"><div class="v" id="s-cur">–</div><div class="k">Current streak</div></div>
   </div>
 
+  <div class="section card" id="activity-card" data-card="activity">
+    <div class="tabs" id="atabs">
+      <button data-days="14">14d</button>
+      <button data-days="30" class="on">30d</button>
+      <button data-days="90">90d</button>
+    </div>
+    <h2>Tokens per day <span class="sub">· all enabled local sources</span></h2>
+    <div class="chart" id="chart-daily"></div>
+    <h3 style="margin-top:16px">Share by tool (30 days)</h3>
+    <div class="chart" id="chart-tools"></div>
+  </div>
+
   <div class="card" data-card="heatmap">
     <div class="tabs" id="tabs">
       <button data-mode="daily" class="on">Daily</button>
@@ -204,6 +216,7 @@
   <footer id="foot">OmniMonitor · unofficial · not affiliated with xAI, X or any listed provider · this page is served only on 127.0.0.1 and never leaves your computer.</footer>
 </main>
 <script src="common.js"></script>
+<script src="app.js"></script>
 <script src="providers.js"></script>
 <script src="stats.js"></script>
 </body>

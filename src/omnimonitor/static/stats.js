@@ -1,7 +1,14 @@
 /* OmniMonitor stats page. No external requests; data from ./api/stats only. */
 (function () {
   "use strict";
-  var data = null, mode = "daily";
+  var data = null, mode = "daily", days = 30;
+  if (window.OMApp) OMApp.shell("dashboard");
+  document.getElementById("atabs").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button"); if (!b) return;
+    days = parseInt(b.getAttribute("data-days"), 10) || 30;
+    Array.prototype.forEach.call(this.querySelectorAll("button"), function (x) { x.classList.toggle("on", x === b); });
+    if (data) OMApp.renderActivity(data, days);
+  });
   var $ = function (id) { return document.getElementById(id); };
 
   var fmtTokens = OM.fmtTokens, fmtDate = OM.fmtDate, el = OM.el, fmtUsd = OM.fmtUsd;
@@ -83,6 +90,7 @@
     setStat("s-cur", d.current_streak, function (v) { return v + (v === 1 ? " day" : " days"); });
 
     renderHeat();
+    if (window.OMApp) OMApp.renderActivity(d, days);
     renderForecast(d);
     renderBreakdown(d);
     renderCost(d);

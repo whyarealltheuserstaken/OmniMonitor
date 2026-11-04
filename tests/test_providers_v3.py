@@ -541,3 +541,30 @@ def test_cli_output_survives_a_non_utf8_console(monkeypatch, tmp_path):
     assert cli.main(["status", "--demo"]) == 0  # prints "≈" (not in cp1252)
     out.flush()
     assert b"DEMO" in buf.getvalue()
+
+
+def test_app_shell_served_and_local_only(tmp_path, monkeypatch):
+    """The app shell (sidebar + SVG charts) is served and makes no external requests."""
+    import urllib.request
+
+    from omnimonitor import config as config_mod
+    from omnimonitor.app import Controller
+    from omnimonitor.webui import for_controller
+
+    monkeypatch.setenv("OMNIMONITOR_HOME", str(tmp_path))
+    p = tmp_path / "config.json"
+    p.write_text(json.dumps({"source": "demo"}))
+    ctrl = Controller(config_mod.load_config(p), tmp_path / "h.db")
+    srv = for_controller(ctrl).start()
+    try:
+        def get(rel):
+            with urllib.request.urlopen(srv.url + rel, timeout=5) as r:
+                return r.read().decode()
+        js = get("app.js")
+        assert "OMApp" in js and "http://" not in js.replace("http://www.w3.org/2000/svg", "")
+        assert "https://" not in js and "fetch(" not in js
+        page = get("")
+        assert 'src="app.js"' in page and 'id="chart-daily"' in page
+        assert 'src="app.js"' in get("settings")
+    finally:
+        srv.stop()
