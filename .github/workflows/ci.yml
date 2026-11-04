@@ -53,3 +53,27 @@ jobs:
           # but it must not crash (any other exit code fails the job).
           rc=0; omnimonitor doctor --offline || rc=$?
           test "$rc" -eq 1
+
+  window-smoke:
+    # Native app window (pywebview) on real GUI runners: open the demo dashboard in its own
+    # process, verify the page loaded via JS, close. Linux has no WebView backend by default.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - name: window --smoke
+        shell: bash
+        env:
+          OMNIMONITOR_HOME: ${{ runner.temp }}/omni-home
+        run: |
+          omnimonitor window --smoke & WP=$!
+          for i in $(seq 1 90); do kill -0 $WP 2>/dev/null || break; sleep 1; done
+          if kill -0 $WP 2>/dev/null; then kill $WP; echo "timed out"; exit 1; fi
+          wait $WP

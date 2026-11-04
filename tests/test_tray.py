@@ -37,7 +37,7 @@ def test_menu_before_first_refresh(tray):
     items = labels(tray)
     assert items[0].startswith("Grok usage:")
     assert "Resets: unknown" in items
-    for want in ("Refresh Now", "Open Stats Page", "Open Grok Usage Page", "Edit Config", "Quit"):
+    for want in ("Refresh Now", "Open OmniMonitor", "Open in Browser", "Open Grok Usage Page", "Edit Config", "Quit"):
         assert want in items
 
 

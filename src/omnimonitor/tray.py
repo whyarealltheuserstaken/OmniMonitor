@@ -17,6 +17,7 @@ from omnimonitor.applog import log
 from omnimonitor.icon import render_icon, tray_size
 from omnimonitor.timeutil import fmt_local, fmt_until
 from omnimonitor.webui import StatsServer, for_controller
+from omnimonitor.window import WindowLauncher
 
 
 def open_path(path: str) -> None:
@@ -65,6 +66,7 @@ FIRST_RUN_MARKER = "first-run-done"
 
 class TrayApp:
     def __init__(self, ctrl: Controller):
+        self.window = WindowLauncher()
         import pystray  # lazy: lets CLI commands work without a GUI backend
 
         self.pystray = pystray
@@ -174,7 +176,9 @@ class TrayApp:
             *[self._provider_item(i) for i in range(8)],
             Menu.SEPARATOR,
             Item("Refresh Now", self._on_refresh),
-            Item("Open Stats Page", self._on_stats, default=True,
+            Item("Open OmniMonitor", self._on_stats, default=True,
+                 enabled=lambda _: self.server is not None),
+            Item("Open in Browser", self._on_browser,
                  enabled=lambda _: self.server is not None),
             Item("Open Mini View", self._page("mini"),
                  enabled=lambda _: self.server is not None),
@@ -195,14 +199,26 @@ class TrayApp:
     def _on_refresh(self, *_):
         threading.Thread(target=self.ctrl.refresh, daemon=True).start()
 
+    def _open(self, rel: str = "") -> None:
+        """App window in its own process (macOS main-thread rule), else the browser."""
+        if not self.server:
+            return
+        try:
+            self.window.open(self.server.url + rel)
+        except Exception:  # noqa: BLE001
+            log.exception("open window")
+            webbrowser.open(self.server.url + rel)
+
     def _on_stats(self, *_):
+        self._open("")
+
+    def _on_browser(self, *_):
         if self.server:
             webbrowser.open(self.server.url)
 
     def _page(self, rel: str):
         def go(*_):
-            if self.server:
-                webbrowser.open(self.server.url + rel)
+            self._open(rel)
         return go
 
     def _export(self, fmt: str, kind: str):
@@ -227,6 +243,12 @@ class TrayApp:
 
     def _on_quit(self, *_):
         self.ctrl.stop()
+        proc = self.window.proc
+        if proc is not None and proc.poll() is None:
+            try:
+                proc.terminate()
+            except OSError:
+                pass
         if self.server:
             try:
                 self.server.stop()
@@ -276,7 +298,7 @@ class TrayApp:
             if sys.platform == "darwin" else "system tray"
         deliver("OmniMonitor is running", "Look for the ring icon in the %s." % where)
         if self.server and not config_mod.env("NO_BROWSER"):
-            webbrowser.open(self.server.url)
+            self._open("")
         log.info("first run: hint shown")
         return True
 

@@ -7,7 +7,7 @@ on:
   pull_request:
     paths: [".github/workflows/release.yml", "scripts/**", "pyproject.toml",
             "src/omnimonitor/tray.py", "src/omnimonitor/cli.py", "src/omnimonitor/net.py",
-            "src/omnimonitor/applog.py"]
+            "src/omnimonitor/applog.py", "src/omnimonitor/window.py"]
   workflow_dispatch:
 
 permissions:
@@ -45,6 +45,7 @@ jobs:
             --hidden-import pystray._darwin \
             --hidden-import AppKit --hidden-import Foundation --hidden-import objc \
             --hidden-import PyObjCTools.AppHelper --hidden-import PyObjCTools.MachSignals \
+            --collect-submodules webview --collect-data webview --hidden-import WebKit \
             scripts/pyinstaller_entry.py
           # menu-bar-only app: no Dock icon
           P=dist/omnimonitor.app/Contents/Info.plist
@@ -62,6 +63,7 @@ jobs:
         run: |
           pyinstaller --noconfirm --onefile --windowed --name omnimonitor `
             --collect-data omnimonitor --collect-data certifi --hidden-import pystray._win32 `
+            --collect-all webview --collect-all clr_loader --collect-all pythonnet `
             scripts/pyinstaller_entry.py
           Compress-Archive -Path dist/omnimonitor.exe -DestinationPath ${{ matrix.asset }}.zip
       - name: Build (Linux)
@@ -132,6 +134,17 @@ jobs:
             echo "tray icon visible after ${ok}s, still running 5 s later"
             if [ -s "${{ runner.temp }}/omni-logs/crash.log" ]; then
               cat "${{ runner.temp }}/omni-logs/crash.log"; exit 1; fi
+          fi
+          if [ "${{ runner.os }}" != "Linux" ]; then
+            # App window: separate process, demo dashboard in pywebview, checks the page
+            # title via JS, then closes. Exit 0 only if the page really loaded.
+            "$B" window --smoke > "$T/w.txt" 2>&1 & WP=$!
+            for i in $(seq 1 90); do kill -0 $WP 2>/dev/null || break; sleep 1; done
+            if kill -0 $WP 2>/dev/null; then kill $WP; echo "window smoke timed out"; exit 1; fi
+            set +e; wait $WP; WRC=$?; set -e
+            cat "$T/w.txt" || true
+            [ "$WRC" = 0 ] || { echo "window smoke failed ($WRC)"; cat "${{ runner.temp }}/omni-logs/"*.log || true; exit 1; }
+            echo "app window smoke OK"
           fi
           ls -la ${{ matrix.asset }}.*
       - uses: actions/upload-artifact@v4
