@@ -303,6 +303,14 @@ class Installer:
         dep = BY_ID[plan.dep]
         return {"ok": rc == 0, "rc": rc, "output": tail, "installed_path": find_binary(dep)}
 
+    def cancel(self, token: str) -> bool:
+        plan = self.plans.get(token)
+        if plan is None:
+            return False
+        self._log(plan.dep, "declined", sha256=plan.sha256)
+        self._discard(plan)
+        return True
+
     # ------------------------------------------------------------------ helpers
     def _discard(self, plan: Plan) -> None:
         with self.lock:

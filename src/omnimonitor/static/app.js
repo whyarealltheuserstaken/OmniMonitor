@@ -8,6 +8,7 @@
     ["providers", "./#providers-card", "Providers"],
     ["activity", "./#activity-card", "Activity"],
     ["breakdown", "./#breakdown-card", "Breakdown"],
+    ["setup", "setup", "Setup"],
     ["settings", "settings", "Settings"],
     ["mini", "mini", "Mini view"]
   ];

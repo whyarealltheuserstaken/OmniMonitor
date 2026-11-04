@@ -27,8 +27,8 @@ from typing import Any, Callable, Dict, Optional, Tuple
 MAX_POST_BYTES = 64 * 1024
 CSRF_HEADER = "X-OmniMonitor-CSRF"
 PAGES = {"": "stats.html", "index.html": "stats.html", "settings": "settings.html",
-         "mini": "mini.html"}
-SCRIPTS = ("stats.js", "settings.js", "mini.js", "common.js", "providers.js", "app.js")
+         "mini": "mini.html", "setup": "setup.html"}
+SCRIPTS = ("stats.js", "settings.js", "mini.js", "common.js", "providers.js", "app.js", "setup.js")
 EXPORT_KINDS = ("daily", "daily-models", "breakdown", "events", "providers")
 
 CSP = ("default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
@@ -45,7 +45,8 @@ class StatsServer:
                  refresh: Optional[Callable[[], None]] = None,
                  get_settings: Optional[Callable[[], Dict[str, Any]]] = None,
                  save_settings: Optional[Callable[[Any], Dict[str, Any]]] = None,
-                 export: Optional[Callable[[str, str], Tuple[bytes, str, str]]] = None):
+                 export: Optional[Callable[[str, str], Tuple[bytes, str, str]]] = None,
+                 setup: Optional[Dict[str, Callable[..., Dict[str, Any]]]] = None):
         self.secret = secrets.token_urlsafe(24)
         self.csrf = secrets.token_urlsafe(24)
         self.get_stats = get_stats
@@ -53,6 +54,8 @@ class StatsServer:
         self.get_settings = get_settings
         self.save_settings = save_settings
         self.export = export
+        # setup wizard: {"status": fn(), "prepare": fn(body), "run": fn(body)}
+        self.setup = setup or {}
         # set once a page's script has fetched api/stats (used by the window smoke test)
         self.stats_served = threading.Event()
         outer = self
@@ -99,7 +102,11 @@ class StatsServer:
                 if not self._host_ok():
                     return self._send(421, b"bad host", "text/plain")
                 rel = self._rel()
-                if rel is None or rel != "api/settings" or outer.save_settings is None:
+                posts = {"api/settings": outer.save_settings,
+                         "api/setup/prepare": outer.setup.get("prepare"),
+                         "api/setup/run": outer.setup.get("run")}
+                handler = posts.get(rel or "")
+                if handler is None:
                     return self._send(404, b"not found", "text/plain")
                 port = self.server.server_address[1]
                 origin = self.headers.get("Origin")
@@ -122,9 +129,11 @@ class StatsServer:
                 except (ValueError, UnicodeDecodeError):
                     return self._json(400, {"ok": False, "errors": {"_": "invalid JSON"}})
                 try:
-                    res = outer.save_settings(body)
+                    res = handler(body)
                 except Exception as e:  # noqa: BLE001
                     return self._json(500, {"ok": False, "errors": {"_": type(e).__name__}})
+                if rel != "api/settings":
+                    return self._json(200, res)
                 return self._json(200 if res.get("ok") else 400, res)
 
             def _export(self, fmt: str):
@@ -158,6 +167,10 @@ class StatsServer:
                         body = json.dumps(outer.get_stats(), default=str).encode("utf-8")
                         outer.stats_served.set()
                         return self._send(200, body, "application/json")
+                    if rel == "api/setup" and outer.setup.get("status"):
+                        view = dict(outer.setup["status"]())
+                        view["_csrf"] = outer.csrf
+                        return self._json(200, view)
                     if rel == "api/settings" and outer.get_settings is not None:
                         view = dict(outer.get_settings())
                         view["_csrf"] = outer.csrf
@@ -197,7 +210,9 @@ def for_controller(ctrl, port: int = 0) -> StatsServer:
 
     return StatsServer(ctrl.stats, port, refresh=ctrl.poke,
                        get_settings=lambda: settings_mod.public_view(ctrl.cfg),
-                       save_settings=ctrl.update_settings, export=ctrl.export)
+                       save_settings=ctrl.update_settings, export=ctrl.export,
+                       setup={"status": ctrl.setup_status, "prepare": ctrl.setup_prepare,
+                              "run": ctrl.setup_run})
 
 
 def start_server(get_stats, port: int = 0) -> Tuple[StatsServer, str]:
