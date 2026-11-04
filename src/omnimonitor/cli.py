@@ -110,6 +110,29 @@ def cmd_serve(args) -> int:
     return 0
 
 
+def cmd_window(args) -> int:
+    """Native app window (child process of the tray). URL arrives on stdin, never argv."""
+    from omnimonitor import window
+    if not window.webview_available():
+        print("pywebview is not installed; the tray opens the browser instead")
+        return 3
+    if args.smoke:
+        from omnimonitor.app import Controller
+        from omnimonitor.webui import for_controller
+        args.demo = True
+        ctrl = Controller(_load(args))
+        srv = for_controller(ctrl, 0).start()
+        try:
+            return window.run_window(srv.url, smoke=True, timeout_s=45, served=srv.stats_served)
+        finally:
+            srv.stop()
+    url = window.read_url_from_stdin()
+    if not url:
+        print("expected a private 127.0.0.1 OmniMonitor URL on stdin")
+        return 2
+    return window.run_window(url)
+
+
 def cmd_doctor(args) -> int:
     from omnimonitor import doctor
     cfg = _load(args)
@@ -443,8 +466,11 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("net-check", help="test an HTTPS request with the app's CA bundle")
     s.add_argument("url", nargs="?", default="https://api.github.com/")
     sub.add_parser("log-path", help="print the log file path")
+    s = sub.add_parser("window", help="native app window (started by the tray; URL on stdin)")
+    s.add_argument("--smoke", action="store_true",
+                   help="open the demo dashboard, check it loaded, close (CI)")
     for name in ("status", "serve", "doctor", "setup", "run", "export", "providers",
-                 "breakdown", "config"):
+                 "breakdown", "config", "window"):
         sub.choices[name].add_argument("--demo", action="store_true", default=argparse.SUPPRESS,
                                        help=argparse.SUPPRESS)
         sub.choices[name].add_argument("--config", default=argparse.SUPPRESS,
@@ -469,6 +495,7 @@ def _clean_argv(argv: List[str]) -> List[str]:
 
 def cmd_net_check(args) -> int:
     """HTTPS round trip with the app's TLS settings (used by the release smoke test)."""
+    import urllib.error
     import urllib.request
 
     from omnimonitor.net import ca_source, ssl_context
@@ -483,6 +510,10 @@ def cmd_net_check(args) -> int:
         with urllib.request.urlopen(req, timeout=15, context=ssl_context()) as r:  # noqa: S310
             print("HTTPS OK: %s -> %s" % (url, r.status))
             return 0
+    except urllib.error.HTTPError as e:
+        # an HTTP status (e.g. 403 rate limit) means TLS + certificate verification succeeded
+        print("HTTPS OK (TLS verified; server answered HTTP %s): %s" % (e.code, url))
+        return 0
     except Exception as e:  # noqa: BLE001
         print("HTTPS FAILED: %s: %s" % (url, e))
         return 1
@@ -514,6 +545,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_config_path(args)
     if cmd == "net-check":
         return cmd_net_check(args)
+    if cmd == "window":
+        return cmd_window(args)
     if cmd == "log-path":
         from omnimonitor.applog import log_path
         print(log_path())
