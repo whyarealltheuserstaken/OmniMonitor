@@ -33,6 +33,7 @@ def cmd_run(args) -> int:
     logfile = applog.setup()
     try:
         from omnimonitor.tray import TrayApp
+        applog.log.info("tray module loaded; creating icon")
         app = TrayApp(Controller(cfg))
     except Exception as e:  # noqa: BLE001
         applog.log.exception("could not start the tray icon")

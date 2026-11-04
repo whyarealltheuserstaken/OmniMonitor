@@ -111,17 +111,25 @@ jobs:
             # Tray: launch the real app (`run`, demo data) for ~10 s. GitHub macOS runners have
             # a logged-in GUI session, so AppKit/NSStatusBar is live; this catches the
             # main-thread SIGTRAP and import errors. It cannot see the menu bar itself.
+            L="${{ runner.temp }}/omni-logs/omnimonitor.log"
             "$B" run --demo & PID=$!
-            sleep 10
-            if kill -0 $PID 2>/dev/null; then
-              echo "tray app still running after 10 s"; kill $PID; wait $PID || true
-            else
-              set +e; wait $PID; RC=$?; set -e
-              echo "tray app exited early with status $RC (>128 = signal $((RC-128)))"
-              cat "${{ runner.temp }}/omni-logs/"*.log || true; exit 1
-            fi
-            echo "--- log"; cat "${{ runner.temp }}/omni-logs/omnimonitor.log"
-            grep -q "tray icon visible" "${{ runner.temp }}/omni-logs/omnimonitor.log"
+            ok=0
+            for i in $(seq 1 40); do
+              sleep 1
+              if ! kill -0 $PID 2>/dev/null; then
+                set +e; wait $PID; RC=$?; set -e
+                echo "tray app exited early with status $RC (>128 = signal $((RC-128)))"
+                cat "${{ runner.temp }}/omni-logs/"*.log || true; exit 1
+              fi
+              if grep -q "tray icon visible" "$L" 2>/dev/null; then ok=$i; break; fi
+            done
+            sleep 5   # keep it running a bit after the icon is shown (poller + first update)
+            alive=0; kill -0 $PID 2>/dev/null && alive=1
+            kill $PID 2>/dev/null || true; wait $PID 2>/dev/null || true
+            echo "--- log"; cat "$L"
+            [ "$alive" = 1 ] || { echo "tray app died after showing the icon"; exit 1; }
+            [ "$ok" != 0 ] || { echo "tray icon not shown within 40 s"; exit 1; }
+            echo "tray icon visible after ${ok}s, still running 5 s later"
             if [ -s "${{ runner.temp }}/omni-logs/crash.log" ]; then
               cat "${{ runner.temp }}/omni-logs/crash.log"; exit 1; fi
           fi
