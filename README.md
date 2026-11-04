@@ -53,6 +53,12 @@ AI tools. OmniMonitor copies **no code, text, icons or images** from it. Everyth
 Python re-implementation of the ideas. See [docs/inspiration-notes.md](docs/inspiration-notes.md)
 for what we adopted, what we built differently and why.
 
+## What's new in 0.4.1
+
+- **Fix: stuck on demo numbers after the in-app Setup.** The Setup page now shows your Grok login state and the exact `grok login` command, and a **Use my real Grok usage** button switches off demo mode (only after a successful usage read).
+- The running app reloads `config.json` when it changes, logs every poll, and `omnimonitor doctor` shows what the running app is using.
+- Clearer message when Grok token stats are not available yet.
+
 ## What's new in 0.4.0
 
 - **Native app window** (pywebview) with an app-style UI: sidebar, dashboard charts, providers, stats and settings.

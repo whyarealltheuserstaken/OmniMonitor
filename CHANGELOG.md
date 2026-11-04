@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.4.1] - 2026-11-04
 
 ### Fixed
 - Installing the Grok CLI from the in-app Setup wizard and logging in left the app on demo numbers: the wizard never switched `source` away from `demo`, the running app never re-read `config.json`, and `doctor` reported `grok_cli_billing` even when the config still said `demo`.
@@ -13,6 +13,11 @@ All notable changes to this project are documented here. The format follows
   - `doctor` reports the configured source honestly and adds a "running app" section from `app-state.json`, flagging app vs config mismatches.
   - Every poll is logged (source, % remaining or error, duration), as are Refresh clicks and the window process.
   - Token stats explain why they are unavailable and mention the experimental unified-log provider when that log exists.
+
+### Not verified
+- **The fix has not been run on a real Mac or with a real Grok account.** The diagnosis (the app stayed in demo mode) comes from reading the code and the reporter's log; it is covered by automated tests with mocked billing only.
+- The "Use my real Grok usage" button, config reload and the doctor "running app" section have been tested only in CI (macOS, Windows, Linux runners), not by a person in the app window.
+- Binaries are ad-hoc signed only (macOS) and not notarized; Windows is unsigned.
 
 ## [0.4.0] - 2026-11-04
 
