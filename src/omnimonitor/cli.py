@@ -28,11 +28,16 @@ def cmd_run(args) -> int:
             config_mod.ensure_config_file()
         except OSError:
             pass
+    from omnimonitor import applog
     from omnimonitor.app import Controller
+    logfile = applog.setup()
     try:
         from omnimonitor.tray import TrayApp
         app = TrayApp(Controller(cfg))
     except Exception as e:  # noqa: BLE001
+        applog.log.exception("could not start the tray icon")
+        from omnimonitor.alerts import deliver
+        deliver("OmniMonitor could not start", "%s. Log: %s" % (e, logfile or "n/a"))
         print("Could not start the tray icon: %s\n"
               "On Linux you may need AppIndicator support (see README > Linux). You can still "
               "use `omnimonitor serve` for the stats page or `status` for text." % e,
@@ -434,6 +439,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("key", nargs="?")
     s.add_argument("value", nargs="?")
     sub.add_parser("notify-test", help="show a test desktop notification")
+    s = sub.add_parser("net-check", help="test an HTTPS request with the app's CA bundle")
+    s.add_argument("url", nargs="?", default="https://api.github.com/")
+    sub.add_parser("log-path", help="print the log file path")
     for name in ("status", "serve", "doctor", "setup", "run", "export", "providers",
                  "breakdown", "config"):
         sub.choices[name].add_argument("--demo", action="store_true", default=argparse.SUPPRESS,
@@ -453,9 +461,35 @@ def _safe_console() -> None:
             pass
 
 
+def _clean_argv(argv: List[str]) -> List[str]:
+    """Finder / LaunchServices may pass -psn_0_12345 to GUI apps; argparse would reject it."""
+    return [a for a in argv if not a.startswith("-psn_")]
+
+
+def cmd_net_check(args) -> int:
+    """HTTPS round trip with the app's TLS settings (used by the release smoke test)."""
+    import urllib.request
+
+    from omnimonitor.net import ca_source, ssl_context
+    kind, detail = ca_source()
+    print("CA bundle: %s (%s)" % (kind, detail))
+    url = args.url
+    if not url.startswith("https://"):
+        print("https URLs only")
+        return 2
+    req = urllib.request.Request(url, headers={"User-Agent": "omnimonitor/" + __version__})
+    try:
+        with urllib.request.urlopen(req, timeout=15, context=ssl_context()) as r:  # noqa: S310
+            print("HTTPS OK: %s -> %s" % (url, r.status))
+            return 0
+    except Exception as e:  # noqa: BLE001
+        print("HTTPS FAILED: %s: %s" % (url, e))
+        return 1
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     _safe_console()
-    args = build_parser().parse_args(argv)
+    args = build_parser().parse_args(_clean_argv(sys.argv[1:] if argv is None else argv))
     if args.setup:
         args.cmd, args.yes = "setup", False
     elif args.doctor:
@@ -477,6 +511,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_autostart(args, False)
     if cmd == "config-path":
         return cmd_config_path(args)
+    if cmd == "net-check":
+        return cmd_net_check(args)
+    if cmd == "log-path":
+        from omnimonitor.applog import log_path
+        print(log_path())
+        return 0
     handlers = {"export": cmd_export, "providers": cmd_providers, "breakdown": cmd_breakdown,
                 "config": cmd_config, "notify-test": cmd_notify_test, "secrets": cmd_secrets}
     if cmd in handlers:

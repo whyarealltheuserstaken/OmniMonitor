@@ -25,6 +25,7 @@ classifiers = [
 dependencies = [
   "pystray>=0.19",
   "Pillow>=9.1",
+  "certifi>=2023.7.22",
 ]
 
 [project.optional-dependencies]

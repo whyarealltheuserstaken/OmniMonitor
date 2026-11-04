@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- macOS: `run` crashed with SIGTRAP ("trace trap") right after launch. pystray calls the setup
+  callback on a worker thread, and the app made the menu-bar icon visible and updated its
+  image / menu from worker threads; AppKit requires the main thread. All tray updates are
+  now marshalled to the main thread (`PyObjCTools.AppHelper.callAfter`).
+- HTTPS failed with `CERTIFICATE_VERIFY_FAILED` in the prebuilt apps (no system CA store
+  in frozen Python). Requests now use certifi's CA bundle (new dependency, bundled in the
+  binaries), falling back to the system store; verification is never disabled.
+- Finder's `-psn_…` launch argument is ignored instead of making argparse exit.
+
+### Added
+- Log file (`~/Library/Logs/OmniMonitor/omnimonitor.log` on macOS, `<config dir>/logs/`
+  elsewhere) and `crash.log` with Python stacks on hard crashes; `omnimonitor log-path`.
+- First launch shows a notification saying where the icon is (it can hide behind the
+  notch on MacBooks) and opens the stats page once.
+- `omnimonitor net-check [URL]` and a `tls` / `log file` line in `doctor`.
+- Release CI also runs on packaging PRs; the macOS jobs make a real HTTPS request from the
+  frozen app and launch the tray for 10 s.
+
 ## [0.3.0] - 2026-11-03
 
 More providers, all opt-in. Format knowledge (not code) was cross-checked against the

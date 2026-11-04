@@ -13,6 +13,7 @@ from typing import Optional
 from omnimonitor import config as config_mod
 from omnimonitor import overview as overview_mod
 from omnimonitor.app import Controller
+from omnimonitor.applog import log
 from omnimonitor.icon import render_icon, tray_size
 from omnimonitor.timeutil import fmt_local, fmt_until
 from omnimonitor.webui import StatsServer, for_controller
@@ -38,6 +39,28 @@ def fmt_tokens(n) -> str:
         if abs(n) >= div:
             return "%.1f%s" % (n / div, suf)
     return str(int(n))
+
+
+def on_main_thread(fn) -> None:
+    """Run fn on the GUI thread. AppKit (NSStatusItem / NSMenu / NSView) must only be touched
+    from the main thread; doing it from a worker thread trips an AppKit assertion that kills
+    the process with SIGTRAP ("trace trap"). Other backends are thread-safe enough in pystray.
+    """
+    if sys.platform == "darwin" and threading.current_thread() is not threading.main_thread():
+        from PyObjCTools import AppHelper
+        AppHelper.callAfter(_logged, fn)
+    else:
+        _logged(fn)
+
+
+def _logged(fn) -> None:
+    try:
+        fn()
+    except Exception:  # noqa: BLE001
+        log.exception("tray update failed")
+
+
+FIRST_RUN_MARKER = "first-run-done"
 
 
 class TrayApp:
@@ -213,6 +236,10 @@ class TrayApp:
 
     # ------------------------------------------------------------- updates
     def update(self) -> None:
+        """Controller listener (called from the poll thread): hop to the GUI thread."""
+        on_main_thread(self._apply_update)
+
+    def _apply_update(self) -> None:
         u, err = self.ctrl.usage, self.ctrl.error
         try:
             ov = self._ov()
@@ -226,11 +253,40 @@ class TrayApp:
             self.icon.title = overview_mod.tooltip(ov, self._title())[:120]
             self.icon.update_menu()
         except Exception:  # noqa: BLE001
-            pass
+            log.exception("tray icon update failed")
+
+    def _show(self) -> None:
+        self.icon.visible = True
+        log.info("tray icon visible (backend %s)", type(self.icon).__module__)
+
+    def first_run_hint(self) -> bool:
+        """First launch only: menu-bar apps have no window, and on notched Macs the icon can be
+        hidden behind the notch, so say where it is and open the stats page once."""
+        try:
+            marker = config_mod.config_dir() / FIRST_RUN_MARKER
+            if marker.exists():
+                return False
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text("1\n", encoding="utf-8")
+        except OSError:
+            log.exception("first-run marker")
+            return False
+        from omnimonitor.alerts import deliver
+        where = "menu bar (top right; on a notched Mac it can hide behind the notch)" \
+            if sys.platform == "darwin" else "system tray"
+        deliver("OmniMonitor is running", "Look for the ring icon in the %s." % where)
+        if self.server and not config_mod.env("NO_BROWSER"):
+            webbrowser.open(self.server.url)
+        log.info("first run: hint shown")
+        return True
 
     def run(self) -> None:
         def setup(icon):
-            icon.visible = True
+            # pystray calls this on a worker thread; AppKit calls must go to the main thread.
+            on_main_thread(self._show)
             self.ctrl.start_background()
+            self.first_run_hint()
+        log.info("starting tray loop on %s", threading.current_thread().name)
         # macOS requires the event loop on the main thread: pystray.Icon.run() blocks here.
         self.icon.run(setup=setup)
+        log.info("tray loop ended")
