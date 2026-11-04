@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -94,10 +95,39 @@ def checks(cfg: Dict[str, Any], online: bool = True) -> List[Tuple[str, str, str
     return out
 
 
+def _pid_alive(pid: Any) -> bool:
+    """Never os.kill(pid, 0) on Windows: signal 0 is CTRL_C_EVENT there."""
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if pid == os.getpid():
+        return True
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            k32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+            h = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+            if not h:
+                return False
+            code = ctypes.c_ulong()
+            ok = k32.GetExitCodeProcess(h, ctypes.byref(code))
+            k32.CloseHandle(h)
+            return bool(ok) and code.value == 259  # STILL_ACTIVE
+        except Exception:  # noqa: BLE001
+            return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+
+
 def running_app_checks(cfg: Dict[str, Any], state_path=None) -> List[Tuple[str, str, str]]:
     """Compare this (fresh) doctor process with what the running tray app last used."""
     import json
-    import os
 
     from omnimonitor import config as config_mod
     p = state_path or config_mod.app_state_path()
@@ -107,14 +137,7 @@ def running_app_checks(cfg: Dict[str, Any], state_path=None) -> List[Tuple[str, 
         return [(WARN, "running app", "no state at %s (app not running, or older than 0.4.1)"
                  % p)]
     pid = st.get("pid")
-    alive = False
-    try:
-        os.kill(int(pid), 0)
-        alive = True
-    except (OSError, TypeError, ValueError):
-        pass
-    except Exception:  # noqa: BLE001
-        pass
+    alive = _pid_alive(pid)
     out: List[Tuple[str, str, str]] = []
     out.append((OK if alive else WARN, "running app",
                 "pid %s %s, version %s, last poll %s" % (
