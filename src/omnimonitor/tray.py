@@ -76,7 +76,7 @@ class TrayApp:
             ctrl.token_note = (ctrl.token_note + "; " if ctrl.token_note else "") + \
                 "stats page unavailable: %s" % e
         self.icon = pystray.Icon("omnimonitor", render_icon(None, size=tray_size()),
-                                 "OmniMonitor · Grok usage", menu=self._menu())
+                                 "OmniMonitor · AI usage", menu=self._menu())
         ctrl.add_listener(self.update)
         ctrl.notifier = self._notify_os
 

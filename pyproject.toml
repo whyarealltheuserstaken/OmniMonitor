@@ -5,13 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "omnimonitor"
 version = "0.3.1"
-description = "Unofficial cross-platform tray app for your Grok weekly usage, with local token stats. Not affiliated with xAI or X."
+description = "Local-first tray app that monitors AI usage, limits and spend across Grok, Claude, ChatGPT/Codex, Gemini, DeepSeek, Qwen, Kimi, Cursor, Copilot and more. No cookies, no scraping. Unofficial; not affiliated with any provider."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "OmniMonitor contributors" }]
-keywords = ["grok", "xai", "tray", "menubar", "usage", "tokens"]
+keywords = ["ai-usage", "token-usage", "llm", "usage-monitor", "tray", "menubar", "grok", "claude-code", "codex", "gemini", "deepseek", "qwen", "kimi", "cursor", "copilot"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "Operating System :: MacOS",

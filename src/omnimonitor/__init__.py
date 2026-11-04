@@ -1,4 +1,4 @@
-"""OmniMonitor: unofficial cross-platform tray app for Grok / X Super weekly usage."""
+"""OmniMonitor: local-first tray app that monitors AI usage, limits and spend across many providers."""
 
 __version__ = "0.3.1"
 APP_NAME = "omnimonitor"

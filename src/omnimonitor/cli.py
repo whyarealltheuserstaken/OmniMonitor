@@ -398,8 +398,8 @@ def cmd_notify_test(args) -> int:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="omnimonitor",
-        description="OmniMonitor: unofficial tray app showing your Grok weekly usage. "
-                    "Not affiliated with xAI or X.")
+        description="OmniMonitor: local-first tray app that monitors AI usage, limits and "
+                    "spend across many providers. Unofficial; not affiliated with any provider.")
     p.add_argument("--version", action="version", version="%(prog)s " + __version__)
     p.add_argument("--config", help="path to config.json (default: per-user config dir)")
     p.add_argument("--demo", action="store_true", help="force demo mode (fake, labeled data)")
