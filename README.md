@@ -201,6 +201,10 @@ against `SHA256SUMS.txt` (`shasum -a 256 omnimonitor-macos-arm64.zip`). The comm
 interface is inside the bundle:
 `/Applications/omnimonitor.app/Contents/MacOS/omnimonitor setup` (or `… doctor`).
 
+If no menu-bar icon appears: on MacBooks with a notch it can be hidden behind the notch (quit
+a few menu-bar apps or hold ⌘ and drag icons). The first launch shows a notification and opens
+the stats page. Logs: `~/Library/Logs/OmniMonitor/omnimonitor.log` (hard crashes: `crash.log`).
+
 **From source:**
 
 ```bash
