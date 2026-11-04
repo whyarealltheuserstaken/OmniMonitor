@@ -45,6 +45,12 @@
       (st.last_attempt ? " (" + fmtDate(st.last_attempt) + ")" : "") + ": " + st.error +
       (u ? " (showing the last good value)" : "") +
       (/grok login/.test(st.error) ? " - open Terminal and run: grok login (or ~/.grok/bin/grok login)" : "")));
+    if (d.token_reason && !(d.is_demo || (u && u.is_demo))) {
+      var tb = el("div", "banner info");
+      tb.appendChild(el("b", null, "Why token numbers are missing: "));
+      tb.appendChild(document.createTextNode(d.token_reason));
+      b.appendChild(tb);
+    }
     $("sub").textContent = "Updated " + (st.last_ok ? fmtDate(st.last_ok) : "never") +
       " · source: " + (st.source || "?") + " · tokens: " + (d.provider || "?") +
       (d.data_since ? " · token data since " + fmtDate(d.data_since) : "");

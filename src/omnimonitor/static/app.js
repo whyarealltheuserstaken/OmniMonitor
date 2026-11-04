@@ -37,13 +37,21 @@
     side.appendChild(b);
     NAV.forEach(function (n) {
       var a = el("a", n[0] === active ? "on" : "", n[2]); a.href = n[1];
-      a.setAttribute("data-nav", n[0]); side.appendChild(a);
+      a.setAttribute("data-nav", n[0]);
+      if (n[0] === "mini") { a.setAttribute("data-view", "mini"); a.title = "Compact window (the app keeps running in the tray)"; }
+      side.appendChild(a);
     });
     side.appendChild(el("div", "sp"));
+    if (OM.isApp()) {
+      var ob = el("a", null, "Open in browser"); ob.href = "#"; ob.setAttribute("data-action", "browser");
+      ob.title = "Open this dashboard in your default web browser"; side.appendChild(ob);
+    }
+    var rp = el("a", null, "Report a problem"); rp.href = "#"; rp.setAttribute("data-action", "report");
+    rp.title = "Copy diagnostics (no keys or tokens) for a bug report"; side.appendChild(rp);
     side.appendChild(el("div", "ft", "Local only · 127.0.0.1"));
     document.body.insertBefore(side, document.body.firstChild);
     side.addEventListener("click", function (ev) {
-      var a = ev.target.closest("a[data-nav]"); if (!a) return;
+      var a = ev.target.closest("a[data-nav]"); if (!a || a.hasAttribute("data-view")) return;
       Array.prototype.forEach.call(side.querySelectorAll("a"), function (x) { x.classList.remove("on"); });
       a.classList.add("on");
     });

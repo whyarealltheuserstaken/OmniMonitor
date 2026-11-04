@@ -128,14 +128,18 @@ def cmd_window(args) -> int:
         ctrl = Controller(_load(args))
         srv = for_controller(ctrl, 0).start()
         try:
-            return window.run_window(srv.url, smoke=True, timeout_s=45, served=srv.stats_served)
+            if getattr(args, "switch", False):
+                return window.switch_smoke(srv, ctrl)
+            view = getattr(args, "view", "full")
+            return window.run_window(window.app_url(srv.url, view), smoke=True, timeout_s=45,
+                                     served=srv.stats_served, view=view)
         finally:
             srv.stop()
-    url = window.read_url_from_stdin()
+    url, opts = window.read_request_from_stdin()
     if not url:
         print("expected a private 127.0.0.1 OmniMonitor URL on stdin")
         return 2
-    return window.run_window(url)
+    return window.run_window(url, view=opts["view"], on_top=opts["on_top"])
 
 
 def cmd_doctor(args) -> int:
@@ -538,6 +542,11 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("window", help="native app window (started by the tray; URL on stdin)")
     s.add_argument("--smoke", action="store_true",
                    help="open the demo dashboard, check it loaded, close (CI)")
+    s.add_argument("--view", choices=("full", "mini"), default="full",
+                   help="with --smoke: which window to open")
+    s.add_argument("--switch", action="store_true",
+                   help="with --smoke: tray-like run - open mini, switch to full via the "
+                        "page's own app action, check the server/parent stay alive (CI)")
     for name in ("status", "serve", "doctor", "setup", "run", "export", "providers",
                  "breakdown", "config", "window"):
         sub.choices[name].add_argument("--demo", action="store_true", default=argparse.SUPPRESS,

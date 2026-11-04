@@ -6,11 +6,12 @@ Security model (see SECURITY.md):
     can't guess it; the secret is regenerated each run and never written to disk;
   * the Host header must be 127.0.0.1:<port> or localhost:<port> (DNS-rebinding guard);
   * no CORS headers; strict Content-Security-Policy; nothing loads from the internet;
-  * GET/HEAD are read-only. The ONLY write is POST api/settings, which additionally needs
-    a JSON body, a per-run CSRF token in the X-OmniMonitor-CSRF header (handed out only via
-    the same-origin api/settings response), an Origin (if sent) of this server, and it can
-    only change allow-listed, validated keys (settings.py) - never tokens, commands, URLs
-    or file paths.
+  * GET/HEAD are read-only. Writes are POSTs only (api/settings, api/setup/*, api/refresh,
+    api/app/*) and need a JSON body, a per-run CSRF token in the X-OmniMonitor-CSRF header
+    (handed out only via same-origin api/settings, api/setup and api/app responses) and an
+    Origin (if sent) of this server. Settings can only change allow-listed, validated keys
+    (settings.py) - never tokens, commands or file paths; app actions only save exports /
+    diagnostics to ~/Downloads, open https links, or open the app's own window.
 """
 
 from __future__ import annotations
@@ -46,7 +47,8 @@ class StatsServer:
                  get_settings: Optional[Callable[[], Dict[str, Any]]] = None,
                  save_settings: Optional[Callable[[Any], Dict[str, Any]]] = None,
                  export: Optional[Callable[[str, str], Tuple[bytes, str, str]]] = None,
-                 setup: Optional[Dict[str, Callable[..., Dict[str, Any]]]] = None):
+                 setup: Optional[Dict[str, Callable[..., Dict[str, Any]]]] = None,
+                 app_actions: Optional[Dict[str, Callable[[Any], Dict[str, Any]]]] = None):
         self.secret = secrets.token_urlsafe(24)
         self.csrf = secrets.token_urlsafe(24)
         self.get_stats = get_stats
@@ -56,6 +58,8 @@ class StatsServer:
         self.export = export
         # setup wizard: {"status": fn(), "prepare": fn(body), "run": fn(body)}
         self.setup = setup or {}
+        # native app actions (appactions.py): POST api/app/<name>; the tray adds window ones
+        self.app_actions: Dict[str, Callable[[Any], Dict[str, Any]]] = dict(app_actions or {})
         # set once a page's script has fetched api/stats (used by the window smoke test)
         self.stats_served = threading.Event()
         outer = self
@@ -107,6 +111,8 @@ class StatsServer:
                          "api/setup/run": outer.setup.get("run"),
                          "api/setup/use-real": outer.setup.get("use_real"),
                          "api/refresh": outer.setup.get("refresh_now")}
+                if (rel or "").startswith("api/app/"):
+                    posts[rel] = outer.app_actions.get(rel[len("api/app/"):])
                 handler = posts.get(rel or "")
                 if handler is None:
                     return self._send(404, b"not found", "text/plain")
@@ -177,6 +183,9 @@ class StatsServer:
                         view = dict(outer.get_settings())
                         view["_csrf"] = outer.csrf
                         return self._json(200, view)
+                    if rel == "api/app":
+                        return self._json(200, {"_csrf": outer.csrf,
+                                                "actions": sorted(outer.app_actions)})
                     if rel == "api/export.csv":
                         return self._export("csv")
                     if rel == "api/export.json":
@@ -215,7 +224,22 @@ def for_controller(ctrl, port: int = 0) -> StatsServer:
                        save_settings=ctrl.update_settings, export=ctrl.export,
                        setup={"status": ctrl.setup_status, "prepare": ctrl.setup_prepare,
                               "run": ctrl.setup_run, "use_real": ctrl.setup_use_real,
-                              "refresh_now": ctrl.refresh_now})
+                              "refresh_now": ctrl.refresh_now},
+                       app_actions=default_app_actions(ctrl))
+
+
+def default_app_actions(ctrl) -> Dict[str, Callable[[Any], Dict[str, Any]]]:
+    from omnimonitor import appactions as aa
+
+    def export(body):
+        body = body if isinstance(body, dict) else {}
+        return aa.save_export(ctrl, str(body.get("kind") or "daily"), str(body.get("fmt") or "csv"))
+
+    def diag(body):
+        if isinstance(body, dict) and body.get("save"):
+            return aa.save_diagnostics(ctrl)
+        return aa.diagnostics(ctrl)
+    return {"export": export, "open-url": aa.open_external, "diagnostics": diag}
 
 
 def start_server(get_stats, port: int = 0) -> Tuple[StatsServer, str]:

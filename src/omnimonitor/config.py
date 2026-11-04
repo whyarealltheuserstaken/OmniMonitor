@@ -72,6 +72,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # Personalization.
     "icon_style": "ring",                   # ring | pie | bar | number
     "icon_value": "remaining",              # remaining | used
+    "icon_text": True,                      # macOS menu bar: show "79%" next to the ring
+    "mini_on_top": False,                   # mini window floats above other windows
     "theme": "dark",                        # dark | light | auto
     "accent_color": "#2a8bd8",
     "display_name": "",

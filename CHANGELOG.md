@@ -4,6 +4,30 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.2] - Unreleased
+
+### Fixed
+- **Mini view no longer "kills the app".** Before, the full window navigated itself to the mini page, and the only way back was a `target=_blank` "Full stats" link that WKWebView handed to the system browser. Mini is now its own compact native window (340x540, optional "keep the mini window on top" setting), with a **Full window** link that reopens the native full window. The tray process and stats server are never touched. CI runs a mini smoke and a mini -> full switch smoke on macOS and Windows.
+- **"Full stats" / tray items open or focus the native window.** The browser opens only from the explicit **Open in browser** item.
+- **Controls that did nothing inside the app window.** WKWebView ignores `<a download>`, `target=_blank`, `window.open`, and some dialogs and clipboard calls.
+  - Exports are now saved to ~/Downloads (never overwriting) and revealed in Finder or Explorer.
+  - External https links open in the default browser.
+  - Copy falls back when the clipboard API is blocked.
+  - All of this goes through new CSRF-protected `api/app/*` actions.
+- **Tray "show file" on macOS** now reveals the file (`open -R`) instead of opening it in TextEdit.
+- **Empty token stats say why** in a visible banner, not only in a tooltip. For example: no `~/.grok/sessions`, no `updates.jsonl`, unreadable files, or no `turn_completed` usage yet.
+- **Grok session parsing:**
+  - Turns are deduplicated by Grok's `prompt_id`, so forked sessions are not double counted.
+  - Turns that have only top-level `usage` (no `modelUsage`) are counted once, with model "unknown".
+
+### Changed
+- **New tray icon.**
+  - macOS: a crisp 22pt (44 px @2x) template ring that macOS tints for light and dark menu bars. An optional % label is controlled by the "macOS: show the % next to the ring" setting. The critical state (< 20%) is red.
+  - Windows/Linux: a cleaner colored gauge, 8x supersampled, with no digits below 24 px.
+
+### Added
+- **Report a problem.** A sidebar button shows a redacted diagnostics report (version, platform, status, offline doctor checks). It contains no keys, tokens, secret URLs or home paths. You can copy it or save it to Downloads.
+
 ## [0.4.1] - 2026-11-04
 
 ### Fixed

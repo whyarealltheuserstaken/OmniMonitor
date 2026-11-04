@@ -210,6 +210,8 @@ SCHEMA: Dict[str, Tuple[Callable[[Any], Any], bool, str]] = {
     "notify_on_pace": (_bool, True, "alert when on pace to run out before reset (estimate)"),
     "icon_style": (_choice("ring", "pie", "bar", "number"), True, "tray icon style"),
     "icon_value": (_choice("remaining", "used"), True, "tray icon shows remaining or used"),
+    "icon_text": (_bool, True, "macOS menu bar: show the % next to the ring"),
+    "mini_on_top": (_bool, True, "keep the mini window above other windows"),
     "theme": (_choice("dark", "light", "auto"), True, "stats page theme"),
     "accent_color": (_color, True, "accent color"),
     "display_name": (_name, True, "name shown on the stats page"),

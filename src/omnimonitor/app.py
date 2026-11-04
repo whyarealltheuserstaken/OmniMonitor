@@ -240,9 +240,19 @@ class Controller:
                 notes.append(why)
                 continue
             try:
-                sc.scan()
+                res = sc.scan()
             except Exception as e:  # noqa: BLE001
                 notes.append("could not read %s logs: %s" % (name or "Grok CLI", e))
+                continue
+            # Only shown when no token data exists at all: say what we saw, never guess.
+            if getattr(sc, "name", "") == "grok_sessions" and isinstance(res, dict):
+                root = getattr(sc, "grok_home", config_mod.grok_home(self.cfg)) / "sessions"
+                if not res.get("files"):
+                    notes.append("%s exists but has no */updates.jsonl session files yet "
+                                 "(use the Grok CLI once, then wait for the next refresh)" % root)
+                elif res.get("errors"):
+                    notes.append("could not read %d of %d Grok session files in %s" % (
+                        res["errors"], res["files"], root))
         if self.token_source == "grok_sessions" and any("Grok" in n for n in notes) and \
                 "grok_unified" not in config_mod.extra_token_sources(self.cfg):
             uni = config_mod.grok_home(self.cfg) / "logs" / "unified.jsonl"

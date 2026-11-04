@@ -45,7 +45,7 @@ def test_url_goes_over_stdin_not_argv():
     cmd, kw = calls[0]
     assert cmd[-1] == "window" and URL not in " ".join(cmd)
     assert kw["stdin"] is subprocess.PIPE
-    assert procs[0].stdin.getvalue() == (URL + "\n").encode()
+    assert procs[0].stdin.getvalue() == (URL + "\n" + '{"view": "full", "on_top": false}\n').encode()
     assert opened == []
 
 
