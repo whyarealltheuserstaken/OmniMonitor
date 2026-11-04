@@ -15,8 +15,10 @@ jobs:
         include:
           - os: macos-14        # Apple Silicon
             asset: omnimonitor-macos-arm64
+            arch: arm64
           - os: macos-15-intel  # Intel (macos-13 runners were retired Dec 2025)
             asset: omnimonitor-macos-x86_64
+            arch: x86_64
           - os: windows-latest
             asset: omnimonitor-windows-x86_64
           - os: ubuntu-latest
@@ -53,13 +55,35 @@ jobs:
             --hidden-import pystray._xorg --hidden-import pystray._appindicator \
             scripts/pyinstaller_entry.py
           tar -C dist -czf ${{ matrix.asset }}.tar.gz omnimonitor
-      - name: Smoke test (non-GUI command)
+      - name: Smoke test the packaged artifact (non-GUI commands)
         shell: bash
+        env:
+          OMNIMONITOR_HOME: ${{ runner.temp }}/omni-home
         run: |
-          if [ "${{ runner.os }}" = "macOS" ]; then B=dist/omnimonitor.app/Contents/MacOS/omnimonitor
-          elif [ "${{ runner.os }}" = "Windows" ]; then B=dist/omnimonitor.exe
-          else B=dist/omnimonitor; fi
-          "$B" --version
+          set -euo pipefail
+          T="${{ runner.temp }}/smoke"; rm -rf "$T"; mkdir -p "$T"
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            ditto -x -k "${{ matrix.asset }}.zip" "$T"
+            B="$T/omnimonitor.app/Contents/MacOS/omnimonitor"
+            archs=$(lipo -archs "$B"); echo "architectures: $archs"
+            case " $archs " in *" ${{ matrix.arch }} "*) ;; *) echo "wrong arch"; exit 1;; esac
+            codesign --verify --verbose "$T/omnimonitor.app" || true   # ad-hoc signed only
+          elif [ "${{ runner.os }}" = "Windows" ]; then
+            unzip -q "${{ matrix.asset }}.zip" -d "$T"; B="$T/omnimonitor.exe"
+          else
+            tar -C "$T" -xzf "${{ matrix.asset }}.tar.gz"; B="$T/omnimonitor"
+          fi
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            # --windowed exe has no console: check the exit code and capture via a file
+            "$B" --version > "$T/v.txt" 2>&1; cat "$T/v.txt" || true
+            "$B" status --demo > "$T/s.txt" 2>&1; cat "$T/s.txt" || true
+          else
+            "$B" --version | tee "$T/v.txt"
+            grep -q "${GITHUB_REF_NAME#v}" "$T/v.txt"
+            "$B" status --demo
+            "$B" providers > /dev/null
+          fi
+          ls -la ${{ matrix.asset }}.*
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}

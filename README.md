@@ -184,6 +184,25 @@ omnimonitor --demo                     # try it with fake data
 
 ### macOS (Apple Silicon and Intel)
 
+**Prebuilt app (no Python needed):** download from
+[Releases](https://github.com/whyarealltheuserstaken/OmniMonitor/releases/latest):
+`omnimonitor-macos-arm64.zip` for Apple Silicon (M1–M4), `omnimonitor-macos-x86_64.zip` for
+Intel. Unzip it and move `omnimonitor.app` to `/Applications`. The app is **not signed or
+notarized**, so macOS blocks the first launch. Either:
+
+* **Finder:** right-click (Control-click) `omnimonitor.app` → **Open** → **Open**. On macOS 15
+  Sequoia and later, if there is no Open button: try to open it once, then go to **System
+  Settings → Privacy & Security**, click **Open Anyway** next to "omnimonitor" and confirm.
+* **Terminal:** `xattr -dr com.apple.quarantine /Applications/omnimonitor.app`, then open it
+  normally.
+
+Only do this for a download you got from this repository's Releases page; you can check it
+against `SHA256SUMS.txt` (`shasum -a 256 omnimonitor-macos-arm64.zip`). The command-line
+interface is inside the bundle:
+`/Applications/omnimonitor.app/Contents/MacOS/omnimonitor setup` (or `… doctor`).
+
+**From source:**
+
 ```bash
 brew install python                    # if you don't have Python 3.9+
 pipx install /path/to/OmniMonitor      # or: python3 -m pip install --user .
