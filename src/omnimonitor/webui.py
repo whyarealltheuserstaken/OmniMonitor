@@ -53,6 +53,8 @@ class StatsServer:
         self.get_settings = get_settings
         self.save_settings = save_settings
         self.export = export
+        # set once a page's script has fetched api/stats (used by the window smoke test)
+        self.stats_served = threading.Event()
         outer = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -154,6 +156,7 @@ class StatsServer:
                                           "application/javascript; charset=utf-8")
                     if rel == "api/stats":
                         body = json.dumps(outer.get_stats(), default=str).encode("utf-8")
+                        outer.stats_served.set()
                         return self._send(200, body, "application/json")
                     if rel == "api/settings" and outer.get_settings is not None:
                         view = dict(outer.get_settings())

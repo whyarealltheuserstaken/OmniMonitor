@@ -50,6 +50,9 @@ jobs:
           # menu-bar-only app: no Dock icon
           P=dist/omnimonitor.app/Contents/Info.plist
           /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "$P"
+          # the app window loads the local dashboard over http://127.0.0.1 (never remote http)
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$P"
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true" "$P"
           V=$(python -c "import omnimonitor; print(omnimonitor.__version__)")
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $V" "$P"
           /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $V" "$P" || \
@@ -139,7 +142,7 @@ jobs:
             # App window: separate process, demo dashboard in pywebview, checks the page
             # title via JS, then closes. Exit 0 only if the page really loaded.
             "$B" window --smoke > "$T/w.txt" 2>&1 & WP=$!
-            for i in $(seq 1 90); do kill -0 $WP 2>/dev/null || break; sleep 1; done
+            for i in $(seq 1 150); do kill -0 $WP 2>/dev/null || break; sleep 1; done
             if kill -0 $WP 2>/dev/null; then kill $WP; echo "window smoke timed out"; exit 1; fi
             set +e; wait $WP; WRC=$?; set -e
             cat "$T/w.txt" || true

@@ -105,29 +105,42 @@ class WindowLauncher:
 
 
 # ---------------------------------------------------------------- child process side
-def run_window(url: str, smoke: bool = False, timeout_s: float = 60.0) -> int:
-    """Blocking; must run on the main thread of its own process."""
+def run_window(url: str, smoke: bool = False, timeout_s: float = 60.0,
+               served: Optional[threading.Event] = None) -> int:
+    """Blocking; must run on the main thread of its own process.
+
+    Smoke mode never injects JS (the page CSP forbids eval, which pywebview's evaluate_js
+    needs); it passes when the window fired `loaded` and the page's own script fetched
+    api/stats from the server (`served`), proving the dashboard ran under its real CSP."""
     import webview  # noqa: PLC0415
 
     win = webview.create_window(TITLE, url, width=SIZE[0], height=SIZE[1],
                                 min_size=MIN_SIZE, text_select=True)
     result = {"rc": 1}
     if smoke:
+        seen = {"shown": False, "loaded": False, "served": False}
+        win.events.shown += lambda *a: seen.__setitem__("shown", True)
+        win.events.loaded += lambda *a: seen.__setitem__("loaded", True)
+
+        def watchdog():
+            # evaluate_js blocks until the page has loaded; never hang CI forever
+            time.sleep(timeout_s + 10)
+            print("WINDOW FAILED: watchdog timeout; state=%r" % seen, flush=True)
+            os._exit(1)
+
+        threading.Thread(target=watchdog, daemon=True).start()
+
         def check():
             t0 = time.monotonic()
             while time.monotonic() - t0 < timeout_s:
-                try:
-                    title = win.evaluate_js("document.title")
-                    ready = win.evaluate_js("document.readyState")
-                    if title and "OmniMonitor" in str(title) and ready == "complete":
-                        print("WINDOW OK: %s" % title, flush=True)
-                        result["rc"] = 0
-                        break
-                except Exception:  # noqa: BLE001
-                    pass
+                seen["served"] = bool(served is not None and served.is_set())
+                if seen["loaded"] and seen["served"]:
+                    print("WINDOW OK: dashboard loaded and fetched api/stats", flush=True)
+                    result["rc"] = 0
+                    break
                 time.sleep(0.5)
             else:
-                print("WINDOW FAILED: page did not load", flush=True)
+                print("WINDOW FAILED: page did not load; state=%r" % seen, flush=True)
             win.destroy()
         webview.start(check, private_mode=True)
         return result["rc"]

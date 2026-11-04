@@ -123,7 +123,7 @@ def cmd_window(args) -> int:
         ctrl = Controller(_load(args))
         srv = for_controller(ctrl, 0).start()
         try:
-            return window.run_window(srv.url, smoke=True)
+            return window.run_window(srv.url, smoke=True, timeout_s=45, served=srv.stats_served)
         finally:
             srv.stop()
     url = window.read_url_from_stdin()
@@ -495,6 +495,7 @@ def _clean_argv(argv: List[str]) -> List[str]:
 
 def cmd_net_check(args) -> int:
     """HTTPS round trip with the app's TLS settings (used by the release smoke test)."""
+    import urllib.error
     import urllib.request
 
     from omnimonitor.net import ca_source, ssl_context
@@ -509,6 +510,10 @@ def cmd_net_check(args) -> int:
         with urllib.request.urlopen(req, timeout=15, context=ssl_context()) as r:  # noqa: S310
             print("HTTPS OK: %s -> %s" % (url, r.status))
             return 0
+    except urllib.error.HTTPError as e:
+        # an HTTP status (e.g. 403 rate limit) means TLS + certificate verification succeeded
+        print("HTTPS OK (TLS verified; server answered HTTP %s): %s" % (e.code, url))
+        return 0
     except Exception as e:  # noqa: BLE001
         print("HTTPS FAILED: %s: %s" % (url, e))
         return 1

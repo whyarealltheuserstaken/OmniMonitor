@@ -74,6 +74,6 @@ jobs:
           OMNIMONITOR_HOME: ${{ runner.temp }}/omni-home
         run: |
           omnimonitor window --smoke & WP=$!
-          for i in $(seq 1 90); do kill -0 $WP 2>/dev/null || break; sleep 1; done
+          for i in $(seq 1 150); do kill -0 $WP 2>/dev/null || break; sleep 1; done
           if kill -0 $WP 2>/dev/null; then kill $WP; echo "timed out"; exit 1; fi
           wait $WP
