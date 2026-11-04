@@ -234,6 +234,8 @@ SCHEMA: Dict[str, Tuple[Callable[[Any], Any], bool, str]] = {
     "copilot_premium_allowance": (_num(0, 1e6, True), False,
                                   "your plan's monthly premium requests (for a %)"),
     "xai_team_id": (_ident(64, r"[A-Za-z0-9_-]+"), False, "xAI team id for the balance"),
+    "fireworks_account_id": (_ident(64, r"[A-Za-z0-9_-]+"), False,
+                             "Fireworks account id for the spend summary"),
     "cursor_email": (_ident(254, r"[^@\s]+@[^@\s]+"), False,
                      "your email in the Cursor team (own spend row)"),
     "token_source": (_choice("auto", "grok_sessions", "demo", "none"), False,
