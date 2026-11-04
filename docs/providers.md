@@ -28,7 +28,7 @@ only. Please report a mismatch with a redacted sample.
 
 ## Summary
 
-47 entries: 12 supported, 9 partial, 9 experimental, 17 not supported.
+56 entries: 13 supported, 11 partial, 11 experimental, 21 not supported.
 
 | Family | Provider | id | Status | Source | Shows | Tray % |
 |---|---|---|---|---|---|---|
@@ -44,7 +44,16 @@ only. Please report a mismatch with a redacted sample.
 | Gemini | Gemini CLI | `gemini_cli` | ✅ supported | local logs | tokens (input incl. tool, output incl. thoughts, cached), models, projects | – |
 | Gemini | Gemini API (AI Studio) | `gemini_api` | ❌ not supported | – | The Gemini API has no balance/usage endpoint; spend is only in Google Cloud Billing (export to BigQuery) | – |
 | Gemini | Antigravity (CLI / IDE) | `antigravity` | 🧪 experimental | local logs | tokens (input incl. cache, output incl. thinking), models | – |
-| Grok | xAI API (prepaid credits) | `xai_api` | 🟡 partial | official API | prepaid credit balance (USD) | – |
+| Grok | xAI API (prepaid credits) | `xai_api` | 🟡 partial | official API | prepaid credit balance, month-to-date spend, postpaid spending limit % used | – |
+| Venice | Venice API | `venice` | 🧪 experimental | official API | USD / DIEM / credit balances; DIEM % used of the epoch allocation | yes |
+| DeepInfra | DeepInfra | `deepinfra` | 🟡 partial | official API | prepaid balance, usage since last invoice, spending limit % used | yes |
+| Fireworks | Fireworks AI | `fireworks` | 🟡 partial | official API | month-to-date spend (no public balance endpoint) | – |
+| Vercel | Vercel AI Gateway | `vercel_ai_gateway` | ✅ supported | official API | credit balance and lifetime credits used (USD) | – |
+| LiteLLM | LiteLLM proxy (self-hosted) | `litellm` | 🧪 experimental | official API | the calling virtual key's spend, budget % used and budget reset | yes |
+| Z.ai | Z.ai (GLM) | `zai` | ❌ not supported | – | Z.ai documents no balance, usage or quota API; figures are dashboard-only | – |
+| Volcengine | Volcengine Ark | `volcengine` | ❌ not supported | – | Balance lives in the Volcengine Billing OpenAPI, which needs AK/SK request signing with account-level credentials; not implemented (an Ark inference key cannot read it) | – |
+| Hugging Face | Hugging Face Inference Providers | `huggingface` | ❌ not supported | – | No documented API returns credit balance or inference spend; it is shown only on the billing settings page | – |
+| AWS | Amazon Bedrock | `bedrock` | ❌ not supported | – | Bedrock has no balance endpoint; spend is in Cost Explorer and token metrics in CloudWatch, both needing SigV4-signed AWS credentials | – |
 | Grok | Grok Bot | `grok_bot` | ❌ not supported | – | No usage API or local usage log is available to third-party tools | – |
 | DeepSeek | DeepSeek API | `deepseek` | ✅ supported | official API | balance (total, granted, topped-up) per currency | – |
 | DeepSeek | DeepSeek Harness | `dsh` | 🧪 experimental | local logs | tokens (incl. cache, reasoning), models, projects | – |
@@ -215,14 +224,84 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🟡 partial |
-| Source | GET https://management-api.x.ai/v1/billing/teams/{team_id}/prepaid/balance |
+| Source | GET .../billing/teams/{team_id}/prepaid/balance; POST .../usage; GET .../postpaid/invoice/preview (management-api.x.ai) |
 | Auth | Management key in XAI_MANAGEMENT_KEY + team id (config xai_team_id or XAI_TEAM_ID) |
-| Shows | prepaid credit balance (USD) |
+| Shows | prepaid credit balance, month-to-date spend, postpaid spending limit % used |
 | Reset period | n/a (balance) |
 | Confidence / testing | low-medium: docs show purchases as negative changes, so balance = -total; not verified with a live key |
 | Key variables | `XAI_MANAGEMENT_KEY`, `XAI_TEAM_ID` |
 | Can drive the tray % | no |
 | Docs | [docs.x.ai](https://docs.x.ai/docs/management-api) |
+
+### Venice API (`venice`)
+
+| | |
+|---|---|
+| Status | 🧪 experimental |
+| Source | GET https://api.venice.ai/api/v1/billing/balance |
+| Auth | ADMIN API key in VENICE_ADMIN_KEY (inference keys are rejected) |
+| Shows | USD / DIEM / credit balances; DIEM % used of the epoch allocation |
+| Reset period | DIEM epoch (time not returned) |
+| Confidence / testing | low-medium: Billing API is marked beta; docs + mocked tests only |
+| Key variables | `VENICE_ADMIN_KEY` |
+| Can drive the tray % | yes |
+| Docs | [docs.venice.ai](https://docs.venice.ai/api-reference/endpoint/billing/balance) |
+
+### DeepInfra (`deepinfra`)
+
+| | |
+|---|---|
+| Status | 🟡 partial |
+| Source | GET https://api.deepinfra.com/payment/checklist |
+| Auth | API key in DEEPINFRA_API_KEY |
+| Shows | prepaid balance, usage since last invoice, spending limit % used |
+| Reset period | per invoice |
+| Confidence / testing | medium (docs + mocked tests) |
+| Key variables | `DEEPINFRA_API_KEY` |
+| Can drive the tray % | yes |
+| Docs | [api.deepinfra.com](https://api.deepinfra.com/docs) |
+
+### Fireworks AI (`fireworks`)
+
+| | |
+|---|---|
+| Status | 🟡 partial |
+| Source | GET https://api.fireworks.ai/v1/accounts/{account_id}/billing/summary |
+| Auth | API key in FIREWORKS_API_KEY + account id (config fireworks_account_id or FIREWORKS_ACCOUNT_ID) |
+| Shows | month-to-date spend (no public balance endpoint) |
+| Reset period | calendar month (UTC) |
+| Confidence / testing | medium (docs + mocked tests) |
+| Key variables | `FIREWORKS_API_KEY`, `FIREWORKS_ACCOUNT_ID` |
+| Can drive the tray % | no |
+| Docs | [docs.fireworks.ai](https://docs.fireworks.ai/api-reference/get-billing-summary) |
+
+### Vercel AI Gateway (`vercel_ai_gateway`)
+
+| | |
+|---|---|
+| Status | ✅ supported |
+| Source | GET https://ai-gateway.vercel.sh/v1/credits |
+| Auth | API key in AI_GATEWAY_API_KEY |
+| Shows | credit balance and lifetime credits used (USD) |
+| Reset period | n/a (balance) |
+| Confidence / testing | medium-high (docs + mocked tests) |
+| Key variables | `AI_GATEWAY_API_KEY` |
+| Can drive the tray % | no |
+| Docs | [vercel.com](https://vercel.com/docs/ai-gateway/capabilities/usage) |
+
+### LiteLLM proxy (self-hosted) (`litellm`)
+
+| | |
+|---|---|
+| Status | 🧪 experimental |
+| Source | GET {LITELLM_BASE_URL}/key/info |
+| Auth | virtual key in LITELLM_API_KEY; proxy URL in LITELLM_BASE_URL (env or secrets.json only; https, or http on localhost) |
+| Shows | the calling virtual key's spend, budget % used and budget reset |
+| Reset period | key budget_duration, when set |
+| Confidence / testing | low-medium: response fields vary across LiteLLM versions; mocked tests |
+| Key variables | `LITELLM_API_KEY`, `LITELLM_BASE_URL` |
+| Can drive the tray % | yes |
+| Docs | [docs.litellm.ai](https://docs.litellm.ai/docs/proxy/virtual_keys) |
 
 ### DeepSeek API (`deepseek`)
 
@@ -514,6 +593,10 @@ only. Please report a mismatch with a redacted sample.
 | Claude Pro/Max plan limits | `claude_plan` | No official API exposes the 5-hour/weekly plan limits; the in-app /usage view uses a private OAuth endpoint and the web dashboard needs a browser session. | An official, documented limits endpoint from Anthropic. | – |
 | ChatGPT app message limits | `chatgpt_app` | No official API. The chatgpt.com backend route some tools call is undocumented and needs the app's login token. Codex plan windows are shown via the Codex adapter. | An official usage endpoint from OpenAI. | – |
 | Gemini API (AI Studio) | `gemini_api` | The Gemini API has no balance/usage endpoint; spend is only in Google Cloud Billing (export to BigQuery). | Cloud Billing BigQuery export + a service account; out of scope for a tray app. | [ai.google.dev](https://ai.google.dev/gemini-api/docs/billing) |
+| Z.ai (GLM) | `zai` | Z.ai documents no balance, usage or quota API; figures are dashboard-only. | A documented billing or usage endpoint. | – |
+| Volcengine Ark | `volcengine` | Balance lives in the Volcengine Billing OpenAPI, which needs AK/SK request signing with account-level credentials; not implemented (an Ark inference key cannot read it). | A signed Billing OpenAPI client with a narrowly scoped IAM user. | – |
+| Hugging Face Inference Providers | `huggingface` | No documented API returns credit balance or inference spend; it is shown only on the billing settings page. | A documented billing endpoint. | – |
+| Amazon Bedrock | `bedrock` | Bedrock has no balance endpoint; spend is in Cost Explorer and token metrics in CloudWatch, both needing SigV4-signed AWS credentials. | A SigV4 Cost Explorer / CloudWatch reader with read-only IAM credentials. | – |
 | Grok Bot | `grok_bot` | No usage API or local usage log is available to third-party tools. | An official usage endpoint. | – |
 | DeepSeek chat app | `deepseek_app` | The consumer app publishes no usage or limit data. | n/a | – |
 | Qwen API (Alibaba Model Studio) | `dashscope` | Balance is only available via Alibaba Cloud BSS OpenAPI (QueryAccountBalance), which needs an AccessKey pair and request signing; not implemented. | Signature V3 client + a RAM user with read-only billing permission. | [www.alibabacloud.com](https://www.alibabacloud.com/help/en/bss-openapi) |

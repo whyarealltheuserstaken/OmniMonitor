@@ -394,7 +394,9 @@ to defaults and shows the error in the menu. See [`config.example.json`](config.
 secrets file readable by other users is ignored). Variables: `ANTHROPIC_ADMIN_KEY`,
 `OPENAI_ADMIN_KEY`, `XAI_MANAGEMENT_KEY` (+ `XAI_TEAM_ID`), `DEEPSEEK_API_KEY`,
 `MOONSHOT_API_KEY`, `GITHUB_COPILOT_TOKEN` (or `GITHUB_TOKEN`), `CURSOR_ADMIN_KEY`,
-`OPENROUTER_API_KEY`, `OLLAMA_API_KEY`. `omnimonitor secrets list` shows which are set and
+`OPENROUTER_API_KEY`, `OLLAMA_API_KEY`, `VENICE_ADMIN_KEY`, `DEEPINFRA_API_KEY`,
+`FIREWORKS_API_KEY` (+ `FIREWORKS_ACCOUNT_ID`), `AI_GATEWAY_API_KEY` (Vercel), `LITELLM_API_KEY`
+(+ `LITELLM_BASE_URL`: https, or http on localhost; env/secrets only). `omnimonitor secrets list` shows which are set and
 where from, never the values.
 
 **Settings page / `config set`:** the settings page can change only the personalization,

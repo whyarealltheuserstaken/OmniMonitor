@@ -25,7 +25,8 @@ from omnimonitor.net import ssl_context
 ALLOWED_HOSTS = {
     "api.deepseek.com", "openrouter.ai", "api.moonshot.ai", "api.moonshot.cn", "ollama.com",
     "management-api.x.ai", "api.anthropic.com", "api.openai.com", "api.github.com",
-    "api.cursor.com",
+    "api.cursor.com", "api.venice.ai", "api.deepinfra.com", "api.fireworks.ai",
+    "ai-gateway.vercel.sh",
 }
 TIMEOUT = 15
 MAX_BODY = 4 * 1024 * 1024
@@ -77,10 +78,16 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def _extra_host_ok(url: str) -> bool:
+    """The user's own LiteLLM proxy (LITELLM_BASE_URL, env/secrets only)."""
+    from omnimonitor.accounts_v6 import litellm_host_ok
+    return litellm_host_ok(url)
+
+
 def default_http(method: str, url: str, headers: Dict[str, str],
                  body: Optional[bytes]) -> Tuple[int, Any]:
     u = urllib.parse.urlsplit(url)
-    if u.scheme != "https" or u.hostname not in ALLOWED_HOSTS:
+    if not ((u.scheme == "https" and u.hostname in ALLOWED_HOSTS) or _extra_host_ok(url)):
         raise AccountError("refusing non-allow-listed URL")
     req = urllib.request.Request(url, data=body, method=method,
                                  headers=dict(headers, **{"User-Agent": USER_AGENT,
@@ -290,6 +297,8 @@ def fetch_xai(cfg, key, http, now) -> Reading:
                      "shown here as a positive balance")
     if cents is not None:
         r.metric("balance", "Prepaid balance", -cents / 100.0, "USD", "balance")
+    from omnimonitor.accounts_v6 import xai_extras
+    xai_extras(r, team, key, http, now)
     return r
 
 
@@ -456,10 +465,25 @@ FETCHERS: Dict[str, Tuple[str, Callable[..., Reading]]] = {
 }
 
 
+def _register_v6() -> None:
+    from omnimonitor import accounts_v6 as v6
+    FETCHERS.update({
+        "venice": ("VENICE_ADMIN_KEY", v6.fetch_venice),
+        "deepinfra": ("DEEPINFRA_API_KEY", v6.fetch_deepinfra),
+        "fireworks": ("FIREWORKS_API_KEY", v6.fetch_fireworks),
+        "vercel_ai_gateway": ("AI_GATEWAY_API_KEY", v6.fetch_vercel_gateway),
+        "litellm": ("LITELLM_API_KEY", v6.fetch_litellm),
+    })
+
+
+_register_v6()
+
+
 def key_for(pid: str) -> Tuple[str, str]:
     """(value, env-name) of the first configured key for a provider ('' if none)."""
     info = catalog.BY_ID.get(pid)
-    names = [n for n in (info.env if info else ()) if n != "XAI_TEAM_ID"]
+    names = [n for n in (info.env if info else ())
+             if n not in ("XAI_TEAM_ID", "FIREWORKS_ACCOUNT_ID", "LITELLM_BASE_URL")]
     for n in names:
         v = apikeys.get(n)
         if v:
