@@ -378,6 +378,7 @@ def codex_limits(history) -> Optional[Dict[str, Any]]:
 def _local_classes(cfg: Dict[str, Any]) -> List[Tuple[Any, List[Path]]]:
     from omnimonitor import local_adapters as la
     from omnimonitor import local_v4 as v4
+    from omnimonitor import local_v4b as v4b
     return [
         (ClaudeCodeScanner, config_mod.claude_homes(cfg)),
         (CodexScanner, config_mod.codex_homes(cfg)),
@@ -389,6 +390,15 @@ def _local_classes(cfg: Dict[str, Any]) -> List[Tuple[Any, List[Path]]]:
         (v4.GrokUnifiedScanner, [config_mod.grok_home(cfg)]),
         (v4.AntigravityScanner, config_mod.antigravity_homes(cfg)),
         (v4.DeepSeekHarnessScanner, config_mod.dsh_roots(cfg)),
+        (v4b.PiScanner, config_mod.pi_roots(cfg)),
+        (v4b.OpenClawScanner, config_mod.openclaw_roots(cfg)),
+        (v4b.GooseScanner, config_mod.goose_roots(cfg)),
+        (v4b.HermesScanner, config_mod.hermes_roots(cfg)),
+        (v4b.AmpScanner, config_mod.amp_roots(cfg)),
+        (v4b.DroidScanner, config_mod.factory_roots(cfg)),
+        (v4b.ClineScanner, config_mod.vscode_storage_roots(cfg)),
+        (v4b.RooScanner, config_mod.vscode_storage_roots(cfg)),
+        (v4b.KiloScanner, config_mod.vscode_storage_roots(cfg)),
     ]
 
 
