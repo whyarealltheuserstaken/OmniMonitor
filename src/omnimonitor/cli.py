@@ -18,6 +18,7 @@ def _load(args) -> dict:
     if getattr(args, "demo", False):
         cfg["source"] = "demo"
         cfg["token_source"] = "demo"
+        cfg["_forced_demo"] = True
     from omnimonitor import net
     net.configure(cfg)
     return cfg
@@ -36,7 +37,9 @@ def cmd_run(args) -> int:
     try:
         from omnimonitor.tray import TrayApp
         applog.log.info("tray module loaded; creating icon")
-        app = TrayApp(Controller(cfg))
+        ctrl = Controller(cfg)
+        ctrl.state_file = config_mod.app_state_path()
+        app = TrayApp(ctrl)
     except Exception as e:  # noqa: BLE001
         applog.log.exception("could not start the tray icon")
         from omnimonitor.alerts import deliver
@@ -140,7 +143,8 @@ def cmd_doctor(args) -> int:
     cfg = _load(args)
     if cfg.get("source") == "demo":
         cfg = dict(cfg)
-        cfg["source"] = "grok_cli_billing"  # check the real path even while in demo mode
+        cfg["_configured_source"] = "demo"  # doctor reports this, but checks the real path
+        cfg["source"] = "grok_cli_billing"
     if args.json:
         print(doctor.as_json(cfg))
         return 0

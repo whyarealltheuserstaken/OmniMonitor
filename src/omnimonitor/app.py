@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import logging
 import threading
 import time
 from datetime import datetime
@@ -18,10 +20,12 @@ from omnimonitor import overview as overview_mod
 from omnimonitor import settings as settings_mod
 from omnimonitor import stats as stats_mod
 from omnimonitor import status as status_mod
-from omnimonitor.billing import UsageResult, fetch_usage_safely
+from omnimonitor.billing import UsageError, UsageResult, fetch_usage_safely
 from omnimonitor.history import History
 from omnimonitor.timeutil import utcnow
 from omnimonitor.tokens import DEMO_TOOLS, demo_codex_limits, demo_events, demo_readings
+
+log = logging.getLogger("omnimonitor.app")
 
 
 class Controller:
@@ -50,6 +54,9 @@ class Controller:
         self.readings: Dict[str, Dict[str, Any]] = {}
         self.http = None  # tests inject a fake HTTP client for account readers
         self._installer = None  # setup wizard; created lazily (tests inject one)
+        self.state_file: Optional[Path] = None  # set by the tray: doctor compares against it
+        self.started = clock()
+        self._cfg_mtime = self._config_mtime()
         self._open_history()
 
     def _open_history(self) -> None:
@@ -63,6 +70,47 @@ class Controller:
                 self.token_note = "history database unavailable: %s" % e
                 if self.token_source == "grok_sessions":
                     self.token_source = "none"
+
+    # ------------------------------------------------------------ config reload
+    def _config_mtime(self) -> Optional[float]:
+        p = self.cfg.get("_config_path")
+        try:
+            return Path(p).stat().st_mtime if p else None
+        except OSError:
+            return None
+
+    def reload_config_if_changed(self) -> bool:
+        """Pick up edits made while the app runs (e.g. `omnimonitor setup` in a terminal
+        switching source from demo to grok_cli_billing). Never raises."""
+        m = self._config_mtime()
+        if m is None or m == self._cfg_mtime:
+            return False
+        self._cfg_mtime = m
+        try:
+            new = config_mod.load_config(Path(self.cfg["_config_path"]))
+        except Exception:  # noqa: BLE001
+            log.exception("config reload failed")
+            return False
+        if self.cfg.get("_forced_demo"):  # started with --demo: stay in demo
+            new["source"], new["token_source"], new["_forced_demo"] = "demo", "demo", True
+        self._apply_cfg(new)
+        log.info("config reloaded from %s (source=%s)", new.get("_config_path"),
+                 new.get("source"))
+        return True
+
+    def _apply_cfg(self, new: Dict[str, Any]) -> None:
+        with self._lock:
+            old_ts = self.token_source
+            self.cfg.clear()
+            self.cfg.update(new)
+            net_mod.configure(self.cfg)
+            self.token_source = config_mod.effective_token_source(self.cfg)
+            if old_ts == "demo" and self.token_source != "demo":
+                self.readings = {}
+            if self.usage is not None and self.usage.is_demo and self.cfg.get("source") != "demo":
+                self.usage = None
+            self.error = self.cfg.get("_config_error")
+        self._open_history()
 
     def tools(self) -> List[str]:
         """Token sources actually feeding the stats."""
@@ -86,8 +134,16 @@ class Controller:
 
     def refresh(self) -> None:
         """One poll. Never raises."""
+        self.reload_config_if_changed()
         self.last_attempt = self.clock()
+        t0 = time.monotonic()
         usage, err = fetch_usage_safely(self.cfg)
+        dt = time.monotonic() - t0
+        if usage is not None:
+            log.info("poll source=%s ok: %.1f%% remaining%s (%.1fs)", self.cfg.get("source"),
+                     usage.remaining_percent, " [DEMO]" if usage.is_demo else "", dt)
+        else:
+            log.warning("poll source=%s failed (%.1fs): %s", self.cfg.get("source"), dt, err)
         with self._lock:
             if usage is not None:
                 self.usage, self.error, self.last_ok = usage, None, self.clock()
@@ -105,7 +161,39 @@ class Controller:
         self._refresh_accounts()
         self._recompute()
         self._check_alerts()
+        if self.token_note:
+            log.info("token stats: %s", self.token_note)
+        self._write_state()
         self._notify()
+
+    def _write_state(self) -> None:
+        """Small, secret-free JSON snapshot of what the running app uses, for `doctor`."""
+        if self.state_file is None:
+            return
+        try:
+            import os
+            import sys
+
+            from omnimonitor import __version__
+            from omnimonitor.billing import find_grok_binary
+            st = self.status_dict()
+            st.pop("usage", None)
+            u = self.usage
+            doc = {"pid": os.getpid(), "version": __version__, "executable": sys.executable,
+                   "started": self.started.isoformat(), "written": self.clock().isoformat(),
+                   "remaining_percent": u.remaining_percent if u else None,
+                   "usage_is_demo": bool(u and u.is_demo),
+                   "token_note": self.token_note, "tools": self.tools(),
+                   "grok_binary": find_grok_binary(self.cfg),
+                   "grok_auth_file": str(config_mod.grok_auth_file(self.cfg)),
+                   "grok_home": str(config_mod.grok_home(self.cfg)),
+                   "path_env": os.environ.get("PATH", ""), **st}
+            tmp = self.state_file.with_suffix(".tmp")
+            tmp.parent.mkdir(parents=True, exist_ok=True)
+            tmp.write_text(json.dumps(doc, indent=1), encoding="utf-8")
+            os.replace(str(tmp), str(self.state_file))
+        except Exception:  # noqa: BLE001
+            log.exception("could not write app state")
 
     def _refresh_accounts(self, force: bool = False) -> None:
         """Official account APIs for enabled providers (rate-limited, never raises)."""
@@ -155,6 +243,14 @@ class Controller:
                 sc.scan()
             except Exception as e:  # noqa: BLE001
                 notes.append("could not read %s logs: %s" % (name or "Grok CLI", e))
+        if self.token_source == "grok_sessions" and any("Grok" in n for n in notes) and \
+                "grok_unified" not in config_mod.extra_token_sources(self.cfg):
+            uni = config_mod.grok_home(self.cfg) / "logs" / "unified.jsonl"
+            notes.append("Grok token stats appear after you use the Grok CLI (it writes "
+                         "~/.grok/sessions)" + (
+                             "; %s exists - you can turn on the experimental 'Grok CLI unified "
+                             "log' provider (don't use both: turns would count twice)" % uni
+                             if uni.is_file() else ""))
         self.token_note = "; ".join(notes)
 
     def _check_alerts(self) -> None:
@@ -281,7 +377,41 @@ class Controller:
         st = deps.status(self.cfg)
         st["history"] = self.installer.history(20)
         st["demo"] = self.cfg.get("source") == "demo"
+        st["grok_login"] = grok_login_state(self.cfg)
+        st["last_ok"] = self.last_ok.isoformat() if self.last_ok else None
+        st["error"] = self.error
         return st
+
+    def setup_use_real(self, body: Any = None) -> Dict[str, Any]:
+        """Setup page: check the Grok login + billing, then switch source from demo to
+        grok_cli_billing (same as `omnimonitor setup`). Never raises."""
+        from omnimonitor.billing import fetch_grok_cli_billing
+        real = dict(self.cfg)
+        real["source"] = "grok_cli_billing"
+        try:
+            r = fetch_grok_cli_billing(real)
+        except UsageError as e:
+            log.warning("setup: real Grok usage check failed: %s", e)
+            return {"ok": False, "error": str(e), "grok_login": grok_login_state(self.cfg)}
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": "%s: %s" % (type(e).__name__, e)}
+        changes = {"source": "grok_cli_billing"}
+        try:
+            if self.cfg.get("_config_path"):
+                config_mod.update_config_file(changes, Path(self.cfg["_config_path"]))
+                self._cfg_mtime = self._config_mtime()
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": "could not save config: %s" % e}
+        new = dict(self.cfg)
+        new.update(changes)
+        new.pop("_forced_demo", None)
+        if (new.get("token_source") or "auto") == "demo":
+            new["token_source"] = "auto"
+        self._apply_cfg(new)
+        log.info("setup: switched to real Grok usage (%.1f%% remaining)", r.remaining_percent)
+        self.poke()
+        return {"ok": True, "remaining_percent": r.remaining_percent,
+                "resets_at": r.resets_at.isoformat() if r.resets_at else None}
 
     def setup_prepare(self, body: Any) -> Dict[str, Any]:
         dep = body.get("dep") if isinstance(body, dict) else None
@@ -360,6 +490,11 @@ class Controller:
             self._wake.wait(float(self.cfg.get("poll_interval_seconds") or 120))
             self._wake.clear()
 
+    def refresh_now(self, body: Any = None) -> Dict[str, Any]:
+        """Refresh button: poll now (synchronously) so the reply carries the fresh state."""
+        self.refresh()
+        return {"ok": self.error is None, "status": self.status_dict()}
+
     def poke(self) -> None:
         self._wake.set()
 
@@ -371,6 +506,32 @@ class Controller:
         t = threading.Thread(target=self.run_loop, name="omnimonitor-poll", daemon=True)
         t.start()
         return t
+
+
+def grok_login_state(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Local-only check of the Grok CLI install + login (no network). Never raises."""
+    from omnimonitor.billing import find_grok_binary, read_grok_auth
+    binary = find_grok_binary(cfg)
+    auth = config_mod.grok_auth_file(cfg)
+    cmd = ('"%s" login' % binary if " " in binary else binary + " login") if binary \
+        else "grok login"
+    out: Dict[str, Any] = {"binary": binary, "auth_file": str(auth), "login_command": cmd}
+    if not binary:
+        out.update(state="not_installed", message="Grok CLI not found (looked on PATH and in "
+                   "%s)" % (config_mod.grok_home(cfg) / "bin"))
+        return out
+    try:
+        _tok, exp = read_grok_auth(auth)
+    except UsageError as e:
+        out.update(state="not_logged_in", message=str(e))
+        return out
+    if exp is not None and exp <= utcnow():
+        out.update(state="expired", expires_at=exp.isoformat(),
+                   message="login expired %s; the app asks the Grok CLI to refresh it, or run "
+                           "`%s`" % (exp.isoformat(), cmd))
+        return out
+    out.update(state="ok", expires_at=exp.isoformat() if exp else None, message="logged in")
+    return out
 
 
 def wait_first(ctrl: Controller, timeout: float = 30.0) -> None:

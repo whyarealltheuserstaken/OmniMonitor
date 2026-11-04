@@ -267,6 +267,11 @@ def ensure_config_file(path: Optional[Path] = None) -> Path:
     return path
 
 
+def app_state_path() -> Path:
+    """Written by the running tray app after every poll (no secrets); read by `doctor`."""
+    return config_dir() / "app-state.json"
+
+
 def grok_home(cfg: Dict[str, Any]) -> Path:
     if (cfg.get("grok_home") or "").strip():
         return Path(cfg["grok_home"]).expanduser()

@@ -74,11 +74,51 @@
     return row;
   }
 
+  function renderLogin(s) {
+    var box = document.getElementById("grok-login");
+    if (!box) {
+      box = el("div", "dep"); box.id = "grok-login";
+      var deps = document.getElementById("deps"); deps.parentNode.insertBefore(box, deps);
+    }
+    box.textContent = "";
+    var g = s.grok_login || {}, left = el("div", "");
+    var ok = g.state === "ok";
+    var t = el("h3", "", "Grok login ");
+    t.appendChild(el("span", "pill " + (ok ? "ok" : "miss"), ok ? "logged in" :
+      ({ not_installed: "CLI missing", not_logged_in: "not logged in", expired: "expired" }[g.state] || "?")));
+    left.appendChild(t);
+    left.appendChild(el("div", "meta", g.message || ""));
+    if (!ok && g.state !== "not_installed") {
+      var c = el("div", "meta", "Login is interactive: open Terminal and run ");
+      c.appendChild(el("code", "", g.login_command || "grok login")); left.appendChild(c);
+    }
+    left.appendChild(el("div", "meta", s.demo ? "This app is showing DEMO (fake) numbers." :
+      "Real Grok usage is on" + (s.last_ok ? " · updated " + new Date(s.last_ok).toLocaleString() : "") +
+      (s.error ? " · last error: " + s.error : "")));
+    box.appendChild(left);
+    var right = el("div", ""), out = el("div", "meta", "");
+    var re = el("button", "", "Re-check"); re.addEventListener("click", load); right.appendChild(re);
+    if (s.demo) {
+      var use = el("button", "primary", "Use my real Grok usage"); use.disabled = !ok;
+      use.addEventListener("click", function () {
+        use.disabled = true; out.textContent = "Checking your Grok usage…";
+        post("api/setup/use-real", {}).then(function (r) {
+          out.textContent = r.ok ? "Done: " + Math.round(r.remaining_percent) + "% remaining." :
+            "Failed: " + (r.error || "?");
+          setTimeout(load, 800);
+        }).catch(function () { out.textContent = "Request failed."; use.disabled = false; });
+      });
+      right.appendChild(document.createTextNode(" ")); right.appendChild(use);
+    }
+    right.appendChild(out); box.appendChild(right);
+  }
+
   function load() {
     fetch("api/setup", { credentials: "same-origin" }).then(function (r) { return r.json(); })
       .then(function (s) {
         csrf = s._csrf || "";
         document.getElementById("root-banner").hidden = !s.root;
+        renderLogin(s);
         var box = document.getElementById("deps"); box.textContent = "";
         var deps = s.deps || [], miss = deps.filter(function (d) { return !d.installed; }).length;
         document.getElementById("summary").textContent = deps.length ?

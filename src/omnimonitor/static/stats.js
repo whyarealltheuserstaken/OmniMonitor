@@ -39,10 +39,12 @@
     var b = $("banners"); b.textContent = "";
     if (d.is_demo || (u && u.is_demo)) {
       b.appendChild(el("div", "banner demo",
-        "DEMO MODE - every number on this page is fake sample data (including tools, projects and prices). Run `omnimonitor setup` to use your Grok account."));
+        "DEMO MODE - every number on this page is fake sample data (including tools, projects and prices). Open Setup and click \"Use my real Grok usage\" (or run `omnimonitor setup`) to use your Grok account."));
     }
-    if (st.error) b.appendChild(el("div", "banner err", "Last refresh failed: " + st.error +
-      (u ? " (showing the last good value)" : "")));
+    if (st.error) b.appendChild(el("div", "banner err", "Last refresh failed" +
+      (st.last_attempt ? " (" + fmtDate(st.last_attempt) + ")" : "") + ": " + st.error +
+      (u ? " (showing the last good value)" : "") +
+      (/grok login/.test(st.error) ? " - open Terminal and run: grok login (or ~/.grok/bin/grok login)" : "")));
     $("sub").textContent = "Updated " + (st.last_ok ? fmtDate(st.last_ok) : "never") +
       " · source: " + (st.source || "?") + " · tokens: " + (d.provider || "?") +
       (d.data_since ? " · token data since " + fmtDate(d.data_since) : "");

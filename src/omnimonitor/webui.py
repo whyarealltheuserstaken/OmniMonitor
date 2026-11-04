@@ -104,7 +104,9 @@ class StatsServer:
                 rel = self._rel()
                 posts = {"api/settings": outer.save_settings,
                          "api/setup/prepare": outer.setup.get("prepare"),
-                         "api/setup/run": outer.setup.get("run")}
+                         "api/setup/run": outer.setup.get("run"),
+                         "api/setup/use-real": outer.setup.get("use_real"),
+                         "api/refresh": outer.setup.get("refresh_now")}
                 handler = posts.get(rel or "")
                 if handler is None:
                     return self._send(404, b"not found", "text/plain")
@@ -212,7 +214,8 @@ def for_controller(ctrl, port: int = 0) -> StatsServer:
                        get_settings=lambda: settings_mod.public_view(ctrl.cfg),
                        save_settings=ctrl.update_settings, export=ctrl.export,
                        setup={"status": ctrl.setup_status, "prepare": ctrl.setup_prepare,
-                              "run": ctrl.setup_run})
+                              "run": ctrl.setup_run, "use_real": ctrl.setup_use_real,
+                              "refresh_now": ctrl.refresh_now})
 
 
 def start_server(get_stats, port: int = 0) -> Tuple[StatsServer, str]:
