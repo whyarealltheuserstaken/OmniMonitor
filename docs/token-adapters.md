@@ -62,6 +62,42 @@ Grok number.
     counting.
 * If no `turn_context` named a model, the model is recorded as `unknown`.
 
+## 0.4 additions
+
+### `claude_code`: transcripts and ≈ 5-hour blocks
+Also reads `~/.claude/transcripts/**/*.jsonl` (same row format as `projects/`). Streamed
+messages are written with partial usage first, so the **last** record per
+`message.id + requestId` wins. `omnimonitor blocks` groups events into ≈ 5-hour blocks
+(start = the UTC hour of the first event after the previous block ended) and reports a
+burn rate and projection. This is an **estimate**: Anthropic does not publish the exact
+window rule or expose it.
+
+### `codex`: archived sessions
+`~/.codex/archived_sessions/` is read alongside `sessions/` (same rollout format).
+
+### `grok_unified` (experimental)
+`~/.grok/logs/unified.jsonl`, lines `{ts, sid, msg, ctx}`. Only
+`msg == "shell.turn.inference_done"` is counted: `ctx.prompt_tokens` (gross, includes
+cached) → input, `cached_prompt_tokens` → cache read, `completion_tokens +
+reasoning_tokens` → output. The model comes from the latest `ctx.model` in the same
+session. Not checked against a real install; overlaps `grok_sessions` (enable only one).
+
+### `antigravity` (experimental)
+Read-only SQLite `conversations/*.db`, table `gen_metadata(idx, data)`, protobuf blobs
+decoded with a minimal wire-format reader: `1.4` usage {2 uncached input, 3 output,
+4 cache write, 5 cache read, 9 thinking, 11 response id (dedupe)}, `1.19` model,
+`1.9.4.1` timestamp seconds (file mtime otherwise). Field numbers are undocumented.
+
+### `dsh` (DeepSeek Harness, experimental)
+`$DSH_HOME` or `~/.dsh/sessions/*/session-*/session[.vN].jsonl[.zstd]`. `.zstd` logs are one
+frame per flush and are decoded frame by frame (a torn final frame keeps the rest).
+`assistant/message` → `data.usage` {inputTokens uncached, cacheReadTokens,
+cacheWriteTokens, outputTokens, reasoningTokens ⊂ output}. `.credentials.yaml` is never read.
+
+### `kimi`: Kimi Work relocated data
+On macOS/Windows, `kimi-desktop/daimon-storage.json` → `shareDir` (absolute paths only) is
+honoured before the default `kimi-desktop/daimon-share`.
+
 ## Adding an adapter
 
 1. Write `parse_<tool>_line(line, ctx, file_key) -> List[TokenEvent]` in `adapters.py`

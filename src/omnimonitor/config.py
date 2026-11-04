@@ -97,6 +97,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "gemini_home": "",       # $GEMINI_CLI_HOME or ~/.gemini
     "qwen_home": "",         # ~/.qwen
     "kimi_home": "",         # ~/.kimi (+ $KIMI_CODE_HOME or ~/.kimi-code, + Kimi Work)
+    "antigravity_home": "",  # ~/.gemini/antigravity-cli etc. (experimental)
+    "dsh_home": "",          # $DSH_HOME or ~/.dsh (experimental)
     "opencode_home": "",     # $XDG_DATA_HOME/opencode or ~/.local/share/opencode
     "copilot_otel_path": "", # $COPILOT_OTEL_FILE_EXPORTER_PATH or ~/.copilot/otel
     # Non-secret account settings.
@@ -335,9 +337,42 @@ def kimi_session_roots(cfg: Dict[str, Any]) -> list:
     roots.append((Path(kc).expanduser() if kc.strip() else Path.home() / ".kimi-code") / "sessions")
     ad = app_data_dir()
     if ad is not None:
-        roots.append(ad / "kimi-desktop" / "daimon-share" / "daimon" / "runtime" / "kimi-code"
-                     / "home" / "sessions")
+        rel = Path("daimon") / "runtime" / "kimi-code" / "home" / "sessions"
+        share = _kimi_share_dir(ad / "kimi-desktop" / "daimon-storage.json")
+        if share is not None:
+            roots.append(share / rel)
+        roots.append(ad / "kimi-desktop" / "daimon-share" / rel)
     return roots
+
+
+def _kimi_share_dir(storage: Path) -> Optional[Path]:
+    """Kimi Desktop can move its data: ``daimon-storage.json`` -> ``shareDir``."""
+    try:
+        with storage.open("rb") as f:
+            data = json.loads(f.read(1024 * 1024).decode("utf-8", "replace"))
+    except (OSError, ValueError):
+        return None
+    sd = data.get("shareDir") if isinstance(data, dict) else None
+    if isinstance(sd, str) and sd.strip() and Path(sd).expanduser().is_absolute():
+        return Path(sd).expanduser()
+    return None
+
+
+def antigravity_homes(cfg: Dict[str, Any]) -> list:
+    """Antigravity CLI / IDE data roots; each holds ``conversations/*.db``."""
+    raw = (cfg.get("antigravity_home") or "").strip()
+    g = os.environ.get("GEMINI_CLI_HOME", "").strip()
+    gem = Path(g).expanduser() if g else Path.home() / ".gemini"
+    return _homes(raw, [gem / n for n in ("antigravity-cli", "antigravity", "antigravity-ide")]
+                  + [Path.home() / ".config" / "antigravity"])
+
+
+def dsh_roots(cfg: Dict[str, Any]) -> list:
+    raw = (cfg.get("dsh_home") or "").strip()
+    env = os.environ.get("DSH_HOME", "").strip()
+    home = Path(env).expanduser() if env else Path.home() / ".dsh"
+    return [h / "sessions" if (h / "sessions").is_dir() else h for h in _homes(raw, [home])] \
+        if raw else [home / "sessions"]
 
 
 def opencode_dirs(cfg: Dict[str, Any]) -> list:

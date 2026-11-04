@@ -92,8 +92,7 @@ def parse_claude_line(line: str, ctx: Dict[str, Any], file_key: str) -> List[Tok
 
 def iter_claude_files(homes: List[Path]) -> Iterator[Path]:
     seen = set()
-    for home in homes:
-        root = home / "projects"
+    for root in [h / sub for h in homes for sub in ("projects", "transcripts")]:
         if not root.is_dir():
             continue
         for dirpath, _dirs, files in os.walk(str(root)):
@@ -326,9 +325,11 @@ class JsonlScanner:
 class ClaudeCodeScanner(JsonlScanner):
     name = "claude_code"
     label = "Claude Code"
+    # streamed messages are written with partial usage first; the last record wins
+    replace = True
 
     def roots(self):
-        return [h / "projects" for h in self.homes]
+        return [h / sub for h in self.homes for sub in ("projects", "transcripts")]
 
     def files(self):
         return iter_claude_files(self.homes)
@@ -376,6 +377,7 @@ def codex_limits(history) -> Optional[Dict[str, Any]]:
 
 def _local_classes(cfg: Dict[str, Any]) -> List[Tuple[Any, List[Path]]]:
     from omnimonitor import local_adapters as la
+    from omnimonitor import local_v4 as v4
     return [
         (ClaudeCodeScanner, config_mod.claude_homes(cfg)),
         (CodexScanner, config_mod.codex_homes(cfg)),
@@ -384,6 +386,9 @@ def _local_classes(cfg: Dict[str, Any]) -> List[Tuple[Any, List[Path]]]:
         (la.KimiScanner, config_mod.kimi_session_roots(cfg)),
         (la.OpencodeScanner, config_mod.opencode_dirs(cfg)),
         (la.CopilotOtelScanner, config_mod.copilot_otel_paths(cfg)),
+        (v4.GrokUnifiedScanner, [config_mod.grok_home(cfg)]),
+        (v4.AntigravityScanner, config_mod.antigravity_homes(cfg)),
+        (v4.DeepSeekHarnessScanner, config_mod.dsh_roots(cfg)),
     ]
 
 

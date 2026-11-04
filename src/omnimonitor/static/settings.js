@@ -22,13 +22,15 @@
       var tr = el("tr"), a = el("td"), l = el("label"), c = el("input");
       c.type = "checkbox"; c.value = p.id; c.checked = !!on[p.id]; c.setAttribute("data-pv", p.id);
       l.appendChild(c); l.appendChild(document.createTextNode(" " + p.name)); a.appendChild(l);
-      var b = el("td", "s", KIND[p.kind] + (p.status === "partial" ? " · partial" : ""));
+      var b = el("td", "s", KIND[p.kind] + (p.status === "partial" ? " · partial" : p.status === "experimental" ? " · experimental" : ""));
       var k = el("td", "s");
       if (p.kind === "api") {
         k.textContent = (p.env || []).filter(function (n) { return /KEY|TOKEN/.test(n); }).map(function (n) {
           return n + ": " + (keys[n] === "env" ? "set (env)" : keys[n] === "file" ? "set (secrets file)" : "not set");
         }).join(" · ");
       } else k.textContent = p.shows;
+      if (p.status === "experimental") k.textContent += " — experimental: undocumented format, numbers may be wrong.";
+      if (p.note) k.textContent += " " + p.note;
       tr.appendChild(a); tr.appendChild(b); tr.appendChild(k); t.appendChild(tr);
     });
     var sel = $("primary_provider"); sel.textContent = "";

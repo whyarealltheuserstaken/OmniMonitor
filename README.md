@@ -271,6 +271,7 @@ omnimonitor doctor              # diagnose CLI / login / billing / logs  (--offl
 omnimonitor setup               # first run: check login, switch off demo mode  (-y = no prompt)
 omnimonitor config-path         # where the config lives
 omnimonitor breakdown --range 30d [--json]    # tokens by tool, model, project
+omnimonitor blocks [--source all] [--json]    # ≈ 5-hour blocks + burn rate (estimate)
 omnimonitor providers [--json]  # which local token logs exist / are enabled
 omnimonitor export --format csv --kind daily -o daily.csv   # kinds: daily, daily-models, breakdown, events
 omnimonitor export --format json -o export.json

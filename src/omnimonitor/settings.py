@@ -217,6 +217,8 @@ SCHEMA: Dict[str, Tuple[Callable[[Any], Any], bool, str]] = {
     "gemini_home": (_path, False, "Gemini CLI home dir(s) (default ~/.gemini)"),
     "qwen_home": (_path, False, "Qwen Code home dir(s) (default ~/.qwen)"),
     "kimi_home": (_path, False, "Kimi sessions dir(s) (default: Kimi CLI, Kimi Code, Kimi Work)"),
+    "antigravity_home": (_path, False, "Antigravity data dir(s) holding conversations/*.db"),
+    "dsh_home": (_path, False, "DeepSeek Harness home or sessions dir (default: $DSH_HOME, ~/.dsh)"),
     "opencode_home": (_path, False, "opencode data dir(s) (default ~/.local/share/opencode)"),
     "copilot_otel_path": (_path, False, "Copilot CLI OTel JSONL file or dir"),
     "moonshot_region": (_choice("global", "cn"), False, "platform.moonshot.ai or .cn"),
@@ -270,7 +272,8 @@ def public_view(cfg: Dict[str, Any]) -> Dict[str, Any]:
                         "hideable_cards": list(HIDEABLE_CARDS),
                         "catalog": [{"id": p.id, "name": p.name, "family": p.family,
                                      "kind": p.kind, "status": p.status, "shows": p.shows,
-                                     "env": list(p.env), "has_limit": p.has_limit}
+                                     "env": list(p.env), "has_limit": p.has_limit,
+                                     "note": p.extra.get("note", "")}
                                     for p in catalog.CATALOG if p.id in catalog.SWITCHABLE],
                         "primary_choices": [{"id": i, "name": "Budget" if i == "budget"
                                              else catalog.name(i)}

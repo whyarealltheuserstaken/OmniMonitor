@@ -16,6 +16,9 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 SUPPORTED, PARTIAL, NOT_SUPPORTED = "supported", "partial", "not_supported"
+#: Works against the format as we understand it, but the format is undocumented by the
+#: vendor (or only partly verified); numbers may be wrong after an update. Off by default.
+EXPERIMENTAL = "experimental"
 
 
 @dataclass(frozen=True)
@@ -50,13 +53,24 @@ CATALOG: Tuple[ProviderInfo, ...] = (
        docs=("docs/research.md",), has_limit=True),
     _P("grok_sessions", "Grok CLI sessions", "Grok", "local_logs", SUPPORTED,
        shows="tokens, recorded cost, models, projects",
-       source="~/.grok/sessions/**/updates.jsonl + ~/.grok/logs/unified.jsonl",
+       source="~/.grok/sessions/**/updates.jsonl",
        reset="n/a (history)", confidence="high (tested on real files)",
        docs=("docs/token-adapters.md",)),
+    _P("grok_unified", "Grok CLI unified log", "Grok", "local_logs", EXPERIMENTAL,
+       shows="tokens per inference (prompt incl. cached, completion, reasoning), models",
+       source="~/.grok/logs/unified.jsonl, msg=shell.turn.inference_done ($GROK_HOME honoured)",
+       reset="n/a (history)",
+       confidence="low: undocumented log; checked against published descriptions, not a real "
+                  "install. Builds before ~June 2026 log no tokens",
+       docs=("docs/token-adapters.md",),
+       extra={"note": "Overlaps Grok CLI sessions: enabling both counts the same Grok turns "
+                      "twice in totals. Use it only if updates.jsonl has no usage for you."}),
     # ------------------------------------------------------- Anthropic
     _P("claude_code", "Claude Code", "Claude", "local_logs", SUPPORTED,
-       shows="tokens (incl. cache), models, projects; ≈ cost from your price table",
-       source="~/.claude/projects/**/*.jsonl ($CLAUDE_CONFIG_DIR honoured)",
+       shows="tokens (incl. cache), models, projects; ≈ cost from your price table; ≈ 5-hour "
+             "block + burn rate (estimate, `omnimonitor blocks`)",
+       source="~/.claude/projects/**/*.jsonl + ~/.claude/transcripts/**/*.jsonl "
+              "($CLAUDE_CONFIG_DIR honoured)",
        reset="n/a (history)", confidence="high (fixtures; widely documented format)",
        docs=("docs/token-adapters.md",)),
     _P("anthropic_api", "Claude API (organization cost)", "Claude", "api", SUPPORTED,
@@ -73,7 +87,8 @@ CATALOG: Tuple[ProviderInfo, ...] = (
     # ---------------------------------------------------------- OpenAI
     _P("codex", "Codex CLI (+ ChatGPT plan limits)", "ChatGPT", "local_logs", SUPPORTED,
        shows="tokens, models, projects; plan limit % (5-hour and weekly windows) when Codex logs them",
-       source="~/.codex/sessions/**/rollout-*.jsonl ($CODEX_HOME honoured); "
+       source="~/.codex/sessions/**/rollout-*.jsonl + ~/.codex/archived_sessions/ "
+              "($CODEX_HOME honoured); "
               "rate_limits from token_count events",
        reset="per window (resets_at from the log)",
        confidence="high for tokens (fixtures); medium for plan limits (verified against Codex "
@@ -103,11 +118,16 @@ CATALOG: Tuple[ProviderInfo, ...] = (
               "Billing (export to BigQuery).",
        needs="Cloud Billing BigQuery export + a service account; out of scope for a tray app.",
        docs=("https://ai.google.dev/gemini-api/docs/billing",)),
-    _P("antigravity", "Gemini app / Antigravity", "Gemini", "none", NOT_SUPPORTED,
-       reason="No public usage API. Quota is only visible in the app, via a local language-server "
-              "RPC and Google OAuth tokens (undocumented, credential-bearing).",
-       needs="A documented quota endpoint or a documented local usage log."),
-    # ------------------------------------------------------------- xAI
+    _P("antigravity", "Antigravity (CLI / IDE)", "Gemini", "local_logs", EXPERIMENTAL,
+       shows="tokens (input incl. cache, output incl. thinking), models",
+       source="~/.gemini/antigravity-cli|antigravity|antigravity-ide/conversations/*.db, "
+              "~/.config/antigravity/conversations/*.db ($GEMINI_CLI_HOME honoured); "
+              "read-only SQLite, protobuf gen_metadata rows",
+       reset="n/a (history)",
+       confidence="low: protobuf field numbers are undocumented and were inferred by others "
+                  "from real files; synthetic fixtures only",
+       docs=("docs/token-adapters.md",),
+       extra={"note": "The Gemini app has no usage API; Antigravity plan quotas are not shown."}),
     _P("xai_api", "xAI API (prepaid credits)", "Grok", "api", PARTIAL,
        shows="prepaid credit balance (USD)",
        source="GET https://management-api.x.ai/v1/billing/teams/{team_id}/prepaid/balance",
@@ -125,6 +145,14 @@ CATALOG: Tuple[ProviderInfo, ...] = (
        source="GET https://api.deepseek.com/user/balance", auth="API key in DEEPSEEK_API_KEY",
        reset="n/a (balance)", confidence="medium (docs + mocked tests)",
        docs=("https://api-docs.deepseek.com/api/get-user-balance",), env=("DEEPSEEK_API_KEY",)),
+    _P("dsh", "DeepSeek Harness", "DeepSeek", "local_logs", EXPERIMENTAL,
+       shows="tokens (incl. cache, reasoning), models, projects",
+       source="$DSH_HOME or ~/.dsh/sessions/*/session-*/session[.vN].jsonl[.zstd]",
+       reset="n/a (history)",
+       confidence="medium-low: format from public parser docs; synthetic fixtures. Compressed "
+                  "logs need the zstandard package (bundled) or Python 3.14",
+       docs=("docs/token-adapters.md",),
+       extra={"note": "Never reads ~/.dsh/.credentials.yaml."}),
     _P("deepseek_app", "DeepSeek chat app", "DeepSeek", "none", NOT_SUPPORTED,
        reason="The consumer app publishes no usage or limit data.", needs="n/a"),
     # ------------------------------------------------------------ Qwen
@@ -142,9 +170,11 @@ CATALOG: Tuple[ProviderInfo, ...] = (
     _P("kimi", "Kimi CLI / Kimi Code / Kimi Work", "Kimi", "local_logs", SUPPORTED,
        shows="tokens (incl. cache), models, projects",
        source="~/.kimi/sessions/**/wire.jsonl, ~/.kimi-code/sessions/**, Kimi Work (macOS/Windows) "
-              "…/kimi-desktop/daimon-share/daimon/runtime/kimi-code/home/sessions",
+              "…/kimi-desktop/daimon-share/daimon/runtime/kimi-code/home/sessions (or the shareDir "
+              "set in kimi-desktop/daimon-storage.json)",
        reset="n/a (history)",
-       confidence="medium (fixtures only; Kimi Work paths not tested on a real install)",
+       confidence="medium (fixtures only; Kimi Work paths match the layout other open-source "
+                  "parsers report from real installs, not tested by us)",
        docs=("https://github.com/MoonshotAI/kimi-cli",)),
     _P("moonshot", "Kimi API (Moonshot) balance", "Kimi", "api", SUPPORTED,
        shows="available, voucher and cash balance",
@@ -257,7 +287,7 @@ def enabled_ids(cfg: dict) -> List[str]:
 
 
 def counts() -> Dict[str, int]:
-    out = {SUPPORTED: 0, PARTIAL: 0, NOT_SUPPORTED: 0}
+    out = {SUPPORTED: 0, PARTIAL: 0, EXPERIMENTAL: 0, NOT_SUPPORTED: 0}
     for p in CATALOG:
         out[p.status] += 1
     return out

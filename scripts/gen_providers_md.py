@@ -31,7 +31,9 @@ guessing. Costs for local logs are the cost the tool recorded, or an estimate fr
 price table (labelled ≈).
 
 Status: **supported** = implemented and covered by fixture tests; **partial** = implemented
-with a limitation noted below; **not supported** = no legitimate source exists today.
+with a limitation noted below; **experimental** = implemented against a format the vendor
+does not document (or that we could not check on a real install), off by default, numbers
+may be wrong after an update; **not supported** = no legitimate source exists today.
 
 Confidence is honest: unless it says "tested on real files", the reader was built from the
 public documentation or open-source code and tested with synthetic fixtures / mocked HTTP
@@ -41,7 +43,8 @@ only. Please report a mismatch with a redacted sample.
 
 KIND = {"billing": "Grok billing", "local_logs": "local logs", "api": "official API",
         "none": "–"}
-STATUS = {"supported": "✅ supported", "partial": "🟡 partial", "not_supported": "❌ not supported"}
+STATUS = {"supported": "✅ supported", "partial": "🟡 partial", "experimental": "🧪 experimental",
+          "not_supported": "❌ not supported"}
 
 
 def _cell(s: str) -> str:
@@ -62,8 +65,9 @@ def _links(docs) -> str:
 def render() -> str:
     c = catalog.counts()
     lines = [HEAD, "## Summary\n",
-             "%d entries: %d supported, %d partial, %d not supported.\n"
-             % (len(catalog.CATALOG), c["supported"], c["partial"], c["not_supported"]),
+             "%d entries: %d supported, %d partial, %d experimental, %d not supported.\n"
+             % (len(catalog.CATALOG), c["supported"], c["partial"], c["experimental"],
+                c["not_supported"]),
              "| Family | Provider | id | Status | Source | Shows | Tray % |",
              "|---|---|---|---|---|---|---|"]
     for p in catalog.CATALOG:
@@ -71,7 +75,7 @@ def render() -> str:
             p.family, _cell(p.name), p.id, STATUS[p.status], KIND[p.kind],
             _cell(p.shows if p.kind != "none" else p.reason.split(". ")[0].rstrip(".")),
             "yes" if p.has_limit else "–"))
-    lines += ["", "## Supported and partial providers", ""]
+    lines += ["", "## Supported, partial and experimental providers", ""]
     for p in catalog.CATALOG:
         if p.status == catalog.NOT_SUPPORTED:
             continue
@@ -85,7 +89,10 @@ def render() -> str:
                   "| Confidence / testing | %s |" % _cell(p.confidence),
                   "| Key variables | %s |" % (", ".join("`%s`" % e for e in p.env) or "–"),
                   "| Can drive the tray %% | %s |" % ("yes" if p.has_limit else "no"),
-                  "| Docs | %s |" % _links(p.docs), ""]
+                  "| Docs | %s |" % _links(p.docs)]
+        if p.extra.get("note"):
+            lines.append("| Note | %s |" % _cell(p.extra["note"]))
+        lines.append("")
     lines += ["## Not supported (and what would be needed)", "",
               "| Provider | id | Why not | What would be needed | Docs |",
               "|---|---|---|---|---|"]

@@ -26,6 +26,8 @@ dependencies = [
   "pystray>=0.19",
   "Pillow>=9.1",
   "certifi>=2023.7.22",
+  # DeepSeek Harness .zstd logs (stdlib compression.zstd on 3.14+)
+  "zstandard>=0.22; python_version < '3.14'",
   # native app window; uses the system WebView (WKWebView / WebView2)
   "pywebview>=5; sys_platform == 'darwin' or sys_platform == 'win32'",
 ]
