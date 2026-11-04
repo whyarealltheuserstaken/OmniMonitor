@@ -49,6 +49,12 @@ AI tools. OmniMonitor copies **no code, text, icons or images** from it. Everyth
 Python re-implementation of the ideas. See [docs/inspiration-notes.md](docs/inspiration-notes.md)
 for what we adopted, what we built differently and why.
 
+## What's new in 0.3.1
+
+Fixes for the prebuilt apps: the macOS menu-bar app no longer crashes on launch ("trace trap"),
+HTTPS uses the bundled certifi CA list (no more `CERTIFICATE_VERIFY_FAILED`), and there is a
+log file (`~/Library/Logs/OmniMonitor/omnimonitor.log` on macOS). See CHANGELOG.md.
+
 ## What's new in 0.3.0
 
 - **33-entry provider matrix** ([docs/providers.md](docs/providers.md), generated from the
