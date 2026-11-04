@@ -39,7 +39,7 @@
     var cc = ov.catalog_counts || {}, d2 = el("div");
     d2.appendChild(el("div", "mini-k", "Provider catalog"));
     d2.appendChild(el("div", "mini-v", (cc.supported || 0) + " supported"));
-    d2.appendChild(el("div", "sub", (cc.partial || 0) + " partial · " + (cc.not_supported || 0) + " not supported (see docs/providers.md)"));
+    d2.appendChild(el("div", "sub", (cc.partial || 0) + " partial · " + (cc.experimental || 0) + " experimental · " + (cc.not_supported || 0) + " not supported (see docs/providers.md)"));
     g.appendChild(d2);
   }
 

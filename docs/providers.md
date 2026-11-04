@@ -17,7 +17,9 @@ guessing. Costs for local logs are the cost the tool recorded, or an estimate fr
 price table (labelled ≈).
 
 Status: **supported** = implemented and covered by fixture tests; **partial** = implemented
-with a limitation noted below; **not supported** = no legitimate source exists today.
+with a limitation noted below; **experimental** = implemented against a format the vendor
+does not document (or that we could not check on a real install), off by default, numbers
+may be wrong after an update; **not supported** = no legitimate source exists today.
 
 Confidence is honest: unless it says "tested on real files", the reader was built from the
 public documentation or open-source code and tested with synthetic fixtures / mocked HTTP
@@ -26,13 +28,14 @@ only. Please report a mismatch with a redacted sample.
 
 ## Summary
 
-33 entries: 12 supported, 6 partial, 15 not supported.
+35 entries: 12 supported, 6 partial, 3 experimental, 14 not supported.
 
 | Family | Provider | id | Status | Source | Shows | Tray % |
 |---|---|---|---|---|---|---|
 | Grok | Grok weekly pool | `grok` | 🟡 partial | Grok billing | limit % used/left, reset time, ≈ token limit estimate | yes |
 | Grok | Grok CLI sessions | `grok_sessions` | ✅ supported | local logs | tokens, recorded cost, models, projects | – |
-| Claude | Claude Code | `claude_code` | ✅ supported | local logs | tokens (incl. cache), models, projects; ≈ cost from your price table | – |
+| Grok | Grok CLI unified log | `grok_unified` | 🧪 experimental | local logs | tokens per inference (prompt incl. cached, completion, reasoning), models | – |
+| Claude | Claude Code | `claude_code` | ✅ supported | local logs | tokens (incl. cache), models, projects; ≈ cost from your price table; ≈ 5-hour block + burn rate (estimate, `omnimonitor blocks`) | – |
 | Claude | Claude API (organization cost) | `anthropic_api` | ✅ supported | official API | month-to-date USD cost (UTC month) | – |
 | Claude | Claude Pro/Max plan limits | `claude_plan` | ❌ not supported | – | No official API exposes the 5-hour/weekly plan limits; the in-app /usage view uses a private OAuth endpoint and the web dashboard needs a browser session | – |
 | ChatGPT | Codex CLI (+ ChatGPT plan limits) | `codex` | ✅ supported | local logs | tokens, models, projects; plan limit % (5-hour and weekly windows) when Codex logs them | yes |
@@ -40,10 +43,11 @@ only. Please report a mismatch with a redacted sample.
 | ChatGPT | ChatGPT app message limits | `chatgpt_app` | ❌ not supported | – | No official API | – |
 | Gemini | Gemini CLI | `gemini_cli` | ✅ supported | local logs | tokens (input incl. tool, output incl. thoughts, cached), models, projects | – |
 | Gemini | Gemini API (AI Studio) | `gemini_api` | ❌ not supported | – | The Gemini API has no balance/usage endpoint; spend is only in Google Cloud Billing (export to BigQuery) | – |
-| Gemini | Gemini app / Antigravity | `antigravity` | ❌ not supported | – | No public usage API | – |
+| Gemini | Antigravity (CLI / IDE) | `antigravity` | 🧪 experimental | local logs | tokens (input incl. cache, output incl. thinking), models | – |
 | Grok | xAI API (prepaid credits) | `xai_api` | 🟡 partial | official API | prepaid credit balance (USD) | – |
 | Grok | Grok Bot | `grok_bot` | ❌ not supported | – | No usage API or local usage log is available to third-party tools | – |
 | DeepSeek | DeepSeek API | `deepseek` | ✅ supported | official API | balance (total, granted, topped-up) per currency | – |
+| DeepSeek | DeepSeek Harness | `dsh` | 🧪 experimental | local logs | tokens (incl. cache, reasoning), models, projects | – |
 | DeepSeek | DeepSeek chat app | `deepseek_app` | ❌ not supported | – | The consumer app publishes no usage or limit data | – |
 | Qwen | Qwen Code | `qwen_code` | ✅ supported | local logs | tokens (incl. cached and thoughts), models, projects | – |
 | Qwen | Qwen API (Alibaba Model Studio) | `dashscope` | ❌ not supported | – | Balance is only available via Alibaba Cloud BSS OpenAPI (QueryAccountBalance), which needs an AccessKey pair and request signing; not implemented | – |
@@ -64,7 +68,7 @@ only. Please report a mismatch with a redacted sample.
 | Amp | Amp | `amp` | ❌ not supported | – | Usage is shown in ampcode.com settings (signed-in) | – |
 | Zed | Zed AI | `zed` | ❌ not supported | – | Agent threads are stored compressed in a private SQLite schema; plan usage is only in the signed-in account page | – |
 
-## Supported and partial providers
+## Supported, partial and experimental providers
 
 ### Grok weekly pool (`grok`)
 
@@ -85,7 +89,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | ✅ supported |
-| Source | ~/.grok/sessions/**/updates.jsonl + ~/.grok/logs/unified.jsonl |
+| Source | ~/.grok/sessions/**/updates.jsonl |
 | Auth | none |
 | Shows | tokens, recorded cost, models, projects |
 | Reset period | n/a (history) |
@@ -94,14 +98,29 @@ only. Please report a mismatch with a redacted sample.
 | Can drive the tray % | no |
 | Docs | [token-adapters.md](../docs/token-adapters.md) |
 
+### Grok CLI unified log (`grok_unified`)
+
+| | |
+|---|---|
+| Status | 🧪 experimental |
+| Source | ~/.grok/logs/unified.jsonl, msg=shell.turn.inference_done ($GROK_HOME honoured) |
+| Auth | none |
+| Shows | tokens per inference (prompt incl. cached, completion, reasoning), models |
+| Reset period | n/a (history) |
+| Confidence / testing | low: undocumented log; checked against published descriptions, not a real install. Builds before ~June 2026 log no tokens |
+| Key variables | – |
+| Can drive the tray % | no |
+| Docs | [token-adapters.md](../docs/token-adapters.md) |
+| Note | Overlaps Grok CLI sessions: enabling both counts the same Grok turns twice in totals. Use it only if updates.jsonl has no usage for you. |
+
 ### Claude Code (`claude_code`)
 
 | | |
 |---|---|
 | Status | ✅ supported |
-| Source | ~/.claude/projects/**/*.jsonl ($CLAUDE_CONFIG_DIR honoured) |
+| Source | ~/.claude/projects/**/*.jsonl + ~/.claude/transcripts/**/*.jsonl ($CLAUDE_CONFIG_DIR honoured) |
 | Auth | none |
-| Shows | tokens (incl. cache), models, projects; ≈ cost from your price table |
+| Shows | tokens (incl. cache), models, projects; ≈ cost from your price table; ≈ 5-hour block + burn rate (estimate, `omnimonitor blocks`) |
 | Reset period | n/a (history) |
 | Confidence / testing | high (fixtures; widely documented format) |
 | Key variables | – |
@@ -127,7 +146,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | ✅ supported |
-| Source | ~/.codex/sessions/**/rollout-*.jsonl ($CODEX_HOME honoured); rate_limits from token_count events |
+| Source | ~/.codex/sessions/**/rollout-*.jsonl + ~/.codex/archived_sessions/ ($CODEX_HOME honoured); rate_limits from token_count events |
 | Auth | none |
 | Shows | tokens, models, projects; plan limit % (5-hour and weekly windows) when Codex logs them |
 | Reset period | per window (resets_at from the log) |
@@ -164,6 +183,21 @@ only. Please report a mismatch with a redacted sample.
 | Can drive the tray % | no |
 | Docs | [github.com](https://github.com/google-gemini/gemini-cli) |
 
+### Antigravity (CLI / IDE) (`antigravity`)
+
+| | |
+|---|---|
+| Status | 🧪 experimental |
+| Source | ~/.gemini/antigravity-cli\|antigravity\|antigravity-ide/conversations/*.db, ~/.config/antigravity/conversations/*.db ($GEMINI_CLI_HOME honoured); read-only SQLite, protobuf gen_metadata rows |
+| Auth | none |
+| Shows | tokens (input incl. cache, output incl. thinking), models |
+| Reset period | n/a (history) |
+| Confidence / testing | low: protobuf field numbers are undocumented and were inferred by others from real files; synthetic fixtures only |
+| Key variables | – |
+| Can drive the tray % | no |
+| Docs | [token-adapters.md](../docs/token-adapters.md) |
+| Note | The Gemini app has no usage API; Antigravity plan quotas are not shown. |
+
 ### xAI API (prepaid credits) (`xai_api`)
 
 | | |
@@ -192,6 +226,21 @@ only. Please report a mismatch with a redacted sample.
 | Can drive the tray % | no |
 | Docs | [api-docs.deepseek.com](https://api-docs.deepseek.com/api/get-user-balance) |
 
+### DeepSeek Harness (`dsh`)
+
+| | |
+|---|---|
+| Status | 🧪 experimental |
+| Source | $DSH_HOME or ~/.dsh/sessions/*/session-*/session[.vN].jsonl[.zstd] |
+| Auth | none |
+| Shows | tokens (incl. cache, reasoning), models, projects |
+| Reset period | n/a (history) |
+| Confidence / testing | medium-low: format from public parser docs; synthetic fixtures. Compressed logs need the zstandard package (bundled) or Python 3.14 |
+| Key variables | – |
+| Can drive the tray % | no |
+| Docs | [token-adapters.md](../docs/token-adapters.md) |
+| Note | Never reads ~/.dsh/.credentials.yaml. |
+
 ### Qwen Code (`qwen_code`)
 
 | | |
@@ -211,11 +260,11 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | ✅ supported |
-| Source | ~/.kimi/sessions/**/wire.jsonl, ~/.kimi-code/sessions/**, Kimi Work (macOS/Windows) …/kimi-desktop/daimon-share/daimon/runtime/kimi-code/home/sessions |
+| Source | ~/.kimi/sessions/**/wire.jsonl, ~/.kimi-code/sessions/**, Kimi Work (macOS/Windows) …/kimi-desktop/daimon-share/daimon/runtime/kimi-code/home/sessions (or the shareDir set in kimi-desktop/daimon-storage.json) |
 | Auth | none |
 | Shows | tokens (incl. cache), models, projects |
 | Reset period | n/a (history) |
-| Confidence / testing | medium (fixtures only; Kimi Work paths not tested on a real install) |
+| Confidence / testing | medium (fixtures only; Kimi Work paths match the layout other open-source parsers report from real installs, not tested by us) |
 | Key variables | – |
 | Can drive the tray % | no |
 | Docs | [github.com](https://github.com/MoonshotAI/kimi-cli) |
@@ -325,7 +374,6 @@ only. Please report a mismatch with a redacted sample.
 | Claude Pro/Max plan limits | `claude_plan` | No official API exposes the 5-hour/weekly plan limits; the in-app /usage view uses a private OAuth endpoint and the web dashboard needs a browser session. | An official, documented limits endpoint from Anthropic. | – |
 | ChatGPT app message limits | `chatgpt_app` | No official API. The chatgpt.com backend route some tools call is undocumented and needs the app's login token. Codex plan windows are shown via the Codex adapter. | An official usage endpoint from OpenAI. | – |
 | Gemini API (AI Studio) | `gemini_api` | The Gemini API has no balance/usage endpoint; spend is only in Google Cloud Billing (export to BigQuery). | Cloud Billing BigQuery export + a service account; out of scope for a tray app. | [ai.google.dev](https://ai.google.dev/gemini-api/docs/billing) |
-| Gemini app / Antigravity | `antigravity` | No public usage API. Quota is only visible in the app, via a local language-server RPC and Google OAuth tokens (undocumented, credential-bearing). | A documented quota endpoint or a documented local usage log. | – |
 | Grok Bot | `grok_bot` | No usage API or local usage log is available to third-party tools. | An official usage endpoint. | – |
 | DeepSeek chat app | `deepseek_app` | The consumer app publishes no usage or limit data. | n/a | – |
 | Qwen API (Alibaba Model Studio) | `dashscope` | Balance is only available via Alibaba Cloud BSS OpenAPI (QueryAccountBalance), which needs an AccessKey pair and request signing; not implemented. | Signature V3 client + a RAM user with read-only billing permission. | [www.alibabacloud.com](https://www.alibabacloud.com/help/en/bss-openapi) |

@@ -120,6 +120,10 @@ class History:
         with self._lock:
             cur = self._db.cursor()
             for e in events:
+                new = True
+                if replace:  # count only ids we had not stored yet
+                    new = cur.execute("SELECT 1 FROM token_events WHERE event_id=? AND model=?",
+                                      (e.event_id, e.model)).fetchone() is None
                 cur.execute(
                     verb + " INTO token_events(event_id, model, ts, session_id,"
                     " input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,"
@@ -128,7 +132,7 @@ class History:
                     (e.event_id, e.model, e.ts, e.session_id, e.input_tokens, e.output_tokens,
                      e.cache_read_tokens, e.cache_creation_tokens, e.reasoning_tokens,
                      e.cost_usd, e.source, getattr(e, "project", "") or None))
-                n += cur.rowcount if cur.rowcount > 0 else 0
+                n += 1 if (cur.rowcount > 0 and new) else 0
             self._db.commit()
         return n
 

@@ -186,7 +186,8 @@ def cmd_export(args) -> int:
 
 
 def _status_word(st: str) -> str:
-    return {"supported": "supported", "partial": "partial", "not_supported": "no"}.get(st, st)
+    return {"supported": "supported", "partial": "partial", "experimental": "experimental",
+            "not_supported": "no"}.get(st, st)
 
 
 def cmd_providers(args) -> int:
@@ -318,6 +319,33 @@ def cmd_breakdown(args) -> int:
                 else "  n/a cache"
             print("  %-28s %9s %4.0f%%  %s  %s" % (r["name"][:28], _fmt(r["tokens"]),
                                                   100 * r["share"], hit, cost))
+    return 0
+
+
+def cmd_blocks(args) -> int:
+    """≈ 5-hour blocks + burn rate from local logs (estimate)."""
+    import datetime as _dt
+
+    from omnimonitor import blocks as blocks_mod
+    ctrl = _ctrl(args)
+    evs = ctrl.history.events() if ctrl.history is not None else []
+    src = None if args.source == "all" else (args.source,)
+    bs = blocks_mod.blocks(evs, src)[-args.last:]
+    if args.json:
+        print(json.dumps(bs, indent=2))
+        return 0
+    print("≈ 5-hour blocks (ESTIMATE from local log timestamps; not the provider's real "
+          "limit window)")
+    if not bs:
+        print("  no events for source %r" % args.source)
+        return 0
+    for b in bs:
+        st = _dt.datetime.fromtimestamp(b["start"]).strftime("%Y-%m-%d %H:%M")
+        line = "  %s  %9s tokens  %6s/min" % (st, _fmt(b["tokens"]), _fmt(int(b["tokens_per_min"])))
+        if b["active"]:
+            line += "  ACTIVE, %dm left, ≈%s projected" % (b["remaining_s"] // 60,
+                                                         _fmt(b["projected_tokens"]))
+        print(line)
     return 0
 
 
@@ -457,6 +485,10 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("name", nargs="?")
     s = sub.add_parser("breakdown", help="tokens by tool, model and project")
     s.add_argument("--range", choices=("today", "week", "7d", "30d", "all"), default="7d")
+    s.add_argument("--json", action="store_true")
+    s = sub.add_parser("blocks", help="≈ 5-hour blocks and burn rate (estimate)")
+    s.add_argument("--source", default="claude_code", help="token source id, or 'all'")
+    s.add_argument("--last", type=int, default=10)
     s.add_argument("--json", action="store_true")
     s = sub.add_parser("config", help="get/set validated settings")
     s.add_argument("action", choices=("get", "set", "keys", "export", "import"))
@@ -602,7 +634,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         from omnimonitor.applog import log_path
         print(log_path())
         return 0
-    handlers = {"export": cmd_export, "providers": cmd_providers, "breakdown": cmd_breakdown,
+    handlers = {"export": cmd_export, "providers": cmd_providers, "breakdown": cmd_breakdown, "blocks": cmd_blocks,
                 "config": cmd_config, "notify-test": cmd_notify_test, "secrets": cmd_secrets, "deps": cmd_deps}
     if cmd in handlers:
         return handlers[cmd](args)
