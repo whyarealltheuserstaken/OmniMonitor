@@ -128,3 +128,20 @@ def test_stats_served_event_set_by_api(tmp_path, monkeypatch):
         assert srv.stats_served.is_set()
     finally:
         srv.stop()
+
+
+def test_switching_view_within_grace_does_not_open_browser():
+    """Regression (caught by CI switch smoke): closing the mini window to open the full one
+    made the mini watcher see rc!=0 and fall back to the browser."""
+    import time
+
+    class P(FakeProc):
+        def terminate(self):
+            self.rc = -15
+    opened = []
+    wl = WindowLauncher(popen=lambda *a, **k: P(), browser=opened.append,
+                        available=lambda: True, grace_s=2)
+    wl.open(URL + "mini", view="mini")
+    wl.open(URL, view="full")
+    time.sleep(0.5)
+    assert opened == [] and wl.view == "full" and wl.last_mode == "window"

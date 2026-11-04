@@ -76,10 +76,12 @@ class WindowLauncher:
         self.view: Optional[str] = None
         self.last_mode = None  # "window" | "browser"
         self._lock = threading.Lock()
+        self._closed: set = set()
 
     def close(self) -> None:
         proc = self.proc
         if proc is not None and proc.poll() is None:
+            self._closed.add(id(proc))  # our own terminate is not a crash: no browser fallback
             try:
                 proc.terminate()
             except OSError:
@@ -116,7 +118,7 @@ class WindowLauncher:
             rc = proc.poll()
             if rc is not None:
                 log.info("app window process exited rc=%s", rc)
-                if rc != 0:
+                if rc != 0 and id(proc) not in self._closed and proc is self.proc:
                     self._fallback(url, "window process exited with %s" % rc)
                 return
             time.sleep(0.1)
