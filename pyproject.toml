@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnimonitor"
-version = "0.4.0"
+version = "0.4.1"
 description = "Local-first tray app that monitors AI usage, limits and spend across Grok, Claude, ChatGPT/Codex, Gemini, DeepSeek, Qwen, Kimi, Cursor, Copilot and more. No cookies, no scraping. Unofficial; not affiliated with any provider."
 readme = "README.md"
 requires-python = ">=3.9"
