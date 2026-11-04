@@ -81,7 +81,8 @@ def test_compute_week_uses_billing_window_and_grokbuild_share():
              {"ts": 2, "duration_s": 90.0, "duration_source": "derived from log timestamps"}]
     out = stats.compute(events, turns, BILLING, {}, NOW, provider="grok_sessions", tz=UTC)
     assert out["lifetime_tokens"]["value"] == 3000
-    assert out["week_tokens"] == {"value": 2000, "window": "current billing week"}
+    assert out["week_tokens"] == {"value": 2000, "window": "current billing week",
+                                  "grok_value": 2000}
     est = out["weekly_limit"]["estimate"]
     assert est["value"] == 20000 and est["basis"] == "Grok Build share"
     assert "ESTIMATE" in est["caveat"]

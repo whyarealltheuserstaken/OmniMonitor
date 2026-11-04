@@ -1,0 +1,5 @@
+{"type":"llm.request","model":"kimi-code/kimi-for-coding","time":1791200000000}
+{"type":"usage.record","usageScope":"turn","time":1791200001000,"usage":{"inputOther":200,"output":80,"inputCacheRead":1800,"inputCacheCreation":0}}
+{"type":"usage.record","usageScope":"session","time":1791200002000,"usage":{"inputOther":200,"output":80,"inputCacheRead":1800,"inputCacheCreation":0}}
+{"type":"llm.request","model":"__runtime_model__","time":1791200003000}
+{"type":"usage.record","usageScope":"turn","model":"kimi-k2-thinking","time":1791200004000,"usage":{"inputOther":10,"output":4,"inputCacheRead":0,"inputCacheCreation":0}}

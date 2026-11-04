@@ -1,0 +1,4 @@
+{"uuid":"q1","sessionId":"q-sess","timestamp":"2026-10-07T08:00:00.000Z","type":"user","cwd":"/home/me/code/qproj","message":{"role":"user"}}
+{"uuid":"q2","sessionId":"q-sess","timestamp":"2026-10-07T08:00:05.000Z","type":"assistant","cwd":"/home/me/code/qproj","model":"qwen3-coder-plus","usageMetadata":{"promptTokenCount":9000,"candidatesTokenCount":400,"thoughtsTokenCount":100,"cachedContentTokenCount":6000,"totalTokenCount":9500}}
+{"uuid":"q3","sessionId":"q-sess","timestamp":"2026-10-07T08:01:05.000Z","type":"assistant","cwd":"/home/me/code/qproj","model":"qwen3-coder-plus","usageMetadata":{"promptTokenCount":1000,"candidatesTokenCount":300,"thoughtsTokenCount":100,"cachedContentTokenCount":0,"totalTokenCount":1300}}
+{"uuid":"q4","sessionId":"q-sess","timestamp":"2026-10-07T08:02:05.000Z","type":"assistant","model":"qwen3-coder-plus","usageMetadata":{"promptTokenCount":-5,"candidatesTokenCount":1}}

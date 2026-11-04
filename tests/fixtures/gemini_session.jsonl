@@ -1,0 +1,4 @@
+{"sessionId":"g-sess-2","projectHash":"abc123","startTime":"2026-10-06T10:00:00.000Z","kind":"main"}
+{"id":"m1","type":"gemini","timestamp":"2026-10-06T10:00:05.000Z","model":"gemini-2.5-pro","tokens":{"input":100,"output":0,"cached":0,"thoughts":0,"tool":0}}
+{"id":"m1","type":"gemini","timestamp":"2026-10-06T10:00:09.000Z","model":"gemini-2.5-pro","tokens":{"input":1000,"output":200,"cached":400,"thoughts":50,"tool":0}}
+{"partial":

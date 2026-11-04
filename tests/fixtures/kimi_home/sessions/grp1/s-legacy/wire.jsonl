@@ -1,0 +1,4 @@
+{"timestamp":1791100000.5,"message":{"type":"TurnBegin","payload":{}}}
+{"timestamp":1791100001.0,"message":{"type":"StatusUpdate","payload":{"message_id":"k1","token_usage":{"input_other":100,"output":20,"input_cache_read":900,"input_cache_creation":0}}}}
+{"timestamp":1791100002.0,"message":{"type":"StatusUpdate","payload":{"message_id":"k1","token_usage":{"input_other":150,"output":60,"input_cache_read":900,"input_cache_creation":50}}}}
+{"timestamp":1791100003.0,"message":{"type":"StatusUpdate","payload":{"message_id":"k2","token_usage":{"input_other":10,"output":5,"input_cache_read":0,"input_cache_creation":0}}}}

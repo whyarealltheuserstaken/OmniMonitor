@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from omnimonitor import __version__
@@ -58,6 +59,17 @@ def checks(cfg: Dict[str, Any], online: bool = True) -> List[Tuple[str, str, str
                 else "no Grok CLI session logs under %s - token stats will be 'not available'"
                 % sess))
 
+    from omnimonitor.adapters import describe
+    for row in describe(cfg)[1:]:
+        if row["enabled"]:
+            out.append((OK if row["found"] else WARN, row["name"],
+                        "enabled, logs found under %s" % ", ".join(row["paths"]) if row["found"]
+                        else "enabled, but %s" % row["note"]))
+        elif row["found"]:
+            out.append((OK, row["name"], "logs found but not enabled (optional: "
+                        "`omnimonitor providers enable %s`)" % row["name"]))
+    out += provider_checks(cfg, online=online)
+
     if online:
         try:
             r = fetch_grok_cli_billing(cfg)
@@ -67,6 +79,40 @@ def checks(cfg: Dict[str, Any], online: bool = True) -> List[Tuple[str, str, str
             out.append((FAIL, "billing", str(e)))
         except Exception as e:  # noqa: BLE001
             out.append((FAIL, "billing", "%s: %s" % (type(e).__name__, e)))
+    return out
+
+
+def provider_checks(cfg: Dict[str, Any], online: bool = True, http=None
+                    ) -> List[Tuple[str, str, str]]:
+    """Every enabled account (API) provider: key present, secrets file private, and - when
+    online - one live read. Keys are never printed."""
+    from omnimonitor import accounts, apikeys, catalog
+    out: List[Tuple[str, str, str]] = []
+    prob = apikeys.file_problem()
+    if prob:
+        out.append((FAIL, "secrets file", prob + " (the file is ignored until then)"))
+    for pid in config_mod.enabled_api_providers(cfg):
+        key, name = accounts.key_for(pid)
+        if not key:
+            out.append((FAIL, pid, "enabled, but no key: set %s in the environment or run "
+                                   "`omnimonitor secrets set %s`" % (name, name)))
+            continue
+        src = apikeys.where(name)
+        if not online:
+            out.append((OK, pid, "key set (%s); live check skipped (--offline)" % src))
+            continue
+        r = accounts.fetch(pid, cfg, http=http)
+        if r.ok:
+            shown = ", ".join("%s %s%s" % (m["label"], m["value"],
+                                           " " + m["unit"] if m["unit"] else "")
+                              for m in r.metrics[:3]) or "no figures returned"
+            out.append((OK, pid, "key set (%s); read OK: %s" % (src, shown)))
+        else:
+            out.append((FAIL, pid, "key set (%s); %s" % (src, r.error)))
+    p = cfg.get("primary_provider") or "grok"
+    if p not in ("grok", "budget") and p not in catalog.enabled_ids(cfg):
+        out.append((WARN, "primary", "primary_provider %s is not enabled - the tray falls back "
+                                     "to the Grok pool" % p))
     return out
 
 
@@ -103,9 +149,11 @@ def setup(cfg: Dict[str, Any], assume_yes: bool = False) -> int:
         if ans not in ("", "y", "yes"):
             print("Unchanged.")
             return 0
-    new = {k: v for k, v in cfg.items() if not str(k).startswith("_")}
-    new["source"] = "grok_cli_billing"
-    path = config_mod.save_config(new)
+    # Update only the FILE: the in-memory cfg may hold env overrides (OMNIMONITOR_TOKEN,
+    # OMNIMONITOR_SOURCE) that must never be written to disk.
+    target = cfg.get("_config_path")
+    path = config_mod.update_config_file({"source": "grok_cli_billing"},
+                                         Path(target) if target else None)
     print("Saved %s (source = grok_cli_billing). Start the tray with `omnimonitor`." % path)
     print("Optional: `omnimonitor install-autostart` to start it at login.")
     return 0

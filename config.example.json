@@ -9,5 +9,49 @@
   "web_port": 0,
   "estimate_weekly_limit": true,
   "estimate_min_used_percent": 5.0,
-  "heatmap_weeks": 53
+  "heatmap_weeks": 53,
+  "extra_token_sources": [],
+  "claude_home": "",
+  "codex_home": "",
+  "prices": {},
+  "notifications": true,
+  "notify_thresholds": [
+    80,
+    95
+  ],
+  "notify_on_reset": true,
+  "notify_on_pace": false,
+  "icon_style": "ring",
+  "icon_value": "remaining",
+  "theme": "dark",
+  "accent_color": "#2a8bd8",
+  "display_name": "",
+  "hidden_cards": [],
+  "providers": {
+    "claude_code": {
+      "enabled": false
+    },
+    "gemini_cli": {
+      "enabled": false
+    }
+  },
+  "primary_provider": "grok",
+  "provider_thresholds": {},
+  "budgets": {
+    "daily": 0,
+    "weekly": 0,
+    "monthly": 0
+  },
+  "budget_alert_percent": 80,
+  "provider_poll_seconds": 900,
+  "gemini_home": "",
+  "qwen_home": "",
+  "kimi_home": "",
+  "opencode_home": "",
+  "copilot_otel_path": "",
+  "moonshot_region": "global",
+  "github_username": "",
+  "copilot_premium_allowance": 0,
+  "xai_team_id": "",
+  "cursor_email": ""
 }

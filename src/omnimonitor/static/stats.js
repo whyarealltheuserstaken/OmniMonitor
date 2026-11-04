@@ -4,14 +4,8 @@
   var data = null, mode = "daily";
   var $ = function (id) { return document.getElementById(id); };
 
-  function fmtTokens(n) {
-    if (n === null || n === undefined) return "–";
-    var a = Math.abs(n);
-    if (a >= 1e9) return (n / 1e9).toFixed(a >= 1e10 ? 0 : 1) + "B";
-    if (a >= 1e6) return (n / 1e6).toFixed(a >= 1e7 ? 0 : 1) + "M";
-    if (a >= 1e3) return (n / 1e3).toFixed(a >= 1e4 ? 0 : 1) + "K";
-    return String(n);
-  }
+  var fmtTokens = OM.fmtTokens, fmtDate = OM.fmtDate, el = OM.el, fmtUsd = OM.fmtUsd;
+  var range = null;
   function fmtDur(s) {
     if (s === null || s === undefined) return "–";
     s = Math.round(s);
@@ -19,18 +13,6 @@
     if (h) return h + "h " + m + "m";
     if (m) return m + "m " + x + "s";
     return x + "s";
-  }
-  function fmtDate(iso) {
-    if (!iso) return "";
-    var d = new Date(iso.length === 10 ? iso + "T12:00:00" : iso);
-    return d.toLocaleString(undefined, iso.length === 10 ? { month: "short", day: "numeric", year: "numeric" }
-      : { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
-  }
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined) e.textContent = text;
-    return e;
   }
   function setStat(id, metric, fmt) {
     var node = $(id);
@@ -50,7 +32,7 @@
     var b = $("banners"); b.textContent = "";
     if (d.is_demo || (u && u.is_demo)) {
       b.appendChild(el("div", "banner demo",
-        "DEMO MODE - every number on this page is fake sample data. Run `omnimonitor setup` to use your Grok account."));
+        "DEMO MODE - every number on this page is fake sample data (including tools, projects and prices). Run `omnimonitor setup` to use your Grok account."));
     }
     if (st.error) b.appendChild(el("div", "banner err", "Last refresh failed: " + st.error +
       (u ? " (showing the last good value)" : "")));
@@ -101,6 +83,9 @@
     setStat("s-cur", d.current_streak, function (v) { return v + (v === 1 ? " day" : " days"); });
 
     renderHeat();
+    renderForecast(d);
+    renderBreakdown(d);
+    renderCost(d);
 
     var mc = $("models"); mc.textContent = "";
     (d.top_models || []).forEach(function (m) {
@@ -121,7 +106,119 @@
       r.appendChild(el("span", "r", i.value)); ic.appendChild(r);
     });
     $("insights-card").hidden = !(d.insights || []).length;
+    if (window.OMProviders) OMProviders.render(d);
+    applyPersonal(d.personal || {});
   }
+
+  function applyPersonal(p) {
+    OM.applyTheme(p);
+    if (p.display_name) {
+      $("title").textContent = p.display_name;
+      $("title-sub").textContent = "· OmniMonitor";
+      document.title = p.display_name + " · OmniMonitor";
+    }
+    var hidden = p.hidden_cards || [];
+    Array.prototype.forEach.call(document.querySelectorAll("[data-card]"), function (n) {
+      if (hidden.indexOf(n.getAttribute("data-card")) >= 0) n.hidden = true;
+    });
+  }
+
+  function setMini(id, value, reason) {
+    var n = $(id); n.textContent = "";
+    if (value === null || value === undefined) n.appendChild(OM.na(reason));
+    else n.textContent = value;
+  }
+
+  function renderForecast(d) {
+    var f = d.forecast || {}, a = f.average || {}, r = f.recent || {};
+    $("fc-kind").textContent = f.is_demo ? "· DEMO" : "· estimates, linear";
+    var st = $("fc-status"); st.textContent = "";
+    if (a.status) {
+      var cls = a.status === "ahead" ? (a.runs_out_at ? "bad" : "warn") : "ok";
+      var pill = el("span", "pill " + cls, a.status === "ahead" ? "Ahead of pace" :
+        a.status === "behind" ? "Under pace" : "On pace");
+      pill.title = Math.round(f.used_percent) + "% used vs " + Math.round(a.even_pace_percent) +
+        "% of the week elapsed";
+      st.appendChild(pill);
+    } else st.appendChild(OM.na(a.reason));
+    setMini("fc-reset", a.percent_at_reset !== undefined ? "≈" + Math.round(Math.min(a.percent_at_reset, 999)) + "%" : null, a.reason);
+    if (a.percent_at_reset !== undefined) {
+      setMini("fc-out", a.runs_out_at ? fmtDate(a.runs_out_at) : "not before reset", "");
+    } else setMini("fc-out", null, a.reason);
+    setMini("fc-recent", r.percent_at_reset !== undefined ?
+      (r.rate_per_hour * 24).toFixed(1) + "%/day → ≈" + Math.round(Math.min(r.percent_at_reset, 999)) + "%" : null, r.reason);
+    var b = d.burn;
+    var why = (d.lifetime_tokens || {}).reason || "no token data";
+    setMini("b-hour", b ? fmtTokens(b.last_hour) : null, why);
+    setMini("b-today", b ? fmtTokens(b.today) : null, why);
+    setMini("b-rate", b && b.per_active_hour_today !== null ? fmtTokens(b.per_active_hour_today) : null,
+      b ? "no activity today" : why);
+    setMini("b-tools", (d.tools || []).length ? d.tools.map(function (t) { return t.name; }).join(", ") : null,
+      "no token sources enabled");
+  }
+
+  function bRows(node, rows) {
+    node.textContent = "";
+    if (!rows.length) { node.appendChild(OM.na("nothing recorded in this range")); return; }
+    var max = rows[0].tokens || 1;
+    rows.forEach(function (r) {
+      var row = el("div", "brow"), t = el("div", "t");
+      var n = el("span", "n", r.name); n.title = r.name; t.appendChild(n);
+      t.appendChild(el("span", "m", fmtTokens(r.tokens) + " · " + Math.round(r.share * 100) + "%"));
+      row.appendChild(t);
+      var m = el("div", "meter"), i = el("i"); i.style.width = Math.max(2, 100 * r.tokens / max) + "%";
+      m.appendChild(i); row.appendChild(m);
+      var bits = [r.sessions + (r.sessions === 1 ? " session" : " sessions")];
+      if (r.cache_hit !== null) bits.push(Math.round(100 * r.cache_hit) + "% cached");
+      if (r.estimated_usd !== null) bits.push("≈" + fmtUsd(r.estimated_usd) + " est.");
+      else if (r.recorded_usd !== null) bits.push(fmtUsd(r.recorded_usd) + " recorded");
+      row.appendChild(el("div", "d", bits.join(" · ")));
+      node.appendChild(row);
+    });
+  }
+
+  function renderBreakdown(d) {
+    var br = d.breakdowns || {}, ids = ["today", "week", "7d", "30d", "all"].filter(function (k) { return br[k]; });
+    $("breakdown-card").hidden = !ids.length;
+    if (!ids.length) return;
+    if (!range || !br[range]) range = br.week ? "week" : "7d";
+    var tabs = $("rtabs"); tabs.textContent = "";
+    var short = { today: "Today", week: "Billing week", "7d": "7d", "30d": "30d", all: "All" };
+    ids.forEach(function (k) {
+      var b = el("button", k === range ? "on" : "", short[k]); b.setAttribute("data-range", k);
+      b.title = br[k].label; tabs.appendChild(b);
+    });
+    var cur = br[range];
+    bRows($("bd-tools"), cur.tools); bRows($("bd-models"), cur.models); bRows($("bd-projects"), cur.projects);
+  }
+
+  function renderCost(d) {
+    var c = d.cost || {}, rs = c.ranges || {}, ids = ["today", "week", "30d", "all"].filter(function (k) { return rs[k]; });
+    $("cost-card").hidden = !ids.length;
+    $("cost-note").textContent = c.note ? "· " + c.note : "";
+    var g = $("cost-grid"); g.textContent = "";
+    ids.forEach(function (k) {
+      var r = rs[k], box = el("div");
+      box.appendChild(el("div", "mini-k", r.label));
+      var v = el("div", "mini-v");
+      if (r.estimated_usd !== null) { v.textContent = "≈" + fmtUsd(r.estimated_usd); v.classList.add("est"); }
+      else v.appendChild(OM.na(c.priced_models ? "no model in this range matches your price table" :
+        "set prices in Settings to estimate cost", "no estimate"));
+      box.appendChild(v);
+      var sub = [];
+      if (r.recorded_usd !== null) sub.push(fmtUsd(r.recorded_usd) + " recorded in logs");
+      if (r.unpriced_tokens) sub.push(fmtTokens(r.unpriced_tokens) + " tokens unpriced");
+      box.appendChild(el("div", "mini-k", sub.join(" · ")));
+      if (r.unpriced_models && r.unpriced_models.length) box.lastChild.title = "Unpriced: " + r.unpriced_models.join(", ");
+      g.appendChild(box);
+    });
+  }
+
+  document.getElementById("rtabs").addEventListener("click", function (ev) {
+    var btn = ev.target.closest("button"); if (!btn) return;
+    range = btn.getAttribute("data-range");
+    if (data) renderBreakdown(data);
+  });
 
   function renderHeat() {
     var cells = (data.heatmap || []).slice(), heat = $("heat"), months = $("months");
