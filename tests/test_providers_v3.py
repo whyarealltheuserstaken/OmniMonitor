@@ -529,3 +529,15 @@ def test_providers_doc_is_generated_from_catalog():
     spec.loader.exec_module(gen)
     assert (ROOT / "docs" / "providers.md").read_text("utf-8") == gen.render(), \
         "run: PYTHONPATH=src python scripts/gen_providers_md.py"
+
+
+def test_cli_output_survives_a_non_utf8_console(monkeypatch, tmp_path):
+    import io
+    import sys as _sys
+    buf = io.BytesIO()
+    out = io.TextIOWrapper(buf, encoding="cp1252")
+    monkeypatch.setattr(_sys, "stdout", out)
+    monkeypatch.setenv("OMNIMONITOR_HOME", str(tmp_path))
+    assert cli.main(["status", "--demo"]) == 0  # prints "≈" (not in cp1252)
+    out.flush()
+    assert b"DEMO" in buf.getvalue()

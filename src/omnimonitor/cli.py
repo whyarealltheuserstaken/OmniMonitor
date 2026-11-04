@@ -443,7 +443,18 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _safe_console() -> None:
+    """Legacy Windows consoles / redirected output use a code page (e.g. cp1252) that can't
+    encode ≈ or ✔. Replace such characters instead of crashing."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
 def main(argv: Optional[List[str]] = None) -> int:
+    _safe_console()
     args = build_parser().parse_args(argv)
     if args.setup:
         args.cmd, args.yes = "setup", False

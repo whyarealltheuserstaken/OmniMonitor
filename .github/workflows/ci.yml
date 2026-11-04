@@ -44,7 +44,12 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: pytest -q
       - name: CLI smoke test
+        shell: bash
         run: |
           omnimonitor --version
           omnimonitor status --demo
-          omnimonitor doctor --offline
+          omnimonitor providers
+          # No Grok CLI login on CI runners, so doctor must report a failed check (exit 1),
+          # but it must not crash (any other exit code fails the job).
+          rc=0; omnimonitor doctor --offline || rc=$?
+          test "$rc" -eq 1
