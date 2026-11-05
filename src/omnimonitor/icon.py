@@ -49,7 +49,7 @@ def render_icon(remaining: Optional[float], *, error: bool = False, demo: bool =
     number (and the gauge fill) flip; the color always follows what is LEFT.
     """
     style = style if style in STYLES else "ring"
-    scale = 4  # supersample for smooth edges
+    scale = 8  # supersample for smooth edges
     s = size * scale
     img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -60,10 +60,22 @@ def render_icon(remaining: Optional[float], *, error: bool = False, demo: bool =
     if pct is not None and show == "used":
         pct = 100.0 - pct
     if style == "ring":
-        d.ellipse(box, fill=(24, 24, 24, 235))
-        d.arc(box, 0, 360, fill=(70, 70, 70, 255), width=width)
+        pad, width = 2 * s // 64, (9 if size >= 24 else 16) * s // 64
+        box = [pad, pad, s - pad, s - pad]
+        d.ellipse(box, fill=(28, 30, 34, 255))
+        inset = width // 2
+        rbox = [pad + inset, pad + inset, s - pad - inset, s - pad - inset]
+        d.arc(rbox, 0, 360, fill=(255, 255, 255, 46), width=width)
         if pct:
-            d.arc(box, -90, -90 + 360 * pct / 100.0, fill=col + (255,), width=width)
+            import math
+            a0, a1 = -90, -90 + 360 * pct / 100.0
+            d.arc(rbox, a0, a1, fill=col + (255,), width=width)
+            r = (rbox[2] - rbox[0]) / 2 - width / 2
+            c = s / 2
+            for a in (a0, a1):
+                px, py = c + r * math.cos(math.radians(a)), c + r * math.sin(math.radians(a))
+                d.ellipse([px - width / 2, py - width / 2, px + width / 2, py + width / 2],
+                          fill=col + (255,))
     elif style == "pie":
         d.ellipse(box, fill=(70, 70, 70, 255))
         if pct:
@@ -90,8 +102,12 @@ def render_icon(remaining: Optional[float], *, error: bool = False, demo: bool =
     else:
         text = "%d" % round(pct)
     fsize = {1: 34, 2: 30, 3: 22}.get(len(text), 22) * scale
+    if style == "ring":
+        fsize = {1: 32, 2: 29, 3: 20}.get(len(text), 20) * s // 64
     if style == "number":
         fsize = {1: 44, 2: 38, 3: 26}.get(len(text), 26) * scale
+    if style == "ring" and size < 24:
+        text = ""  # digits are illegible at 16-20 px; the arc carries the value
     font = _font(fsize)
     try:
         bb = d.textbbox((0, 0), text, font=font)
@@ -103,10 +119,107 @@ def render_icon(remaining: Optional[float], *, error: bool = False, demo: bool =
     fg = (20, 20, 20, 255) if style == "number" and pct is not None else (245, 245, 245, 255)
     d.text(((s - tw) / 2 - ox, ty), text, font=font, fill=fg)
     if demo:
-        r = 9 * scale
-        d.ellipse([s - 2 * r - scale, scale, s - scale, 2 * r + scale], fill=DEMO + (255,))
+        r = 7 * s // 64
+        m = s // 64
+        d.ellipse([s - 2 * r - m, m, s - m, 2 * r + m], fill=(20, 20, 20, 255))
+        d.ellipse([s - 2 * r + m, 3 * m, s - 3 * m, 2 * r - m], fill=DEMO + (255,))
     img = img.resize((size, size), Image.LANCZOS)
     return img
+
+
+# ------------------------------------------------------------------ macOS menu bar
+MENUBAR_PT = 22  # NSStatusBar thickness in points
+_MAC_FONTS = ["/System/Library/Fonts/SFNSRounded.ttf", "/System/Library/Fonts/SFNS.ttf",
+              "/System/Library/Fonts/SFNSText.ttf", "/System/Library/Fonts/Helvetica.ttc",
+              "/Library/Fonts/Arial Bold.ttf", "DejaVuSans-Bold.ttf",
+              "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]
+
+
+def _mac_font(px: int):
+    for name in _MAC_FONTS:
+        try:
+            f = ImageFont.truetype(name, px)
+            try:  # SF is a variable font: ask for semibold where supported
+                f.set_variation_by_name("Semibold")
+            except Exception:  # noqa: BLE001
+                pass
+            return f
+        except (OSError, IOError):
+            continue
+    return _font(px)
+
+
+def menubar_state(remaining: Optional[float], error: bool = False) -> str:
+    if error:
+        return "error"
+    if remaining is None:
+        return "none"
+    if remaining < 20:
+        return "critical"
+    if remaining < 50:
+        return "warn"
+    return "ok"
+
+
+def render_menubar(remaining: Optional[float], *, error: bool = False, demo: bool = False,
+                   show: str = "remaining", text: bool = True, scale: int = 2):
+    """Crisp macOS status-bar image. Returns (PIL image, is_template).
+
+    Height is exactly 22pt * scale px (44 px at 2x), width fits the content. Drawn 8x
+    supersampled, then LANCZOS-reduced. Template images are pure black + alpha so macOS
+    tints them for light/dark menu bars; only the critical state (< 20% left) is drawn in
+    red as a non-template image, like the battery icon does.
+    """
+    state = menubar_state(remaining, error)
+    template = state != "critical"
+    ss = 8
+    u = scale * ss  # pixels per point while drawing
+    h = MENUBAR_PT * u
+    pct = None if state in ("none", "error") else max(0.0, min(100.0, float(remaining)))
+    shown = None if pct is None else (100.0 - pct if show == "used" else pct)
+    label = "" if state == "error" else "–" if pct is None else "%d%%" % round(shown)
+    font = _mac_font(int(12.5 * u))
+    tmp = ImageDraw.Draw(Image.new("L", (1, 1)))
+    bb = tmp.textbbox((0, 0), label, font=font)
+    tw = bb[2] - bb[0]
+    ring_d = 15 * u
+    gap = 3.5 * u
+    w = int(ring_d + 2 * u + ((gap + tw + 1 * u) if text and label else 0))
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    ink = (0, 0, 0) if template else (232, 60, 52)
+    track = (0, 0, 0, 80) if template else (232, 60, 52, 90)
+    x0, y0 = 1 * u, (h - ring_d) / 2
+    box = [x0, y0, x0 + ring_d, y0 + ring_d]
+    stroke = int(2.4 * u)
+    d.arc(box, 0, 360, fill=track, width=stroke)
+    if shown:
+        a0, a1 = -90, -90 + 360 * shown / 100.0
+        d.arc(box, a0, a1, fill=ink + (255,), width=stroke)
+        import math
+        r = ring_d / 2 - stroke / 2
+        cx, cy = x0 + ring_d / 2, y0 + ring_d / 2
+        for a in (a0, a1):  # round caps
+            px, py = cx + r * math.cos(math.radians(a)), cy + r * math.sin(math.radians(a))
+            d.ellipse([px - stroke / 2, py - stroke / 2, px + stroke / 2, py + stroke / 2],
+                      fill=ink + (255,))
+    if state == "error" or (pct is None and not text):
+        cx, cy = x0 + ring_d / 2, y0 + ring_d / 2
+        d.rounded_rectangle([cx - 0.9 * u, cy - 4 * u, cx + 0.9 * u, cy + 1.2 * u],
+                            radius=0.9 * u, fill=ink + (255,))
+        d.ellipse([cx - 1 * u, cy + 2.3 * u, cx + 1 * u, cy + 4.3 * u], fill=ink + (255,))
+    if demo:  # small solid dot badge, top right of the ring
+        r = 2.6 * u
+        cx, cy = x0 + ring_d - r * 0.6, y0 + r * 0.6
+        d.ellipse([cx - r - 1.2 * u, cy - r - 1.2 * u, cx + r + 1.2 * u, cy + r + 1.2 * u],
+                  fill=(0, 0, 0, 0))
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=ink + (255,))
+    if text and label:
+        asc, desc = font.getmetrics()
+        ty = (h - (asc + desc)) / 2 + 0.3 * u
+        d.text((x0 + ring_d + gap - bb[0], ty), label, font=font, fill=ink + (255,))
+    out = img.resize((max(1, w // ss), MENUBAR_PT * scale), Image.LANCZOS)
+    return out, template
 
 
 def tray_size() -> int:

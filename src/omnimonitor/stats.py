@@ -167,6 +167,7 @@ def compute(events: List[Dict[str, Any]], turns: List[Dict[str, Any]],
     today = now_local.date()
     is_demo = provider == "demo"
     out: Dict[str, Any] = {"provider": provider, "provider_note": provider_note,
+                           "token_reason": "",
                            "is_demo": is_demo, "generated_at": now.isoformat(),
                            "billing": billing}
     if provider == "none":
@@ -175,6 +176,11 @@ def compute(events: List[Dict[str, Any]], turns: List[Dict[str, Any]],
         reason = provider_note or NA_NO_DATA
     else:
         reason = ""
+    if not events and provider == "grok_sessions" and not provider_note:
+        reason = NA_NO_DATA + (" Session logs were found and read, but none contained "
+                               "turn_completed token usage (the Grok CLI log format may have "
+                               "changed - please use Report a problem).")
+    out["token_reason"] = reason
     daily = daily_totals(events, tz=tz)
     days = active_days(daily)
     out["heatmap"] = heatmap(daily, today, cfg.get("heatmap_weeks", 53))

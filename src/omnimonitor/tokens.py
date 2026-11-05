@@ -118,11 +118,18 @@ def parse_update_line(line: str, session_id: str, path_hint: str = ""
     usage = upd.get("usage") if isinstance(upd.get("usage"), dict) else {}
     model_usage = usage.get("modelUsage") if isinstance(usage.get("modelUsage"), dict) else {}
     meta = params.get("_meta") if isinstance(params.get("_meta"), dict) else {}
-    base_id = str(meta.get("eventId") or upd.get("eventId") or obj.get("id") or "") or (
+    # Grok Build writes a snake_case prompt_id on turn_completed; forked sessions copy the
+    # file with rewritten timestamps but keep prompt_id, so it is the best dedup key.
+    pid = upd.get("prompt_id") or upd.get("promptId") or meta.get("promptId")
+    base_id = (("prompt:" + str(pid)[:200]) if isinstance(pid, (str, int)) and str(pid) else "") or \
+        str(meta.get("eventId") or upd.get("eventId") or obj.get("id") or "") or (
         "sha1:" + hashlib.sha1((path_hint + "\0" + line).encode("utf-8", "replace")).hexdigest())
     if ts is None:
         return None, [], None  # can't place it on a day -> skip rather than guess
     events: List[TokenEvent] = []
+    if not model_usage and any(k in usage for k in ("inputTokens", "outputTokens")):
+        # no per-model split recorded: count the turn totals once, model unknown
+        model_usage = {str(meta.get("modelId") or upd.get("modelId") or "unknown"): usage}
     for model, mu in model_usage.items():
         if not isinstance(mu, dict):
             continue

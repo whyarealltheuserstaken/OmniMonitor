@@ -7,17 +7,17 @@ import subprocess
 import sys
 import threading
 import webbrowser
-from pathlib import Path
 from typing import Optional
 
+from omnimonitor import appactions
 from omnimonitor import config as config_mod
 from omnimonitor import overview as overview_mod
 from omnimonitor.app import Controller
 from omnimonitor.applog import log
-from omnimonitor.icon import render_icon, tray_size
+from omnimonitor.icon import render_icon, render_menubar, tray_size
 from omnimonitor.timeutil import fmt_local, fmt_until
 from omnimonitor.webui import StatsServer, for_controller
-from omnimonitor.window import WindowLauncher
+from omnimonitor.window import WindowLauncher, app_url
 
 
 def open_path(path: str) -> None:
@@ -79,6 +79,17 @@ class TrayApp:
                 "stats page unavailable: %s" % e
         self.icon = pystray.Icon("omnimonitor", render_icon(None, size=tray_size()),
                                  "OmniMonitor · AI usage", menu=self._menu())
+        self.mac_menubar = False
+        if sys.platform == "darwin":
+            try:
+                from omnimonitor import macicon
+                self.mac_menubar = macicon.install(self.icon)
+                self._set_mac_image(None, error=False, demo=False)
+            except Exception:  # noqa: BLE001
+                log.exception("macOS menu bar image hook")
+        if self.server is not None:
+            self.server.app_actions.update(appactions.window_actions(
+                self.window, lambda: self.server.url, self.ctrl.cfg.get))
         ctrl.add_listener(self.update)
         ctrl.notifier = self._notify_os
 
@@ -180,7 +191,7 @@ class TrayApp:
                  enabled=lambda _: self.server is not None),
             Item("Open in Browser", self._on_browser,
                  enabled=lambda _: self.server is not None),
-            Item("Open Mini View", self._page("mini"),
+            Item("Open Mini View", self._on_mini,
                  enabled=lambda _: self.server is not None),
             Item("Settings…", self._page("settings"),
                  enabled=lambda _: self.server is not None),
@@ -200,12 +211,13 @@ class TrayApp:
         log.info("Refresh Now clicked")
         threading.Thread(target=self.ctrl.refresh, daemon=True).start()
 
-    def _open(self, rel: str = "") -> None:
+    def _open(self, rel: str = "", view: str = "full") -> None:
         """App window in its own process (macOS main-thread rule), else the browser."""
         if not self.server:
             return
         try:
-            self.window.open(self.server.url + rel)
+            self.window.open(app_url(self.server.url, view, rel), view=view,
+                             on_top=bool(view == "mini" and self.ctrl.cfg.get("mini_on_top")))
         except Exception:  # noqa: BLE001
             log.exception("open window")
             webbrowser.open(self.server.url + rel)
@@ -217,6 +229,9 @@ class TrayApp:
         if self.server:
             webbrowser.open(self.server.url)
 
+    def _on_mini(self, *_):
+        self._open("", view="mini")
+
     def _page(self, rel: str):
         def go(*_):
             self._open(rel)
@@ -225,12 +240,8 @@ class TrayApp:
     def _export(self, fmt: str, kind: str):
         def go(*_):
             try:
-                body, _ct, fname = self.ctrl.export(kind, fmt)
-                folder = Path.home() / "Downloads"
-                folder = folder if folder.is_dir() else Path.home()
-                out = folder / fname
-                out.write_bytes(body)
-                open_path(str(folder))
+                res = appactions.save_export(self.ctrl, kind, fmt)
+                log.info("exported %s %s -> %s", kind, fmt, res.get("path"))
             except Exception as e:  # noqa: BLE001
                 self.ctrl.token_note = "export failed: %s" % e
         return go
@@ -244,12 +255,7 @@ class TrayApp:
 
     def _on_quit(self, *_):
         self.ctrl.stop()
-        proc = self.window.proc
-        if proc is not None and proc.poll() is None:
-            try:
-                proc.terminate()
-            except OSError:
-                pass
+        self.window.close()
         if self.server:
             try:
                 self.server.stop()
@@ -267,16 +273,27 @@ class TrayApp:
         try:
             ov = self._ov()
             value, _label = overview_mod.tray_value(ov, u.to_dict() if u else None)
-            self.icon.icon = render_icon(value, error=bool(err) and value is None,
-                                         demo=bool((u and u.is_demo) or ov.get("is_demo")),
-                                         size=tray_size(),
-                                         style=self.ctrl.cfg.get("icon_style") or "ring",
-                                         show=self.ctrl.cfg.get("icon_value") or "remaining")
+            error = bool(err) and value is None
+            demo = bool((u and u.is_demo) or ov.get("is_demo"))
+            if self.mac_menubar:
+                self._set_mac_image(value, error, demo)
+            else:
+                self.icon.icon = render_icon(value, error=error, demo=demo, size=tray_size(),
+                                             style=self.ctrl.cfg.get("icon_style") or "ring",
+                                             show=self.ctrl.cfg.get("icon_value") or "remaining")
             # compact "today" tooltip (Windows limit ~128 chars)
             self.icon.title = overview_mod.tooltip(ov, self._title())[:120]
             self.icon.update_menu()
         except Exception:  # noqa: BLE001
             log.exception("tray icon update failed")
+
+    def _set_mac_image(self, value, error: bool, demo: bool) -> None:
+        """macOS: template ring (+ optional %) at 22 pt / 44 px; see macicon.py."""
+        img, template = render_menubar(value, error=error, demo=demo,
+                                       show=self.ctrl.cfg.get("icon_value") or "remaining",
+                                       text=self.ctrl.cfg.get("icon_text", True) is not False)
+        self.icon._omni_spec = (img, template)
+        self.icon.icon = img  # pystray setter -> _update_icon -> our _assert_image
 
     def _show(self) -> None:
         self.icon.visible = True
