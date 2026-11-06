@@ -60,9 +60,13 @@ AI tools. OmniMonitor copies **no code, text, icons or images** from it. Everyth
 Python re-implementation of the ideas. See [docs/inspiration-notes.md](docs/inspiration-notes.md)
 for what we adopted, what we built differently and why.
 
-## What's new in 0.5.0-beta
+## What's new in 0.5.1-beta
 
-**Beta / prerelease** (GitHub prerelease; `/releases/latest` stays on 0.4.2). Opt-in web-session providers (Claude plan, ChatGPT web, Cursor — off by default; in-app sign-in or browser import) and a green/amber/red tray icon by remaining weekly pool (macOS: one ring + optional %; colored states are non-template, with a hairline edge). Unreleased: the menu-bar icon is a single ring (the 0.5.0-beta halo read as extra rings), and the dashboard shows a Grok suite total plus a CLI / Bot / Cursor breakdown from real billing fields and local CLI logs. See [release notes](docs/release-notes/v0.5.0-beta.md) and the changelog.
+**Beta / prerelease** (GitHub prerelease; `/releases/latest` stays on 0.4.2). One macOS menu-bar ring (the 0.5.0-beta dark+light halo read as extra rings) and a Grok suite card: the shared weekly pool, plus CLI / Bot / Cursor shares only when billing names them, and Grok CLI tokens from local logs. See [release notes](docs/release-notes/v0.5.1-beta.md).
+
+### Earlier: 0.5.0-beta
+
+Opt-in web-session providers (Claude plan, ChatGPT web, Cursor — off by default; in-app sign-in or browser import) and a green/amber/red tray icon by remaining weekly pool. See [release notes](docs/release-notes/v0.5.0-beta.md).
 
 ### Earlier: 0.4.2
 
