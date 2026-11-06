@@ -532,14 +532,22 @@ def refresh(cfg: Dict[str, Any], history, ids: List[str], force: bool = False,
     now = time.time() if now is None else now
     every = max(300, int(cfg.get("provider_poll_seconds") or 900))
     out: Dict[str, Reading] = {}
+    web_ids = set(getattr(catalog, "WEB_SESSION_IDS", ()))
     for pid in ids:
-        if pid not in FETCHERS:
+        is_web = pid in web_ids
+        if pid not in FETCHERS and not is_web:
             continue
         last = load(history, pid)
         if last and not force and now - max(last.fetched_at, last.attempted_at) < every:
             out[pid] = last
             continue
-        r = fetch(pid, cfg, http, now)
+        if is_web:
+            from omnimonitor import web_accounts
+            # Ensure browser import happens when auth=browser and no stored session yet
+            _maybe_import_browser(cfg, pid)
+            r = web_accounts.fetch(pid, cfg, http=http, now=now)
+        else:
+            r = fetch(pid, cfg, http, now)
         r.attempted_at = now
         if not r.ok and last and last.ok:
             last.error, last.attempted_at = r.error, now
@@ -551,3 +559,19 @@ def refresh(cfg: Dict[str, Any], history, ids: List[str], force: bool = False,
             except Exception:  # noqa: BLE001
                 pass
     return out
+
+
+def _maybe_import_browser(cfg: Dict[str, Any], pid: str) -> None:
+    """If the user chose browser import and we have no session yet, try once (best-effort)."""
+    from omnimonitor import sessions
+    if sessions.has(pid):
+        return
+    opts = (cfg.get("providers") or {}).get(pid) or {}
+    if not isinstance(opts, dict) or opts.get("auth") != "browser":
+        return
+    try:
+        from omnimonitor import browser_cookies
+        header = browser_cookies.read_for_provider(pid, str(opts.get("browser") or "auto"))
+        sessions.save(pid, header, meta={"source": "browser"})
+    except Exception:  # noqa: BLE001 - leave error to the fetch ("signed out")
+        pass

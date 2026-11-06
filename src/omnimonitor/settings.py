@@ -121,7 +121,14 @@ def _path(v: Any) -> str:
     return v.strip()
 
 
-def _providers(v: Any) -> Dict[str, Dict[str, bool]]:
+def _providers(v: Any) -> Dict[str, Dict[str, Any]]:
+    """Per-provider switches. Web-session providers also accept auth + browser.
+
+    Shape::
+        {"claude_plan": {"enabled": true, "auth": "login"|"browser"|"off",
+                         "browser": "auto"|"chrome"|"edge"|"brave"|"arc"|"firefox"|"safari"}}
+    ``auth`` defaults to ``off``. Cookies are never accepted through this endpoint.
+    """
     if isinstance(v, str):
         try:
             v = json.loads(v or "{}")
@@ -129,15 +136,35 @@ def _providers(v: Any) -> Dict[str, Dict[str, bool]]:
             raise SettingError("providers must be a JSON object") from None
     if not isinstance(v, dict):
         raise SettingError('expected {"provider_id": {"enabled": true|false}, ...}')
+    allowed_auth = {"off", "login", "browser"}
+    allowed_browsers = {"auto", "chrome", "edge", "brave", "arc", "firefox", "safari"}
     out = {}
     for pid, opts in v.items():
         if pid not in catalog.SWITCHABLE:
             raise SettingError("unknown provider %r (see `omnimonitor providers`)" % pid)
         if isinstance(opts, bool):
             opts = {"enabled": opts}
-        if not isinstance(opts, dict) or set(opts) - {"enabled"}:
-            raise SettingError("%s: only {\"enabled\": true|false} is settable" % pid)
-        out[pid] = {"enabled": _bool(opts.get("enabled", False))}
+        if not isinstance(opts, dict):
+            raise SettingError("%s: expected an object" % pid)
+        extra = set(opts) - {"enabled", "auth", "browser"}
+        if extra:
+            raise SettingError("%s: unknown keys %s" % (pid, sorted(extra)))
+        entry = {"enabled": _bool(opts.get("enabled", False))}
+        if pid in getattr(catalog, "WEB_SESSION_IDS", ()):
+            auth = str(opts.get("auth") or "off").lower()
+            if auth not in allowed_auth:
+                raise SettingError("%s.auth must be one of %s" % (pid, sorted(allowed_auth)))
+            entry["auth"] = auth
+            browser = str(opts.get("browser") or "auto").lower()
+            if browser not in allowed_browsers:
+                raise SettingError("%s.browser must be one of %s" % (pid, sorted(allowed_browsers)))
+            entry["browser"] = browser
+            if entry["enabled"] and auth == "off":
+                # enabling without a method is allowed but useless; keep off-by-default honesty
+                pass
+        elif "auth" in opts or "browser" in opts:
+            raise SettingError("%s is not a web-session provider" % pid)
+        out[pid] = entry
     return out
 
 
@@ -193,7 +220,7 @@ SCHEMA: Dict[str, Tuple[Callable[[Any], Any], bool, str]] = {
     "extra_token_sources": (_list_of(tuple(i for i in catalog.LOCAL_IDS
                                            if i != "grok_sessions")), True,
                             "legacy list of local-log adapters (prefer `providers`)"),
-    "providers": (_providers, True, 'per-provider switches: {"id": {"enabled": true}}'),
+    "providers": (_providers, True, 'per-provider switches; web_session also auth/browser'),
     "primary_provider": (_choice(*catalog.PRIMARY_CHOICES), True,
                          "provider whose % drives the tray icon"),
     "provider_thresholds": (_provider_thresholds, True,
@@ -299,8 +326,18 @@ def public_view(cfg: Dict[str, Any]) -> Dict[str, Any]:
                         "primary_choices": [{"id": i, "name": "Budget" if i == "budget"
                                              else catalog.name(i)}
                                             for i in catalog.PRIMARY_CHOICES],
-                        "keys": _key_presence()}
+                        "keys": _key_presence(),
+                        "sessions": _session_presence()}
     return out
+
+
+def _session_presence() -> Dict[str, str]:
+    """Where a web session is stored ('keyring' / 'file' / '') — never cookie values."""
+    try:
+        from omnimonitor import sessions
+        return sessions.status()
+    except Exception:  # noqa: BLE001
+        return {}
 
 
 def _key_presence() -> Dict[str, str]:

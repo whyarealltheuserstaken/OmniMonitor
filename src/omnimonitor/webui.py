@@ -239,7 +239,9 @@ def default_app_actions(ctrl) -> Dict[str, Callable[[Any], Dict[str, Any]]]:
         if isinstance(body, dict) and body.get("save"):
             return aa.save_diagnostics(ctrl)
         return aa.diagnostics(ctrl)
-    return {"export": export, "open-url": aa.open_external, "diagnostics": diag}
+    actions = {"export": export, "open-url": aa.open_external, "diagnostics": diag}
+    actions.update(aa.session_actions(lambda k: ctrl.cfg.get(k)))
+    return actions
 
 
 def start_server(get_stats, port: int = 0) -> Tuple[StatsServer, str]:

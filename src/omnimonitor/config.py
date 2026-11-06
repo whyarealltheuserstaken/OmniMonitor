@@ -310,6 +310,12 @@ def extra_token_sources(cfg: Dict[str, Any]) -> list:
     return [p for p in catalog.enabled_ids(cfg) if p in catalog.LOCAL_IDS]
 
 
+def enabled_web_providers(cfg: Dict[str, Any]) -> list:
+    """Web-session providers the user turned on (cookie / in-app login)."""
+    from omnimonitor import catalog
+    return [p for p in catalog.enabled_ids(cfg) if p in catalog.WEB_SESSION_IDS]
+
+
 def enabled_api_providers(cfg: Dict[str, Any]) -> list:
     from omnimonitor import catalog
     return [p for p in catalog.enabled_ids(cfg) if p in catalog.API_IDS]

@@ -4,17 +4,18 @@
      catalog, then regenerate; tests/test_providers_v3.py fails if this file is stale. -->
 
 Every provider is **opt-in** (`omnimonitor providers enable <id>`, or the Providers table
-in Settings). OmniMonitor only uses two kinds of source:
+in Settings). OmniMonitor uses these kinds of source:
 
 * **Local logs** – files the tool itself writes on this computer, opened read-only.
 * **Official account APIs** – the provider's documented usage / billing endpoint, called
   with a key **you** supply in an environment variable or the chmod-600 secrets file
   (`omnimonitor secrets set NAME`). Keys are never accepted from or shown in the web UI.
+* **Web sessions (opt-in, off by default)** – an in-app sign-in window on the provider's
+  real login page, or a browser cookie import you choose, used only to call that
+  provider's own usage endpoints. See [cookies/](cookies/).
 
-OmniMonitor **never reads browser cookies, keychains or another app's login session**, and
-never calls undocumented endpoints. When a number is not available it says so instead of
-guessing. Costs for local logs are the cost the tool recorded, or an estimate from *your*
-price table (labelled ≈).
+When a number is not available it says so instead of guessing. Costs for local logs are
+the cost the tool recorded, or an estimate from *your* price table (labelled ≈).
 
 Status: **supported** = implemented and covered by fixture tests; **partial** = implemented
 with a limitation noted below; **experimental** = implemented against a format the vendor
@@ -28,7 +29,7 @@ only. Please report a mismatch with a redacted sample.
 
 ## Summary
 
-56 entries: 13 supported, 11 partial, 11 experimental, 21 not supported.
+57 entries: 13 supported, 11 partial, 14 experimental, 19 not supported.
 
 | Family | Provider | id | Status | Source | Shows | Tray % |
 |---|---|---|---|---|---|---|
@@ -37,10 +38,11 @@ only. Please report a mismatch with a redacted sample.
 | Grok | Grok CLI unified log | `grok_unified` | 🧪 experimental | local logs | tokens per inference (prompt incl. cached, completion, reasoning), models | – |
 | Claude | Claude Code | `claude_code` | ✅ supported | local logs | tokens (incl. cache), models, projects; ≈ cost from your price table; ≈ 5-hour block + burn rate (estimate, `omnimonitor blocks`) | – |
 | Claude | Claude API (organization cost) | `anthropic_api` | ✅ supported | official API | month-to-date USD cost (UTC month) | – |
-| Claude | Claude Pro/Max plan limits | `claude_plan` | ❌ not supported | – | No official API exposes the 5-hour/weekly plan limits; the in-app /usage view uses a private OAuth endpoint and the web dashboard needs a browser session | – |
+| Claude | Claude Pro/Max plan limits | `claude_plan` | 🧪 experimental | web session (opt-in) | 5-hour session and weekly (and model-scoped) % used, reset times when returned | yes |
 | ChatGPT | Codex CLI (+ ChatGPT plan limits) | `codex` | ✅ supported | local logs | tokens, models, projects; plan limit % (5-hour and weekly windows) when Codex logs them | yes |
 | ChatGPT | OpenAI API (organization cost) | `openai_api` | ✅ supported | official API | month-to-date USD cost (UTC month) | – |
-| ChatGPT | ChatGPT app message limits | `chatgpt_app` | ❌ not supported | – | No official API | – |
+| ChatGPT | ChatGPT app message limits | `chatgpt_app` | ❌ not supported | – | No official API for the consumer ChatGPT app message counters | – |
+| ChatGPT | ChatGPT / Codex web plan limits | `chatgpt_web` | 🧪 experimental | web session (opt-in) | session and weekly plan windows when chatgpt.com returns them | yes |
 | Gemini | Gemini CLI | `gemini_cli` | ✅ supported | local logs | tokens (input incl. tool, output incl. thoughts, cached), models, projects | – |
 | Gemini | Gemini API (AI Studio) | `gemini_api` | ❌ not supported | – | The Gemini API has no balance/usage endpoint; spend is only in Google Cloud Billing (export to BigQuery) | – |
 | Gemini | Antigravity (CLI / IDE) | `antigravity` | 🧪 experimental | local logs | tokens (input incl. cache, output incl. thinking), models | – |
@@ -66,7 +68,7 @@ only. Please report a mismatch with a redacted sample.
 | Copilot | GitHub Copilot premium requests | `github_copilot` | 🟡 partial | official API | premium requests this month, billed USD; % only against an allowance you enter | yes |
 | Copilot | GitHub Copilot CLI (OpenTelemetry file) | `copilot_otel` | 🟡 partial | local logs | tokens (incl. cache, reasoning), models | – |
 | Cursor | Cursor (team Admin API) | `cursor_team` | 🟡 partial | official API | team cycle spend (USD), on-demand spend, your spend vs. your per-user limit | yes |
-| Cursor | Cursor (individual plans) | `cursor` | ❌ not supported | – | Individual usage is only in the signed-in dashboard (session cookie) | – |
+| Cursor | Cursor (individual plans) | `cursor` | 🧪 experimental | web session (opt-in) | included plan % used / spend vs limit, on-demand spend, billing cycle when returned | yes |
 | OpenRouter | OpenRouter | `openrouter` | ✅ supported | official API | credits used (total/day/week/month), key limit % and reset | yes |
 | Ollama | Ollama Cloud | `ollama_cloud` | ✅ supported | official API | balance / allowance and % used when the API returns them | yes |
 | Ollama | Ollama (local) | `ollama_local` | ❌ not supported | – | A local Ollama server keeps no usage log; per-request counts only appear in API responses | – |
@@ -162,6 +164,20 @@ only. Please report a mismatch with a redacted sample.
 | Can drive the tray % | no |
 | Docs | [docs.anthropic.com](https://docs.anthropic.com/en/api/admin-api/usage-cost/get-cost-report) |
 
+### Claude Pro/Max plan limits (`claude_plan`)
+
+| | |
+|---|---|
+| Status | 🧪 experimental |
+| Source | GET https://claude.ai/api/organizations/{id}/usage with a sessionKey cookie |
+| Auth | opt-in: in-app sign-in to claude.ai, or import sessionKey from a chosen browser |
+| Shows | 5-hour session and weekly (and model-scoped) % used, reset times when returned |
+| Reset period | per window (from the API) |
+| Confidence / testing | experimental (endpoints/cookie name from CodexBar docs; not verified on a live OmniMonitor account yet) |
+| Key variables | – |
+| Can drive the tray % | yes |
+| Docs | [codexbar.md](../docs/cookies/codexbar.md), [github.com](https://github.com/steipete/CodexBar/blob/main/docs/claude.md) |
+
 ### Codex CLI (+ ChatGPT plan limits) (`codex`)
 
 | | |
@@ -189,6 +205,20 @@ only. Please report a mismatch with a redacted sample.
 | Key variables | `OPENAI_ADMIN_KEY` |
 | Can drive the tray % | no |
 | Docs | [platform.openai.com](https://platform.openai.com/docs/api-reference/usage/costs) |
+
+### ChatGPT / Codex web plan limits (`chatgpt_web`)
+
+| | |
+|---|---|
+| Status | 🧪 experimental |
+| Source | GET https://chatgpt.com/backend-api/wham/usage with session cookies (and optional access token from in-app login) |
+| Auth | opt-in: in-app sign-in to chatgpt.com, or import cookies from a chosen browser |
+| Shows | session and weekly plan windows when chatgpt.com returns them |
+| Reset period | per window (from the API) |
+| Confidence / testing | experimental (endpoint from CodexBar docs; cookie-only auth often needs a Bearer from the web session — use in-app sign-in if browser import 401s) |
+| Key variables | – |
+| Can drive the tray % | yes |
+| Docs | [codexbar.md](../docs/cookies/codexbar.md), [github.com](https://github.com/steipete/CodexBar/blob/main/docs/codex.md) |
 
 ### Gemini CLI (`gemini_cli`)
 
@@ -416,6 +446,20 @@ only. Please report a mismatch with a redacted sample.
 | Can drive the tray % | yes |
 | Docs | [cursor.com](https://cursor.com/docs/account/teams/admin-api) |
 
+### Cursor (individual plans) (`cursor`)
+
+| | |
+|---|---|
+| Status | 🧪 experimental |
+| Source | GET https://cursor.com/api/usage-summary with a cursor.com session cookie |
+| Auth | opt-in: in-app sign-in (authenticator.cursor.sh), or import cookies from a browser |
+| Shows | included plan % used / spend vs limit, on-demand spend, billing cycle when returned |
+| Reset period | billing cycle (from the API when present) |
+| Confidence / testing | experimental (endpoint/cookie names from CodexBar docs; response field names vary by plan — not verified on a live OmniMonitor account yet) |
+| Key variables | – |
+| Can drive the tray % | yes |
+| Docs | [codexbar.md](../docs/cookies/codexbar.md), [github.com](https://github.com/steipete/CodexBar/blob/main/docs/cursor.md) |
+
 ### OpenRouter (`openrouter`)
 
 | | |
@@ -590,8 +634,7 @@ only. Please report a mismatch with a redacted sample.
 
 | Provider | id | Why not | What would be needed | Docs |
 |---|---|---|---|---|
-| Claude Pro/Max plan limits | `claude_plan` | No official API exposes the 5-hour/weekly plan limits; the in-app /usage view uses a private OAuth endpoint and the web dashboard needs a browser session. | An official, documented limits endpoint from Anthropic. | – |
-| ChatGPT app message limits | `chatgpt_app` | No official API. The chatgpt.com backend route some tools call is undocumented and needs the app's login token. Codex plan windows are shown via the Codex adapter. | An official usage endpoint from OpenAI. | – |
+| ChatGPT app message limits | `chatgpt_app` | No official API for the consumer ChatGPT app message counters. Prefer chatgpt_web (session) or the Codex CLI adapter for plan windows. | An official usage endpoint from OpenAI. | – |
 | Gemini API (AI Studio) | `gemini_api` | The Gemini API has no balance/usage endpoint; spend is only in Google Cloud Billing (export to BigQuery). | Cloud Billing BigQuery export + a service account; out of scope for a tray app. | [ai.google.dev](https://ai.google.dev/gemini-api/docs/billing) |
 | Z.ai (GLM) | `zai` | Z.ai documents no balance, usage or quota API; figures are dashboard-only. | A documented billing or usage endpoint. | – |
 | Volcengine Ark | `volcengine` | Balance lives in the Volcengine Billing OpenAPI, which needs AK/SK request signing with account-level credentials; not implemented (an Ark inference key cannot read it). | A signed Billing OpenAPI client with a narrowly scoped IAM user. | – |
@@ -601,7 +644,6 @@ only. Please report a mismatch with a redacted sample.
 | DeepSeek chat app | `deepseek_app` | The consumer app publishes no usage or limit data. | n/a | – |
 | Qwen API (Alibaba Model Studio) | `dashscope` | Balance is only available via Alibaba Cloud BSS OpenAPI (QueryAccountBalance), which needs an AccessKey pair and request signing; not implemented. | Signature V3 client + a RAM user with read-only billing permission. | [www.alibabacloud.com](https://www.alibabacloud.com/help/en/bss-openapi) |
 | Kimi app membership | `kimi_app` | The consumer app publishes no usage or limit API. | n/a | – |
-| Cursor (individual plans) | `cursor` | Individual usage is only in the signed-in dashboard (session cookie). OmniMonitor never reads browser cookies. | An official per-user usage API, or a team plan (see Cursor team Admin API). | – |
 | Ollama (local) | `ollama_local` | A local Ollama server keeps no usage log; per-request counts only appear in API responses. | A logging proxy in front of Ollama. | – |
 | Windsurf | `windsurf` | Usage APIs are Enterprise-only (service key) and report acceptances/credits per team, not personal usage; no local usage log. | An Enterprise service key; an adapter could be added on request. | [docs.windsurf.com](https://docs.windsurf.com/windsurf/accounts/api-reference/api-introduction) |
 | Mistral (Le Chat / API) | `mistral` | No public usage or billing API; usage is only in the console. | An official API. | – |

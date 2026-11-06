@@ -144,7 +144,7 @@
       <div><input type="number" id="heatmap_weeks" min="4" max="106" step="1"></div></div>
 
     <h2 class="section">Data</h2>
-    <div class="field"><span class="k">Providers<div class="h">Each one is opt-in. Local logs are read-only files on this computer; account APIs use your own key from an environment variable or <code>omnimonitor secrets set NAME</code> (keys can't be entered or seen here). Never counted against your Grok pool.</div></span>
+    <div class="field"><span class="k">Providers<div class="h">Each one is opt-in. Local logs are read-only files on this computer; account APIs use your own key from an environment variable or <code>omnimonitor secrets set NAME</code> (keys can't be entered or seen here). <strong>Web session</strong> providers (Claude plan, ChatGPT web, Cursor individual) are off by default: choose in-app sign-in or import cookies from a browser you pick. Only that provider's domains/cookie names are read; cookies are stored locally (Keychain when available, else a chmod-600 file), never shown, exported, or put in Report a problem. Chromium import may prompt for Safe Storage; Safari needs Full Disk Access.</div></span>
       <div><table class="pv" id="providers_table"></table><div class="h" id="providers"></div></div></div>
     <div class="field"><label class="k" for="primary_provider">Tray icon follows<div class="h">Falls back to the Grok pool when the chosen one has no reading.</div></label>
       <div><select id="primary_provider"></select></div></div>

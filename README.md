@@ -15,9 +15,11 @@ OmniMonitor reads two kinds of sources, both **opt-in**:
 
 It shows remaining limits, tokens by tool / model / project, estimated cost from **your own**
 price table, weekly pace, threshold alerts and CSV/JSON export on a private page served only
-to your own computer. It never reads browser cookies or keychains, and shows "not available"
-instead of guessing. The full matrix, including what is **not** supported and why, is in
-[docs/providers.md](docs/providers.md).
+to your own computer. API keys never go through the web UI. **Web-session** providers
+(Claude plan, ChatGPT web, Cursor individual) are **off by default**; when you enable one
+you choose in-app sign-in or a browser cookie import — cookies stay local and are never
+logged or exported ([docs/cookies/](docs/cookies/)). Everything else shows "not available"
+instead of guessing. The full matrix is in [docs/providers.md](docs/providers.md).
 
 Runs on **macOS** (Apple Silicon and Intel), **Windows 10/11** and **Linux** (GNOME/KDE). It
 is the standalone successor to the old SwiftBar plugin in [`legacy/`](legacy/), so SwiftBar
@@ -474,10 +476,9 @@ app keeps reading the old dir instead. Uninstall the old package with
 
 ## Security and privacy
 
-- Reads the Grok CLI auth file **read-only**. It never writes it, never uses the refresh
-  token itself, and never reads browser cookies, the macOS Keychain or other apps' stores.
-  When the token is stale, it runs the official `grok models` command (no shell) and lets
-  the CLI refresh its own login.
+- Reads the Grok CLI auth file **read-only**. It never writes it and never uses the refresh
+  token itself. When the token is stale, it runs the official `grok models` command (no shell)
+  and lets the CLI refresh its own login.
 - Other tools' logs (Claude Code, Codex, Gemini CLI, Qwen Code, Kimi, opencode, Copilot
   OTel) are read only if you enable them, read-only, and only token counts, cost, model
   names, timestamps, session ids and the project **folder name** are stored.
@@ -486,8 +487,14 @@ app keeps reading the old dir instead. Uninstall the old package with
   redirects, at most every 5 minutes). Keys come from env vars or the chmod-600
   `secrets.json` and are never sent to the web page or written to logs or exports. There is
   no telemetry and no update check.
-- OmniMonitor never reads browser cookies, keychains or other apps' login sessions to reach
-  a provider; providers that only expose usage that way are listed as not supported.
+- **Web-session providers** (`claude_plan`, `chatgpt_web`, `cursor`) are off by default.
+  When enabled, you pick **in-app sign-in** (a pywebview window on the provider's real login
+  page; OmniMonitor keeps its own cookies) or **import from a browser you choose**. Only
+  that provider's domains/cookie names are read. Chromium imports may prompt for Safe
+  Storage; Safari needs Full Disk Access. Sessions are stored in the OS keyring when
+  available, else a chmod-600 file; they are never logged, exported, shown in the UI, or
+  included in Report a problem. Use **Sign out / forget** per provider. See
+  [docs/cookies/](docs/cookies/).
 - The stats page binds to **127.0.0.1 only**, on a random port, under a random per-run URL
   secret. It also checks the `Host` header (DNS-rebinding guard) and sends a strict CSP. The
   only write is `POST …/api/settings`, which also requires a matching `Origin`, a per-run CSRF

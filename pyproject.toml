@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "omnimonitor"
 version = "0.4.2"
-description = "Local-first tray app that monitors AI usage, limits and spend across Grok, Claude, ChatGPT/Codex, Gemini, DeepSeek, Qwen, Kimi, Cursor, Copilot and more. No cookies, no scraping. Unofficial; not affiliated with any provider."
+description = "Local-first tray app that monitors AI usage, limits and spend across Grok, Claude, ChatGPT/Codex, Gemini, DeepSeek, Qwen, Kimi, Cursor, Copilot and more. Unofficial; not affiliated with any provider. Web-session providers are opt-in."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
@@ -34,6 +34,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "ruff>=0.4"]
+# Chromium cookie decrypt + OS keyring for web-session storage
+cookies = ["cryptography>=41", "keyring>=24"]
 # Linux app window: needs a GUI backend; or use the system python3-gi + WebKit2GTK packages
 window-qt = ["pywebview[qt]>=5"]
 window-gtk = ["pywebview[gtk]>=5"]

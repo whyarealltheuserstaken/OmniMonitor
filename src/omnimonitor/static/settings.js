@@ -11,25 +11,56 @@
   var CARD_LABELS = { forecast: "Pace & forecast", burn: "Burn rate", limit: "Tokens this week / limit",
     heatmap: "Heatmap", breakdown: "Breakdown", tools: "· by tool", models: "Models", projects: "· by project",
     cost: "Cost", insights: "Insights", providers: "All AI tools / providers", budgets: "Budgets" };
-  var KIND = { local_logs: "local logs", api: "account API" };
+  var KIND = { local_logs: "local logs", api: "account API", web_session: "web session (opt-in)" };
+  var BROWSERS = [["auto","Auto (first that works)"],["chrome","Chrome"],["edge","Edge"],
+    ["brave","Brave"],["arc","Arc"],["firefox","Firefox"],["safari","Safari (macOS, needs FDA)"]];
 
   function providersTable(ro, s) {
     var t = $("providers_table"); t.textContent = "";
-    var on = {}, keys = ro.keys || {};
-    Object.keys(s.providers || {}).forEach(function (k) { on[k] = !!(s.providers[k] || {}).enabled; });
-    (s.extra_token_sources || []).forEach(function (k) { if (!(k in on)) on[k] = true; });
+    var on = {}, keys = ro.keys || {}, sess = ro.sessions || {};
+    Object.keys(s.providers || {}).forEach(function (k) { on[k] = s.providers[k] || {}; });
+    (s.extra_token_sources || []).forEach(function (k) { if (!(k in on)) on[k] = {enabled: true}; });
     (ro.catalog || []).forEach(function (p) {
       var tr = el("tr"), a = el("td"), l = el("label"), c = el("input");
-      c.type = "checkbox"; c.value = p.id; c.checked = !!on[p.id]; c.setAttribute("data-pv", p.id);
+      var cur = on[p.id] || {};
+      c.type = "checkbox"; c.value = p.id; c.checked = !!cur.enabled; c.setAttribute("data-pv", p.id);
       l.appendChild(c); l.appendChild(document.createTextNode(" " + p.name)); a.appendChild(l);
-      var b = el("td", "s", KIND[p.kind] + (p.status === "partial" ? " · partial" : p.status === "experimental" ? " · experimental" : ""));
+      var b = el("td", "s", (KIND[p.kind] || p.kind) + (p.status === "partial" ? " · partial" : p.status === "experimental" ? " · experimental" : ""));
       var k = el("td", "s");
       if (p.kind === "api") {
         k.textContent = (p.env || []).filter(function (n) { return /KEY|TOKEN/.test(n); }).map(function (n) {
           return n + ": " + (keys[n] === "env" ? "set (env)" : keys[n] === "file" ? "set (secrets file)" : "not set");
         }).join(" · ");
+      } else if (p.kind === "web_session") {
+        k.appendChild(document.createTextNode(
+          "Off by default. Uses only this provider's own usage URL with a session you approve. Cookies stay on this computer, are never shown or exported. "));
+        k.appendChild(document.createTextNode(p.shows || ""));
+        var row = el("div", "checks"); row.style.marginTop = "6px";
+        var auth = el("select"); auth.setAttribute("data-pv-auth", p.id);
+        [["off","Auth: off"],["login","In-app sign-in window"],["browser","Import from browser"]].forEach(function (o) {
+          var op = el("option", "", o[1]); op.value = o[0]; if ((cur.auth || "off") === o[0]) op.selected = true; auth.appendChild(op);
+        });
+        var br = el("select"); br.setAttribute("data-pv-browser", p.id);
+        BROWSERS.forEach(function (o) {
+          var op = el("option", "", o[1]); op.value = o[0]; if ((cur.browser || "auto") === o[0]) op.selected = true; br.appendChild(op);
+        });
+        row.appendChild(auth); row.appendChild(document.createTextNode(" ")); row.appendChild(br);
+        var st = el("span", "s"); st.style.marginLeft = "8px";
+        st.textContent = sess[p.id] ? ("session: stored in " + sess[p.id]) : "session: none";
+        row.appendChild(st);
+        var btns = el("div", "checks"); btns.style.marginTop = "4px";
+        function btn(label, act) {
+          var b = el("button", "", label); b.type = "button"; b.setAttribute("data-session", act); b.setAttribute("data-pid", p.id);
+          btns.appendChild(b); btns.appendChild(document.createTextNode(" "));
+        }
+        btn("Sign in…", "login"); btn("Import now", "import"); btn("Sign out / forget", "forget");
+        k.appendChild(row); k.appendChild(btns);
+        if (p.status === "experimental") {
+          var warn = el("div", "s"); warn.textContent = "Experimental: not yet verified against a live signed-in response in OmniMonitor.";
+          k.appendChild(warn);
+        }
       } else k.textContent = p.shows;
-      if (p.status === "experimental") k.textContent += " — experimental: undocumented format, numbers may be wrong.";
+      if (p.status === "experimental" && p.kind !== "web_session") k.textContent += " — experimental: undocumented format, numbers may be wrong.";
       if (p.note) k.textContent += " " + p.note;
       tr.appendChild(a); tr.appendChild(b); tr.appendChild(k); t.appendChild(tr);
     });
@@ -79,7 +110,12 @@
     out.hidden_cards = checked("hidden_cards");
     var pv = {};
     Array.prototype.forEach.call(document.querySelectorAll("#providers_table input[data-pv]"), function (c) {
-      pv[c.value] = { enabled: c.checked };
+      var o = { enabled: c.checked };
+      var auth = document.querySelector('select[data-pv-auth="' + c.value + '"]');
+      var br = document.querySelector('select[data-pv-browser="' + c.value + '"]');
+      if (auth) o.auth = auth.value;
+      if (br) o.browser = br.value;
+      pv[c.value] = o;
     });
     out.providers = pv;
     out.budgets = { daily: Number($("budget_daily").value) || 0, weekly: Number($("budget_weekly").value) || 0,
@@ -119,5 +155,29 @@
       $("providers").textContent = t.length ? "Reporting now: " + t.join(", ") : "";
     });
   }
+  document.addEventListener("click", function (ev) {
+    var b = ev.target && ev.target.closest && ev.target.closest("[data-session]");
+    if (!b || !window.OM || !OM.appPost) return;
+    ev.preventDefault();
+    var act = b.getAttribute("data-session"), pid = b.getAttribute("data-pid");
+    var body = { provider: pid };
+    if (act === "import") {
+      var br = document.querySelector('select[data-pv-browser="' + pid + '"]');
+      body.browser = br ? br.value : "auto";
+      OM.appPost("session-import", body).then(function (r) {
+        OM.toast(r.ok ? ("Imported (" + (r.stored || "ok") + ")") : (r.error || "import failed"));
+        if (r.ok) load();
+      });
+    } else if (act === "login") {
+      OM.appPost("session-login", body).then(function (r) {
+        OM.toast(r.ok ? (r.message || "Opening sign-in…") : (r.error || "login failed"));
+      });
+    } else if (act === "forget") {
+      OM.appPost("session-forget", body).then(function (r) {
+        OM.toast(r.ok ? "Signed out" : (r.error || "forget failed"));
+        if (r.ok) load();
+      });
+    }
+  });
   load();
 })();

@@ -25,7 +25,7 @@ about a week. This is a volunteer project.
 | Desktop notifications | via the tray library; contain only percentages and times |
 | Config + history (`config.json`, `history.sqlite3`) | in the per-user config dir, chmod 600 where supported |
 
-It never reads browser cookies, the macOS Keychain, Windows Credential Manager, other
+It reads browser cookies only for opt-in web-session providers (see docs/cookies/), the macOS Keychain, Windows Credential Manager, other
 apps' login sessions or tokens (other than the Grok CLI auth file above), and never calls
 undocumented provider endpoints. There is no telemetry.
 

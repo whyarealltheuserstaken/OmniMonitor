@@ -6,9 +6,13 @@ Every provider is opt-in. ``kind`` says where numbers come from:
 * ``local_logs`` - read-only parsing of files the tool itself writes on this computer
 * ``api``        - the provider's official usage/billing API with a key *you* supply
                    (environment variable or the chmod-600 secrets file, never the web UI)
+* ``web_session``- opt-in session cookie to the provider's own usage endpoints
+                   (in-app sign-in window, or import from a chosen browser; off by default)
 * ``none``       - not supported; ``reason`` says why and ``needs`` what would be required
 
-Nothing here reads browser cookies, keychains or another app's login session.
+Cookie / web-session providers (``kind="web_session"``) are opt-in and off by default.
+They use either an in-app sign-in window or a user-approved browser cookie import for
+that provider's domains only — see docs/cookies/.
 """
 from __future__ import annotations
 
@@ -80,10 +84,16 @@ CATALOG: Tuple[ProviderInfo, ...] = (
        confidence="medium (docs + mocked tests, no live key tested)",
        docs=("https://docs.anthropic.com/en/api/admin-api/usage-cost/get-cost-report",),
        env=("ANTHROPIC_ADMIN_KEY",)),
-    _P("claude_plan", "Claude Pro/Max plan limits", "Claude", "none", NOT_SUPPORTED,
-       reason="No official API exposes the 5-hour/weekly plan limits; the in-app /usage view uses "
-              "a private OAuth endpoint and the web dashboard needs a browser session.",
-       needs="An official, documented limits endpoint from Anthropic."),
+    _P("claude_plan", "Claude Pro/Max plan limits", "Claude", "web_session", EXPERIMENTAL,
+       shows="5-hour session and weekly (and model-scoped) % used, reset times when returned",
+       source="GET https://claude.ai/api/organizations/{id}/usage with a sessionKey cookie",
+       auth="opt-in: in-app sign-in to claude.ai, or import sessionKey from a chosen browser",
+       reset="per window (from the API)",
+       confidence="experimental (endpoints/cookie name from CodexBar docs; not verified on a "
+                  "live OmniMonitor account yet)",
+       docs=("docs/cookies/codexbar.md",
+             "https://github.com/steipete/CodexBar/blob/main/docs/claude.md"),
+       has_limit=True),
     # ---------------------------------------------------------- OpenAI
     _P("codex", "Codex CLI (+ ChatGPT plan limits)", "ChatGPT", "local_logs", SUPPORTED,
        shows="tokens, models, projects; plan limit % (5-hour and weekly windows) when Codex logs them",
@@ -104,9 +114,20 @@ CATALOG: Tuple[ProviderInfo, ...] = (
        docs=("https://platform.openai.com/docs/api-reference/usage/costs",),
        env=("OPENAI_ADMIN_KEY",)),
     _P("chatgpt_app", "ChatGPT app message limits", "ChatGPT", "none", NOT_SUPPORTED,
-       reason="No official API. The chatgpt.com backend route some tools call is undocumented "
-              "and needs the app's login token. Codex plan windows are shown via the Codex adapter.",
+       reason="No official API for the consumer ChatGPT app message counters. Prefer "
+              "chatgpt_web (session) or the Codex CLI adapter for plan windows.",
        needs="An official usage endpoint from OpenAI."),
+    _P("chatgpt_web", "ChatGPT / Codex web plan limits", "ChatGPT", "web_session", EXPERIMENTAL,
+       shows="session and weekly plan windows when chatgpt.com returns them",
+       source="GET https://chatgpt.com/backend-api/wham/usage with session cookies "
+              "(and optional access token from in-app login)",
+       auth="opt-in: in-app sign-in to chatgpt.com, or import cookies from a chosen browser",
+       reset="per window (from the API)",
+       confidence="experimental (endpoint from CodexBar docs; cookie-only auth often needs a "
+                  "Bearer from the web session — use in-app sign-in if browser import 401s)",
+       docs=("docs/cookies/codexbar.md",
+             "https://github.com/steipete/CodexBar/blob/main/docs/codex.md"),
+       has_limit=True),
     # ---------------------------------------------------------- Google
     _P("gemini_cli", "Gemini CLI", "Gemini", "local_logs", SUPPORTED,
        shows="tokens (input incl. tool, output incl. thoughts, cached), models, projects",
@@ -267,10 +288,16 @@ CATALOG: Tuple[ProviderInfo, ...] = (
        confidence="medium (docs + mocked tests). Team plans only.",
        docs=("https://cursor.com/docs/account/teams/admin-api",), env=("CURSOR_ADMIN_KEY",),
        has_limit=True),
-    _P("cursor", "Cursor (individual plans)", "Cursor", "none", NOT_SUPPORTED,
-       reason="Individual usage is only in the signed-in dashboard (session cookie). OmniMonitor "
-              "never reads browser cookies.",
-       needs="An official per-user usage API, or a team plan (see Cursor team Admin API)."),
+    _P("cursor", "Cursor (individual plans)", "Cursor", "web_session", EXPERIMENTAL,
+       shows="included plan % used / spend vs limit, on-demand spend, billing cycle when returned",
+       source="GET https://cursor.com/api/usage-summary with a cursor.com session cookie",
+       auth="opt-in: in-app sign-in (authenticator.cursor.sh), or import cookies from a browser",
+       reset="billing cycle (from the API when present)",
+       confidence="experimental (endpoint/cookie names from CodexBar docs; response field names "
+                  "vary by plan — not verified on a live OmniMonitor account yet)",
+       docs=("docs/cookies/codexbar.md",
+             "https://github.com/steipete/CodexBar/blob/main/docs/cursor.md"),
+       has_limit=True),
     # ------------------------------------------------------- Others
     _P("openrouter", "OpenRouter", "OpenRouter", "api", SUPPORTED,
        shows="credits used (total/day/week/month), key limit % and reset",
@@ -385,8 +412,10 @@ CATALOG: Tuple[ProviderInfo, ...] = (
 BY_ID: Dict[str, ProviderInfo] = {p.id: p for p in CATALOG}
 LOCAL_IDS: Tuple[str, ...] = tuple(p.id for p in CATALOG if p.kind == "local_logs")
 API_IDS: Tuple[str, ...] = tuple(p.id for p in CATALOG if p.kind == "api")
-#: Ids that can be switched on (local adapters other than the built-in Grok one, and APIs).
-SWITCHABLE: Tuple[str, ...] = tuple(i for i in LOCAL_IDS + API_IDS if i != "grok_sessions")
+WEB_SESSION_IDS: Tuple[str, ...] = tuple(p.id for p in CATALOG if p.kind == "web_session")
+#: Ids that can be switched on (local adapters other than the built-in Grok one, APIs, web sessions).
+SWITCHABLE: Tuple[str, ...] = tuple(
+    i for i in LOCAL_IDS + API_IDS + WEB_SESSION_IDS if i != "grok_sessions")
 #: Choices for the tray's primary provider. ``budget`` = the tightest budget cap.
 PRIMARY_CHOICES: Tuple[str, ...] = tuple(p.id for p in CATALOG if p.has_limit) + ("budget",)
 

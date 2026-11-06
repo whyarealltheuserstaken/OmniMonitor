@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Opt-in web-session providers** (off by default): `claude_plan`, `chatgpt_web`, `cursor`.
+  Per provider you choose **in-app sign-in** (pywebview on the real login page) or **import
+  from a browser** (Firefox / Chrome / Edge / Brave / Arc / Safari where feasible). Only that
+  provider's domains and cookie names are read. Sessions are stored in the OS keyring when
+  possible, else a chmod-600 file; never logged, exported, shown, or included in Report a
+  problem. Sign out / forget per provider.
+- Docs: [docs/cookies/](docs/cookies/) cites CodexBar's public endpoint/cookie notes (MIT;
+  no code copied). Confidence for each new reader is **experimental** until live-verified.
+
+### Changed
+- Privacy policy: cookie use is allowed only for explicitly enabled web-session providers,
+  with a clear Settings explanation (Chromium Safe Storage prompt; Safari Full Disk Access).
+
+
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).

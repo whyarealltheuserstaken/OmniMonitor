@@ -18,17 +18,18 @@ HEAD = """# Providers
      catalog, then regenerate; tests/test_providers_v3.py fails if this file is stale. -->
 
 Every provider is **opt-in** (`omnimonitor providers enable <id>`, or the Providers table
-in Settings). OmniMonitor only uses two kinds of source:
+in Settings). OmniMonitor uses these kinds of source:
 
 * **Local logs** – files the tool itself writes on this computer, opened read-only.
 * **Official account APIs** – the provider's documented usage / billing endpoint, called
   with a key **you** supply in an environment variable or the chmod-600 secrets file
   (`omnimonitor secrets set NAME`). Keys are never accepted from or shown in the web UI.
+* **Web sessions (opt-in, off by default)** – an in-app sign-in window on the provider's
+  real login page, or a browser cookie import you choose, used only to call that
+  provider's own usage endpoints. See [cookies/](cookies/).
 
-OmniMonitor **never reads browser cookies, keychains or another app's login session**, and
-never calls undocumented endpoints. When a number is not available it says so instead of
-guessing. Costs for local logs are the cost the tool recorded, or an estimate from *your*
-price table (labelled ≈).
+When a number is not available it says so instead of guessing. Costs for local logs are
+the cost the tool recorded, or an estimate from *your* price table (labelled ≈).
 
 Status: **supported** = implemented and covered by fixture tests; **partial** = implemented
 with a limitation noted below; **experimental** = implemented against a format the vendor
@@ -42,7 +43,7 @@ only. Please report a mismatch with a redacted sample.
 """
 
 KIND = {"billing": "Grok billing", "local_logs": "local logs", "api": "official API",
-        "none": "–"}
+        "web_session": "web session (opt-in)", "none": "–"}
 STATUS = {"supported": "✅ supported", "partial": "🟡 partial", "experimental": "🧪 experimental",
           "not_supported": "❌ not supported"}
 
