@@ -333,3 +333,7 @@ def _extras(out, events, billing, cfg, now, tz, snapshots, tools, no_data, is_de
                        "accent_color": cfg.get("accent_color") or "#2a8bd8",
                        "hidden_cards": [c for c in (cfg.get("hidden_cards") or [])
                                         if isinstance(c, str)]}
+    from omnimonitor.grok_suite import build_grok_suite
+    out["grok_suite"] = build_grok_suite(
+        billing, events, cfg, now, provider=out.get("provider") or "",
+        provider_note=out.get("provider_note") or "")

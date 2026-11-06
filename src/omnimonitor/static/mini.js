@@ -25,6 +25,20 @@
     var a = (d.forecast || {}).average || {}, why = (d.lifetime_tokens || {}).reason;
     rows.appendChild(row("≈ Used at reset", a.percent_at_reset !== undefined ? "≈" + Math.round(Math.min(a.percent_at_reset, 999)) + "%" : null, a.reason));
     if (a.runs_out_at) rows.appendChild(row("≈ Runs out", OM.fmtDate(a.runs_out_at)));
+    var gs = d.grok_suite;
+    if (gs) {
+      (gs.buckets || []).forEach(function (b) {
+        var pct = (b.used_percent === null || b.used_percent === undefined) ? null
+          : (Math.round(b.used_percent * 10) / 10) + "% of pool";
+        rows.appendChild(row(b.name, pct, b.percent_reason));
+        var tok = b.tokens || {};
+        var tv = (tok.value === null || tok.value === undefined) ? null : T(tok.value);
+        rows.appendChild(row(b.name + " tokens", tv, tok.reason || "not available"));
+      });
+      (gs.other_products || []).forEach(function (p) {
+        rows.appendChild(row(p.label || p.product, (Math.round(p.used_percent * 10) / 10) + "% of pool"));
+      });
+    }
     var wk = d.week_tokens || {};
     rows.appendChild(row("Tokens this week", wk.value !== null && wk.value !== undefined ? T(wk.value) : null, wk.reason));
     var today = (d.breakdowns || {}).today;

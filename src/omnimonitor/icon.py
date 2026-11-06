@@ -176,9 +176,10 @@ def render_menubar(remaining: Optional[float], *, error: bool = False, demo: boo
 
     When remaining % is known (ok / warn / critical), the ring and optional % label are
     colored green / amber / red and ``is_template`` is False — NSImage templates are
-    monochrome, so a colored gauge cannot be a template. A thin dark+light halo keeps the
-    color readable on both light and dark menu bars. Error and "no data" stay template
-    (black + alpha) so macOS tints them for the bar; that is the non-alarm look.
+    monochrome, so a colored gauge cannot be a template. A hairline dark edge (one stroke,
+    a pixel or so outside the color) keeps the ring visible on a light menu bar; the color
+    itself reads on a dark bar. There is no second ring, no light halo, and no filled
+    disc. Error and "no data" stay template (black + alpha) so macOS tints them.
     """
     state = menubar_state(remaining, error)
     # Colored states cannot be templates (macOS would discard the RGB).
@@ -195,18 +196,18 @@ def render_menubar(remaining: Optional[float], *, error: bool = False, demo: boo
     tw = bb[2] - bb[0]
     ring_d = 15 * u
     gap = 3.5 * u
-    # Halo needs a couple of extra pixels of width so the outline is not clipped.
-    halo = 0 if template else int(1.6 * u)
-    w = int(ring_d + 2 * u + 2 * halo + ((gap + tw + 1 * u + halo) if text and label else 0))
+    # Room for a 1px (at @2x) hairline so it is not clipped. Not a second ring.
+    edge = 0 if template else u // 2 + u // 8
+    w = int(ring_d + 2 * u + 2 * edge + ((gap + tw + 1 * u + edge) if text and label else 0))
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     if template:
         ink, track = (0, 0, 0), (0, 0, 0, 80)
     else:
         ink = color_for(remaining)  # green / amber / red from remaining
-        track = ink + (70,)
+        track = ink + (110,)
     import math
-    x0, y0 = 1 * u + halo, (h - ring_d) / 2
+    x0, y0 = 1 * u + edge, (h - ring_d) / 2
     box = [x0, y0, x0 + ring_d, y0 + ring_d]
     stroke = int(2.4 * u)
 
@@ -222,15 +223,13 @@ def render_menubar(remaining: Optional[float], *, error: bool = False, demo: boo
                           fill=fill if len(fill) == 4 else fill + (255,))
 
     if not template:
-        # Dark then light halo so the colored stroke reads on light and dark menu bars.
-        _arc((0, 0, 0, 140), stroke + int(2.2 * u))
-        _arc((255, 255, 255, 200), stroke + int(1.1 * u))
+        # One hairline, same center as the color stroke. Wider by ~1 output px per side
+        # (u supersampled px of extra width at the default 8x supersample). A second,
+        # lighter stroke here is what read as nested rings on a real menu bar.
+        _arc((0, 0, 0, 150), stroke + u)
     _arc(track, stroke)
     if shown:
         a0, a1 = -90, -90 + 360 * shown / 100.0
-        if not template:
-            _arc((0, 0, 0, 160), stroke + int(2.2 * u), a0, a1, caps=True)
-            _arc((255, 255, 255, 220), stroke + int(1.1 * u), a0, a1, caps=True)
         _arc(ink + (255,), stroke, a0, a1, caps=True)
     if state == "error" or (pct is None and not text):
         cx, cy = x0 + ring_d / 2, y0 + ring_d / 2
@@ -249,12 +248,11 @@ def render_menubar(remaining: Optional[float], *, error: bool = False, demo: boo
         ty = (h - (asc + desc)) / 2 + 0.3 * u
         tx = x0 + ring_d + gap - bb[0]
         if not template:
-            # Soft outline so the % stays legible on light and dark bars.
-            for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, 1), (-1, 1), (1, -1)):
-                d.text((tx + dx * 0.55 * u, ty + dy * 0.55 * u), label, font=font,
-                       fill=(0, 0, 0, 160))
-            for dx, dy in ((-0.35, 0), (0.35, 0), (0, -0.35), (0, 0.35)):
-                d.text((tx + dx * u, ty + dy * u), label, font=font, fill=(255, 255, 255, 200))
+            # Single dark edge so the % stays readable on a light bar. No light halo.
+            step = 0.4 * u
+            for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1),
+                           (-0.7, -0.7), (0.7, -0.7), (-0.7, 0.7), (0.7, 0.7)):
+                d.text((tx + dx * step, ty + dy * step), label, font=font, fill=(0, 0, 0, 170))
         d.text((tx, ty), label, font=font, fill=ink + (255,))
     out = img.resize((max(1, w // ss), MENUBAR_PT * scale), Image.LANCZOS)
     return out, template

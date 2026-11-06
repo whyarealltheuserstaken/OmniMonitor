@@ -61,8 +61,9 @@
       $("barfill").style.width = rem + "%";
       $("barfill").style.background = color(rem);
       $("reset").textContent = u.resets_at ? "Resets " + (OM.fmtCountdown(u.resets_at) ? OM.fmtCountdown(u.resets_at) + " · " : "") + fmtDate(u.resets_at) : "Reset time not reported";
-      var parts = (u.products || []).map(function (p) { return p.product + " " + Math.round(p.used_percent) + "% used"; });
-      if (u.raw_used_percent > 100) parts.push("reported " + u.raw_used_percent.toFixed(1) + "% (over pool)");
+      var parts = [];
+      if (u.raw_used_percent > 100) parts.push("reported " + u.raw_used_percent.toFixed(1) + "% used (over pool)");
+      parts.push("One shared weekly pool — breakdown below");
       $("products").textContent = parts.join(" · ");
     } else {
       $("remaining").textContent = "–";
@@ -97,6 +98,7 @@
     setStat("s-long", d.longest_streak, function (v) { return v + (v === 1 ? " day" : " days"); });
     setStat("s-cur", d.current_streak, function (v) { return v + (v === 1 ? " day" : " days"); });
 
+    renderGrokSuite(d);
     renderHeat();
     if (window.OMApp) OMApp.renderActivity(d, days);
     renderForecast(d);
@@ -143,6 +145,82 @@
     var n = $(id); n.textContent = "";
     if (value === null || value === undefined) n.appendChild(OM.na(reason));
     else n.textContent = value;
+  }
+
+  function fmtPct(v) {
+    if (v === null || v === undefined || v !== v) return null;
+    var r = Math.round(v * 10) / 10;
+    return (Math.abs(r - Math.round(r)) < 0.05 ? String(Math.round(r)) : r.toFixed(1)) + "%";
+  }
+  function renderGrokSuite(d) {
+    var gs = d.grok_suite;
+    var card = $("grok-suite-card");
+    if (!gs || !card) return;
+    $("gs-window").textContent = gs.window ? "· " + gs.window : "";
+    var total = $("gs-total"); total.textContent = "";
+    if (gs.used_percent === null || gs.used_percent === undefined) {
+      total.appendChild(OM.na(gs.total_reason || "no billing reading"));
+    } else {
+      total.textContent = fmtPct(gs.used_percent) + " used · " + fmtPct(gs.remaining_percent) +
+        " left" + (gs.resets_at ? " · resets " + fmtDate(gs.resets_at) : " · reset time not reported");
+    }
+    var banners = $("gs-banners"); banners.textContent = "";
+    (gs.honesty || []).forEach(function (text) {
+      banners.appendChild(el("div", "banner info", text));
+    });
+    var rows = $("gs-rows"); rows.textContent = "";
+    (gs.buckets || []).forEach(function (b) { rows.appendChild(suiteRow(b)); });
+    if ((gs.other_products || []).length) {
+      var o = el("div", "gs-row");
+      o.appendChild(el("div", "gs-h")).appendChild(el("span", "n", "Other products in this payload"));
+      var bits = gs.other_products.map(function (p) {
+        return (p.label || p.product) + " " + fmtPct(p.used_percent) + " of pool";
+      });
+      o.appendChild(el("div", "gs-detail", bits.join(" · ") +
+        ". These are shares of the same weekly pool. They are not Grok CLI, Grok Bot, or Cursor."));
+      rows.appendChild(o);
+    }
+  }
+  function suiteRow(b) {
+    var row = el("div", "gs-row");
+    var h = el("div", "gs-h");
+    h.appendChild(el("span", "n", b.name));
+    var right = el("span");
+    if (b.used_percent === null || b.used_percent === undefined) {
+      right.appendChild(OM.na(b.percent_reason, "pool % not available"));
+    } else {
+      right.textContent = fmtPct(b.used_percent) + " of pool";
+    }
+    h.appendChild(right);
+    row.appendChild(h);
+    if (b.used_percent !== null && b.used_percent !== undefined) {
+      var bar = el("div", "bar");
+      var fill = el("i");
+      fill.style.width = Math.max(0, Math.min(100, b.used_percent)) + "%";
+      fill.style.background = "var(--accent)";
+      bar.appendChild(fill);
+      row.appendChild(bar);
+    } else if (b.percent_reason) {
+      row.appendChild(el("div", "gs-why", b.percent_reason));
+    }
+    var tok = b.tokens || {};
+    var detail = el("div", "gs-detail");
+    if (tok.value === null || tok.value === undefined) {
+      detail.appendChild(document.createTextNode("Tokens: "));
+      detail.appendChild(OM.na(tok.reason));
+    } else {
+      var models = (tok.models || []).map(function (m) { return m.name; }).filter(Boolean).slice(0, 3);
+      detail.textContent = fmtTokens(tok.value) + " tokens (" + (tok.window || "window") + ")" +
+        " · in " + fmtTokens(tok.input_tokens) + " · out " + fmtTokens(tok.output_tokens) +
+        (tok.cache_read_tokens ? " · cache " + fmtTokens(tok.cache_read_tokens) : "") +
+        (tok.reasoning_tokens ? " · reasoning " + fmtTokens(tok.reasoning_tokens) : "") +
+        " · " + (tok.events || 0) + " events · " + (tok.sessions || 0) + " sessions" +
+        (models.length ? " · " + models.join(", ") : "") +
+        (tok.source ? " · " + tok.source : "");
+    }
+    row.appendChild(detail);
+    if (tok.note) row.appendChild(el("div", "gs-why", tok.note));
+    return row;
   }
 
   function renderForecast(d) {

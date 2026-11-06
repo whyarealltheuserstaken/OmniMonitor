@@ -8,7 +8,7 @@
   var TEXTS = ["display_name", "theme", "accent_color", "icon_style", "icon_value", "primary_provider"];
   var NUMS = ["heatmap_weeks", "poll_interval_seconds", "estimate_min_used_percent",
               "provider_poll_seconds", "budget_alert_percent"];
-  var CARD_LABELS = { forecast: "Pace & forecast", burn: "Burn rate", limit: "Tokens this week / limit",
+  var CARD_LABELS = { "grok-suite": "Grok suite breakdown", forecast: "Pace & forecast", burn: "Burn rate", limit: "Tokens this week / limit",
     heatmap: "Heatmap", breakdown: "Breakdown", tools: "· by tool", models: "Models", projects: "· by project",
     cost: "Cost", insights: "Insights", providers: "All AI tools / providers", budgets: "Budgets" };
   var KIND = { local_logs: "local logs", api: "account API", web_session: "web session (opt-in)" };

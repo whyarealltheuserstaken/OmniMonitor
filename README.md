@@ -38,11 +38,15 @@ is no longer needed.
 <sub>Screenshot rendered from **demo mode** (fake, labeled data). Tray icons: green ≥ 40 %
 left, amber 20–&lt;40 %, red below 20 %, gray `?` = no data yet, gray `!` = error, blue dot =
 demo. On macOS the green/amber/red ring is a non-template image (templates are monochrome)
-with a thin halo so it stays visible on light and dark menu bars.</sub>
+with a hairline edge so the single ring stays visible on light and dark menu bars.</sub>
 
 ![Tray icon styles](docs/tray-icons.png)
 
 <sub>Icon styles (`icon_style`): ring, pie, bar, number. Colors follow what's left.</sub>
+
+![Menu bar ring](docs/menubar-ring.png)
+
+<sub>macOS menu-bar icon, one ring, enlarged without smoothing. Light and dark bars; green ≥ 40% left, amber 30% left, red 12% left. The % sits beside the ring.</sub>
 
 | Mini view | Settings page |
 |---|---|
@@ -58,7 +62,7 @@ for what we adopted, what we built differently and why.
 
 ## What's new in 0.5.0-beta
 
-**Beta / prerelease** (GitHub prerelease; `/releases/latest` stays on 0.4.2). Opt-in web-session providers (Claude plan, ChatGPT web, Cursor — off by default; in-app sign-in or browser import) and a green/amber/red tray icon by remaining weekly pool (macOS keeps the ring + optional %; colored states are non-template with a light/dark halo). See [release notes](docs/release-notes/v0.5.0-beta.md).
+**Beta / prerelease** (GitHub prerelease; `/releases/latest` stays on 0.4.2). Opt-in web-session providers (Claude plan, ChatGPT web, Cursor — off by default; in-app sign-in or browser import) and a green/amber/red tray icon by remaining weekly pool (macOS: one ring + optional %; colored states are non-template, with a hairline edge). Unreleased: the menu-bar icon is a single ring (the 0.5.0-beta halo read as extra rings), and the dashboard shows a Grok suite total plus a CLI / Bot / Cursor breakdown from real billing fields and local CLI logs. See [release notes](docs/release-notes/v0.5.0-beta.md) and the changelog.
 
 ### Earlier: 0.4.2
 
@@ -160,7 +164,8 @@ log file (`~/Library/Logs/OmniMonitor/omnimonitor.log` on macOS). See CHANGELOG.
 
 **Tray menu**
 
-- `72% left`: remaining share of the weekly pool. In demo mode this reads `DEMO · 72% left`.
+- `72% left`: remaining share of the **Grok suite** weekly pool (one number). In demo mode this reads `DEMO · 72% left`.
+- `Grok suite: 73% left · 27% used`, then one line each for **Grok CLI**, **Grok Bot**, and **Cursor (Grok)**. A percent is shown only when billing `productUsage` names that product. Otherwise the line says not available. CLI tokens, when the local logs have them, are on the Grok CLI line. Other products returned by the API (Grok Chat, …) get an "Also in pool" line.
 - `Resets Sun Nov 8, 4:00 PM (in 4d 3h)`, in your local time.
 - `Tokens: 1.9M of ≈8.7M (estimate)`, `Tokens this week: 1.9M (limit not exposed)` or
   `Tokens this week: not available`.
@@ -176,7 +181,9 @@ log file (`~/Library/Logs/OmniMonitor/omnimonitor.log` on macOS). See CHANGELOG.
 
 | Stat | Where it comes from | Real or not |
 |---|---|---|
-| Weekly pool remaining %, reset time, per-product % | the billing endpoint | **real** (unofficial API) |
+| Grok suite weekly pool remaining %, reset time | billing `creditUsagePercent` | **real** (unofficial API); one shared pool |
+| CLI / Bot / Cursor pool % | billing `productUsage` only, and only for products the payload names | **real** when present; otherwise **not available** (not shown as 0%). Grok Chat and other named products are listed as themselves. Shares that do not add up to the suite total are not filled in. |
+| Grok CLI tokens (suite card) | `~/.grok/sessions/**/updates.jsonl`, or `unified.jsonl` only if sessions have no events | **real**, this computer's CLI only. Not Grok Bot or Cursor. |
 | Tokens used this billing week | Grok CLI session logs on **this computer** | **real**, but local CLI only |
 | Weekly token limit ("out of Y") | **not exposed by xAI anywhere** | shown as *not available*, or as a flagged **≈ estimate** (see below) |
 | Lifetime tokens, peak day, streaks, heatmap (Daily / Weekly / Cumulative) | session logs + local history | real, local CLI only |
@@ -195,10 +202,14 @@ why. Nothing is made up or silently estimated.
 
 - **The billing endpoint returns percentages, not tokens.** Your plan's weekly allowance is
   a pool of *credits* weighted by model, caching and product (Grok chat, Grok Build/CLI and
-  others). Credits are not the same thing as tokens, and xAI does not publish a token limit.
+  others). That is one pool: the suite total is `creditUsagePercent`, and `productUsage`
+  is the split when the API sends it. Credits are not the same thing as tokens, and xAI
+  does not publish a token limit. Grok Bot's separate weekly meter (a Cursor-account
+  request) and Cursor's own plan percent are different numbers and are not mixed in.
 - **Token counts come from the Grok CLI's own logs** (`~/.grok/sessions/**/updates.jsonl`,
-  `turn_completed` events), read **read-only**. Usage on grok.com, in the mobile apps, in
-  other tools or on other computers is **not** in those logs.
+  `turn_completed` events), read **read-only**. The experimental unified log is the same
+  CLI. Usage on grok.com, in Grok Bot, in Cursor, in the mobile apps, or on other
+  computers is **not** in those logs.
 - **The "≈Y" estimate** is `tokens this week ÷ (Grok Build % used ÷ 100)`, or the overall %
   when no per-product number is returned. It appears only if `estimate_weekly_limit` is
   true **and** at least `estimate_min_used_percent` (default 5 %) is used. It is always
@@ -422,7 +433,7 @@ to defaults and shows the error in the menu. See [`config.example.json`](config.
 | `theme` | `"dark"` | `dark`, `light` or `auto` (follows the OS) |
 | `accent_color` | `"#2a8bd8"` | `#rrggbb` for bars, heatmap and buttons |
 | `display_name` | `""` | title of the stats page |
-| `hidden_cards` | `[]` | any of `forecast`, `burn`, `limit`, `heatmap`, `breakdown`, `tools`, `models`, `projects`, `cost`, `insights` |
+| `hidden_cards` | `[]` | any of `grok-suite`, `forecast`, `burn`, `limit`, `heatmap`, `breakdown`, `tools`, `models`, `projects`, `cost`, `insights`, `providers`, `budgets` |
 | `providers` | `{}` | per-provider switches, e.g. `{"gemini_cli": {"enabled": true}, "deepseek": {"enabled": true}}`. Ids: `omnimonitor providers`. Entries here override `extra_token_sources` |
 | `primary_provider` | `"grok"` | what the tray icon shows: `grok`, `codex`, `github_copilot`, `cursor_team`, `openrouter`, `ollama_cloud` or `budget` |
 | `provider_thresholds` | `{}` | per-provider USED % alerts, e.g. `{"codex": [75, 90]}`; missing = `notify_thresholds` |

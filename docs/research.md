@@ -62,6 +62,30 @@ machines.
 - Consumer FAQ (usage limits are described qualitatively, not as token numbers):
   <https://docs.x.ai/grok/faq>
 
+## 5. Grok CLI vs Grok Bot vs Cursor — what is actually available
+
+The weekly number is **one pool**. `creditUsagePercent` is the suite total (used).
+`productUsage[].usagePercent` is a share of that same pool. Proto-JSON omits a zero
+`usagePercent` on a product it still lists; a product that is **not listed** is not 0%.
+
+| Wanted row | Pool % | Token / activity detail |
+|---|---|---|
+| Grok suite total | `creditUsagePercent`, reset from `currentPeriod.end` or `billingPeriodEnd` | not a token figure |
+| Grok CLI | `productUsage` product `GrokBuild` (Grok Build / the `grok` CLI). A literal `Grok CLI` name is accepted. | `~/.grok/sessions/**/updates.jsonl` (`turn_completed`). Experimental `~/.grok/logs/unified.jsonl` lines with `msg == shell.turn.inference_done` are the **same CLI** (shell telemetry, not Grok Bot). If both logs have events, session logs win so turns are not counted twice. |
+| Grok Bot | Only if `productUsage` contains a product named Grok Bot. Documented captures of this payload list `GrokBuild` / `GrokChat` / `GrokTasks` and **do not** include Grok Bot. `GrokChat` is grok.com chat, not Grok Bot. | **Not available.** `~/.grokbot` has daemon settings and logs, not token counts. Transcript replicas under Application Support are not a usage API and are not read. |
+| Cursor (Grok-in-Cursor) | Only if `productUsage` names Cursor (or Grok-in-Cursor). | **Not available** from Grok CLI logs. |
+
+Not used for this breakdown, on purpose:
+
+* `POST https://cursor.com/api/dashboard/get-sand-usage-status` — Grok Bot's own weekly
+  meter, Cursor session cookie. Separate from the shared Grok pool. Not called.
+* `GET https://cursor.com/api/usage-summary` — Cursor plan (the opt-in `cursor` provider).
+  A different pool. Not mixed into the Grok suite total.
+* xAI Management API — API-team spend, not the consumer weekly pool.
+
+If the listed product shares do not sum to `creditUsagePercent`, the difference is shown
+as unexplained. It is not assigned to a product.
+
 ## Conclusions used in the design
 
 1. The weekly % and reset time are real but come from an unofficial API. Show them, with a

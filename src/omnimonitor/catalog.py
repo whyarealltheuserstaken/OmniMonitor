@@ -50,7 +50,8 @@ _P = ProviderInfo
 CATALOG: Tuple[ProviderInfo, ...] = (
     # ---------------------------------------------------------------- Grok
     _P("grok", "Grok weekly pool", "Grok", "billing", PARTIAL,
-       shows="limit % used/left, reset time, ≈ token limit estimate",
+       shows="shared weekly pool % used/left, reset, per-product split when productUsage "
+             "is present, ≈ token limit estimate",
        source="Grok CLI billing endpoint using the Grok CLI's own login file (see README)",
        auth="Grok CLI login (~/.grok/auth.json)", reset="weekly (from the API's period dates)",
        confidence="high for %, ≈ for the token-limit estimate",
@@ -67,8 +68,9 @@ CATALOG: Tuple[ProviderInfo, ...] = (
        confidence="low: undocumented log; checked against published descriptions, not a real "
                   "install. Builds before ~June 2026 log no tokens",
        docs=("docs/token-adapters.md",),
-       extra={"note": "Overlaps Grok CLI sessions: enabling both counts the same Grok turns "
-                      "twice in totals. Use it only if updates.jsonl has no usage for you."}),
+       extra={"note": "Same Grok CLI turns as grok_sessions. Enabling both double-counts "
+                      "in all-tool totals. The Grok suite token total uses session logs "
+                      "when those events exist and does not add this log on top."}),
     # ------------------------------------------------------- Anthropic
     _P("claude_code", "Claude Code", "Claude", "local_logs", SUPPORTED,
        shows="tokens (incl. cache), models, projects; ≈ cost from your price table; ≈ 5-hour "
@@ -215,8 +217,16 @@ CATALOG: Tuple[ProviderInfo, ...] = (
               "in CloudWatch, both needing SigV4-signed AWS credentials.",
        needs="A SigV4 Cost Explorer / CloudWatch reader with read-only IAM credentials."),
     _P("grok_bot", "Grok Bot", "Grok", "none", NOT_SUPPORTED,
-       reason="No usage API or local usage log is available to third-party tools.",
-       needs="An official usage endpoint."),
+       reason="No Grok Bot token log, and no Grok Bot field is guaranteed on the shared "
+              "weekly pool. productUsage on the Grok CLI billing response lists whatever "
+              "products the API returns (documented examples: GrokBuild, GrokChat, "
+              "GrokTasks). A product literally named GrokBot is shown in the Grok suite "
+              "breakdown; otherwise that percent is not available. Grok Bot's own weekly "
+              "meter is POST https://cursor.com/api/dashboard/get-sand-usage-status with "
+              "a Cursor session cookie, which OmniMonitor does not call. ~/.grokbot has "
+              "daemon settings and logs, not token counts. ~/.grok/sessions and "
+              "unified.jsonl are the Grok CLI.",
+       needs="An official usage endpoint, or a documented local log that records tokens."),
     # -------------------------------------------------------- DeepSeek
     _P("deepseek", "DeepSeek API", "DeepSeek", "api", SUPPORTED,
        shows="balance (total, granted, topped-up) per currency",

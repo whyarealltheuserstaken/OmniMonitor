@@ -14,6 +14,7 @@ from omnimonitor import config as config_mod
 from omnimonitor import overview as overview_mod
 from omnimonitor.app import Controller
 from omnimonitor.applog import log
+from omnimonitor.grok_suite import menu_lines as grok_suite_lines
 from omnimonitor.icon import render_icon, render_menubar, tray_size
 from omnimonitor.timeutil import fmt_local, fmt_until
 from omnimonitor.webui import StatsServer, for_controller
@@ -125,6 +126,18 @@ class TrayApp:
                                                     fmt_tokens(lim["estimate"]["value"]))
         return "Tokens this week: %s (limit not exposed)" % fmt_tokens(wk)
 
+    def _suite_line(self, i: int) -> str:
+        lines = grok_suite_lines((self.ctrl.stats().get("grok_suite") or {}))
+        return lines[i] if i < len(lines) else ""
+
+    def _suite_item(self, i: int):
+        def text(_):
+            return self._suite_line(i)
+
+        def shown(_):
+            return bool(self._suite_line(i))
+        return self.pystray.MenuItem(text, None, enabled=False, visible=shown)
+
     def _pace_line(self) -> str:
         avg = (self.ctrl.stats().get("forecast") or {}).get("average") or {}
         if avg.get("value", 0) is None or "percent_at_reset" not in avg:
@@ -179,6 +192,7 @@ class TrayApp:
             Item(lambda _: self._tokens_line(), None, enabled=False),
             Item(lambda _: self._today_line(), None, enabled=False),
             Item(lambda _: self._pace_line(), None, enabled=False),
+            *[self._suite_item(i) for i in range(6)],
             Item(lambda _: self._error_line(), None, enabled=False,
                  visible=lambda _: bool(self.ctrl.error)),
             Item(lambda _: self._primary_line(), None, enabled=False,
