@@ -176,10 +176,9 @@ def render_menubar(remaining: Optional[float], *, error: bool = False, demo: boo
 
     When remaining % is known (ok / warn / critical), the ring and optional % label are
     colored green / amber / red and ``is_template`` is False — NSImage templates are
-    monochrome, so a colored gauge cannot be a template. A hairline dark edge (one stroke,
-    a pixel or so outside the color) keeps the ring visible on a light menu bar; the color
-    itself reads on a dark bar. There is no second ring, no light halo, and no filled
-    disc. Error and "no data" stay template (black + alpha) so macOS tints them.
+    monochrome, so a colored gauge cannot be a template. The gauge is one stroke: a dim
+    track and the colored arc share the same radius and width. There is no outline, no
+    second ring, and no filled disc. Error and "no data" stay template (black + alpha).
     """
     state = menubar_state(remaining, error)
     # Colored states cannot be templates (macOS would discard the RGB).
@@ -196,9 +195,9 @@ def render_menubar(remaining: Optional[float], *, error: bool = False, demo: boo
     tw = bb[2] - bb[0]
     ring_d = 15 * u
     gap = 3.5 * u
-    # Room for a 1px (at @2x) hairline so it is not clipped. Not a second ring.
-    edge = 0 if template else u // 2 + u // 8
-    w = int(ring_d + 2 * u + 2 * edge + ((gap + tw + 1 * u + edge) if text and label else 0))
+    # Pad so the centered stroke is not clipped. This is empty margin, not another ring.
+    pad = int(1.6 * u)
+    w = int(ring_d + 2 * pad + ((gap + tw + pad) if text and label else 0))
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     if template:
@@ -207,7 +206,7 @@ def render_menubar(remaining: Optional[float], *, error: bool = False, demo: boo
         ink = color_for(remaining)  # green / amber / red from remaining
         track = ink + (110,)
     import math
-    x0, y0 = 1 * u + edge, (h - ring_d) / 2
+    x0, y0 = pad, (h - ring_d) / 2
     box = [x0, y0, x0 + ring_d, y0 + ring_d]
     stroke = int(2.4 * u)
 
@@ -222,11 +221,7 @@ def render_menubar(remaining: Optional[float], *, error: bool = False, demo: boo
                 d.ellipse([px - width / 2, py - width / 2, px + width / 2, py + width / 2],
                           fill=fill if len(fill) == 4 else fill + (255,))
 
-    if not template:
-        # One hairline, same center as the color stroke. Wider by ~1 output px per side
-        # (u supersampled px of extra width at the default 8x supersample). A second,
-        # lighter stroke here is what read as nested rings on a real menu bar.
-        _arc((0, 0, 0, 150), stroke + u)
+    # One stroke only. A wider dark arc around this circle showed up as an inner black ring.
     _arc(track, stroke)
     if shown:
         a0, a1 = -90, -90 + 360 * shown / 100.0

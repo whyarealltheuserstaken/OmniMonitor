@@ -113,6 +113,42 @@ def test_fetch_cursor_usage_summary(sess_home):
     r = web_accounts.fetch("cursor", {}, http=http, now=1.0)
     assert r.ok and r.limit_percent == pytest.approx(30.0)
     assert any(m["key"] == "on_demand" for m in r.metrics)
+    assert not any(m["key"] == "grok_bot_used_percent" for m in r.metrics)
+
+
+def test_sand_usage_percent_requires_an_allowance():
+    ok = web_accounts.parse_sand_usage({
+        "usagePercent": 12, "hasNonZeroIncludedLimit": True,
+        "nextResetTimestampUtc": "2026-11-12T00:00:00Z",
+    })
+    assert ok["available"] and ok["used_percent"] == 12
+    missing = web_accounts.parse_sand_usage({"hasNonZeroIncludedLimit": True})
+    assert not missing["available"] and "omitted" in missing["reason"]
+    no_grant = web_accounts.parse_sand_usage({"usagePercent": 0, "hasNonZeroIncludedLimit": False})
+    assert not no_grant["available"]
+    pooled = web_accounts.parse_sand_usage({
+        "usagePercent": 4, "hasNonZeroIncludedLimit": True,
+        "usesPooledEnterpriseAllowance": True,
+    })
+    assert not pooled["available"]
+
+
+def test_fetch_cursor_reads_grok_bot_meter(sess_home):
+    sessions.save("cursor", "WorkosCursorSessionToken=abc")
+    http = _http_map({
+        "https://cursor.com/api/usage-summary": (200, {
+            "individualUsage": {"plan": {"used": 30, "limit": 100}},
+        }),
+        "https://cursor.com/api/dashboard/get-sand-usage-status": (200, {
+            "usagePercent": 18, "hasNonZeroIncludedLimit": True,
+            "nextResetTimestampUtc": "2026-11-12T00:00:00Z",
+        }),
+    })
+    r = web_accounts.fetch("cursor", {}, http=http, now=1.0)
+    assert r.ok and r.limit_percent == pytest.approx(30.0)
+    bot = next(m for m in r.metrics if m["key"] == "grok_bot_used_percent")
+    assert bot["value"] == 18
+    assert "abc" not in r.note and "Workos" not in r.note
 
 
 def test_fetch_chatgpt_web_windows(sess_home):

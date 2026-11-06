@@ -165,29 +165,51 @@
         " left" + (gs.resets_at ? " · resets " + fmtDate(gs.resets_at) : " · reset time not reported");
     }
     var banners = $("gs-banners"); banners.textContent = "";
-    (gs.honesty || []).forEach(function (text) {
-      banners.appendChild(el("div", "banner info", text));
-    });
+    var cred = gs.credit_allowance || {};
+    var allow = gs.token_allowance || {};
+    var summary = el("div", "gs-detail");
+    summary.appendChild(document.createTextNode("Token allowance: "));
+    if (allow.value === null || allow.value === undefined) summary.appendChild(OM.na(allow.reason, "not available"));
+    else summary.appendChild(document.createTextNode(fmtTokens(allow.value) + (allow.source ? " · " + allow.source : "")));
+    summary.appendChild(document.createTextNode(" · Monthly credits: "));
+    if (cred.limit_usd === null || cred.limit_usd === undefined) summary.appendChild(OM.na(cred.reason, "not available"));
+    else {
+      var used = cred.used_usd === null || cred.used_usd === undefined ? "—" : ("$" + Number(cred.used_usd).toFixed(2));
+      summary.appendChild(document.createTextNode(used + " of $" + Number(cred.limit_usd).toFixed(2) + " (USD, not tokens)"));
+    }
+    banners.appendChild(summary);
+    if (gs.xai_api_spend_usd !== null && gs.xai_api_spend_usd !== undefined) {
+      banners.appendChild(el("div", "gs-detail", "xAI API spend this month: $" +
+        Number(gs.xai_api_spend_usd).toFixed(2) + " (management API, USD — not this weekly pool and not tokens)"));
+    }
     var rows = $("gs-rows"); rows.textContent = "";
-    (gs.buckets || []).forEach(function (b) { rows.appendChild(suiteRow(b)); });
+    (gs.buckets || []).forEach(function (b) { rows.appendChild(suiteRow(b, gs)); });
     if ((gs.other_products || []).length) {
       var o = el("div", "gs-row");
-      o.appendChild(el("div", "gs-h")).appendChild(el("span", "n", "Other products in this payload"));
       var bits = gs.other_products.map(function (p) {
         return (p.label || p.product) + " " + fmtPct(p.used_percent) + " of pool";
       });
-      o.appendChild(el("div", "gs-detail", bits.join(" · ") +
-        ". These are shares of the same weekly pool. They are not Grok CLI, Grok Bot, or Cursor."));
+      o.appendChild(el("div", "gs-detail", "Also in this payload: " + bits.join(" · ") +
+        ". Same weekly pool. Not relabeled as CLI, Bot, or Cursor."));
       rows.appendChild(o);
     }
+    if ((gs.gaps || []).length) {
+      var gap = el("div", "gs-row");
+      gap.appendChild(el("div", "gs-h")).appendChild(el("span", "n", "Why some figures are missing"));
+      (gs.gaps || []).forEach(function (g) {
+        gap.appendChild(el("div", "gs-why", g.text));
+      });
+      rows.appendChild(gap);
+    }
+    if (gs.share_gap_note) rows.appendChild(el("div", "gs-why", gs.share_gap_note));
   }
-  function suiteRow(b) {
+  function suiteRow(b, gs) {
     var row = el("div", "gs-row");
     var h = el("div", "gs-h");
     h.appendChild(el("span", "n", b.name));
     var right = el("span");
     if (b.used_percent === null || b.used_percent === undefined) {
-      right.appendChild(OM.na(b.percent_reason, "pool % not available"));
+      right.appendChild(OM.na(b.percent_reason, "pool share not available"));
     } else {
       right.textContent = fmtPct(b.used_percent) + " of pool";
     }
@@ -200,26 +222,34 @@
       fill.style.background = "var(--accent)";
       bar.appendChild(fill);
       row.appendChild(bar);
-    } else if (b.percent_reason) {
-      row.appendChild(el("div", "gs-why", b.percent_reason));
     }
     var tok = b.tokens || {};
     var detail = el("div", "gs-detail");
+    detail.appendChild(document.createTextNode("Tokens: "));
     if (tok.value === null || tok.value === undefined) {
-      detail.appendChild(document.createTextNode("Tokens: "));
       detail.appendChild(OM.na(tok.reason));
     } else {
       var models = (tok.models || []).map(function (m) { return m.name; }).filter(Boolean).slice(0, 3);
-      detail.textContent = fmtTokens(tok.value) + " tokens (" + (tok.window || "window") + ")" +
+      detail.appendChild(document.createTextNode(
+        fmtTokens(tok.value) + " (" + (tok.window || "window") + ")" +
         " · in " + fmtTokens(tok.input_tokens) + " · out " + fmtTokens(tok.output_tokens) +
         (tok.cache_read_tokens ? " · cache " + fmtTokens(tok.cache_read_tokens) : "") +
         (tok.reasoning_tokens ? " · reasoning " + fmtTokens(tok.reasoning_tokens) : "") +
-        " · " + (tok.events || 0) + " events · " + (tok.sessions || 0) + " sessions" +
-        (models.length ? " · " + models.join(", ") : "") +
-        (tok.source ? " · " + tok.source : "");
+        " · " + (tok.events || 0) + " events" +
+        (models.length ? " · " + models.join(", ") : "")));
     }
     row.appendChild(detail);
-    if (tok.note) row.appendChild(el("div", "gs-why", tok.note));
+    if (b.id === "bot" && gs && gs.grok_bot_meter) {
+      var meter = gs.grok_bot_meter;
+      var line = el("div", "gs-detail");
+      line.appendChild(document.createTextNode("Grok Bot meter (separate weekly allowance): "));
+      if (meter.used_percent === null || meter.used_percent === undefined) {
+        line.appendChild(OM.na(meter.reason));
+      } else {
+        line.appendChild(document.createTextNode(fmtPct(meter.used_percent) + " used"));
+      }
+      row.appendChild(line);
+    }
     return row;
   }
 

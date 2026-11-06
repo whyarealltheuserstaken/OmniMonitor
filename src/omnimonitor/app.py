@@ -352,7 +352,7 @@ class Controller:
             "local_logs" if tools else "none")
         st = stats_mod.compute(events, turns, billing, self.cfg, now, provider=provider,
                                provider_note=note, data_since=data_since,
-                               snapshots=snapshots, tools=tools)
+                               snapshots=snapshots, tools=tools, readings=dict(self.readings))
         if self.token_source == "demo":
             codex = demo_codex_limits(now.timestamp())
         else:

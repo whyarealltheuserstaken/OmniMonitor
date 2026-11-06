@@ -118,7 +118,9 @@
     (c.metrics || []).forEach(function (m) {
       var d = el("div", "brow"), t = el("div", "t");
       t.appendChild(el("span", "n", m.label));
-      t.appendChild(el("span", "m", m.unit === "USD" ? fmtUsd(m.value) : (m.value + (m.unit ? " " + m.unit : ""))));
+      var shown = m.kind === "resets_at" || m.unit === "unix" ? fmtTs(m.value)
+        : (m.unit === "USD" ? fmtUsd(m.value) : (m.value + (m.unit ? " " + m.unit : "")));
+      t.appendChild(el("span", "m", shown));
       d.appendChild(t); box.appendChild(d);
     });
     if (full) {

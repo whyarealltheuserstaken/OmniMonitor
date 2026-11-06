@@ -31,7 +31,7 @@ def main() -> None:
 
 def render_menubar_sheet() -> None:
     """One ring on light and dark bars: green (≥40), amber (20–40), red (<20)."""
-    samples = [(73, "73% left · green"), (30, "30% left · amber"), (12, "12% left · red")]
+    samples = [(70, "70% left · green"), (30, "30% left · amber"), (12, "12% left · red")]
     bars = [((246, 246, 246, 255), "Light menu bar"), ((28, 28, 30, 255), "Dark menu bar")]
     pad, label_w, zoom = 16, 150, 3
     icons = []

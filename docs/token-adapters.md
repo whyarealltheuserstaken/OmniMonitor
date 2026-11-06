@@ -30,6 +30,9 @@ Grok-in-Cursor have no rows in these logs. `grok_unified` is the Grok CLI as wel
 (`shell.turn.inference_done`); when session events exist, the suite total does not add the
 unified log on top. Pool percents for CLI / Bot / Cursor come only from billing
 `productUsage` — see [research.md](research.md). A missing product is "not available", not 0%.
+The weekly billing payloads do not include a token allowance. `used` / `monthlyLimit` on
+`GET /v1/billing` are USD cents. Grok Bot's `usagePercent` (opt-in Cursor session) is a
+separate percent, not a token count.
 
 ## `grok_sessions` (Grok CLI, always on)
 
