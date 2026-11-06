@@ -240,9 +240,62 @@ def _percent_reason(bucket: str, reported: bool, names: List[str]) -> str:
             "It listed: %s. " % listed) + _CURSOR_PERCENT_SEPARATE
 
 
+_TOKEN_ALLOWANCE = (
+    "No token cap is in the Grok billing payloads. "
+    "GET https://cli-chat-proxy.grok.com/v1/billing?format=credits returns a weekly percent "
+    "(creditUsagePercent) and product shares. "
+    "GET https://cli-chat-proxy.grok.com/v1/billing (same login) returns monthly USD cents "
+    "(used, monthlyLimit) when the account has that cap — dollars, not tokens. "
+    "grok.com GetGrokCreditsConfig needs a browser session this app does not send. "
+    "The xAI management API (opt-in xai_api) is API-team USD spend, not this weekly pool."
+)
+
+
+def _reading_metric(readings: Optional[Dict[str, Any]], provider: str, key: str
+                    ) -> Optional[Dict[str, Any]]:
+    if not readings:
+        return None
+    reading = readings.get(provider) or {}
+    if not reading.get("ok"):
+        return None
+    for m in reading.get("metrics") or []:
+        if isinstance(m, dict) and m.get("key") == key and m.get("value") is not None:
+            return m
+    return None
+
+
+def _token_allowance(billing: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    fields = (billing or {}).get("token_fields") or {}
+    for k, v in fields.items():
+        low = str(k).lower()
+        if any(w in low for w in ("limit", "cap", "allowance", "max")):
+            try:
+                n = int(round(float(v)))
+            except (TypeError, ValueError):
+                continue
+            return {"value": n, "unit": "tokens", "source": "billing field %s" % k, "reason": ""}
+    return {"value": None, "unit": "tokens", "source": "", "reason": _TOKEN_ALLOWANCE}
+
+
+def _credit_allowance(billing: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not billing:
+        return {"used_usd": None, "limit_usd": None,
+                "reason": "no Grok billing reading yet"}
+    used, limit = billing.get("credit_used_usd"), billing.get("credit_limit_usd")
+    if used is None and limit is None:
+        return {"used_usd": None, "limit_usd": None,
+                "reason": ("monthly USD credit cap not in this billing reading "
+                           "(no used / monthlyLimit). That cap is dollars, not tokens.")}
+    return {"used_usd": used, "limit_usd": limit,
+            "resets_at": billing.get("credit_period_end"),
+            "source": "GET https://cli-chat-proxy.grok.com/v1/billing (USD cents)",
+            "reason": ""}
+
+
 def build_grok_suite(billing: Optional[Dict[str, Any]], events: Iterable[Dict[str, Any]],
                      cfg: Optional[Dict[str, Any]], now: datetime, *,
-                     provider: str = "", provider_note: str = "") -> Dict[str, Any]:
+                     provider: str = "", provider_note: str = "",
+                     readings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Dashboard / tray payload. Never invents a percent or a token count."""
     cfg = cfg or {}
     reported, products = _products(billing)
@@ -344,6 +397,53 @@ def build_grok_suite(billing: Optional[Dict[str, Any]], events: Iterable[Dict[st
             "tokens": tokens,
         })
 
+    token_allowance = _token_allowance(billing if used is not None else None)
+    if used is None and token_allowance["value"] is None:
+        token_allowance = dict(token_allowance, reason=total_reason or _TOKEN_ALLOWANCE)
+    credit_allowance = _credit_allowance(billing if used is not None else None)
+    bot_meter = _reading_metric(readings, "cursor", "grok_bot_used_percent")
+    bot_reset = _reading_metric(readings, "cursor", "grok_bot_resets_at")
+    cursor_on = bool(readings and readings.get("cursor"))
+    if bot_meter:
+        bot_status = {"used_percent": float(bot_meter["value"]),
+                      "resets_at": (bot_reset or {}).get("value"),
+                      "reason": "",
+                      "source": "POST https://cursor.com/api/dashboard/get-sand-usage-status"}
+    elif cursor_on:
+        bot_status = {"used_percent": None, "resets_at": None,
+                      "source": "POST https://cursor.com/api/dashboard/get-sand-usage-status",
+                      "reason": ("Cursor session is on, but get-sand-usage-status did not "
+                                 "return a personal Grok Bot allowance (usagePercent only "
+                                 "when hasNonZeroIncludedLimit is true). That payload has "
+                                 "no token count and no token cap.")}
+    else:
+        bot_status = {"used_percent": None, "resets_at": None,
+                      "source": "POST https://cursor.com/api/dashboard/get-sand-usage-status",
+                      "reason": ("Grok Bot's weekly percent is not in the Grok CLI billing "
+                                 "payload. It is usagePercent on POST "
+                                 "https://cursor.com/api/dashboard/get-sand-usage-status, "
+                                 "read only when the opt-in Cursor session is enabled. "
+                                 "That response has no token count and no token cap.")}
+
+    gaps = []
+    if token_allowance.get("value") is None:
+        gaps.append({"id": "token_allowance", "text": token_allowance["reason"]})
+    if credit_allowance.get("limit_usd") is None and credit_allowance.get("reason"):
+        gaps.append({"id": "credit_allowance", "text": credit_allowance["reason"]})
+    for b in buckets:
+        tok = b.get("tokens") or {}
+        if tok.get("value") is None and b["id"] != "cli":
+            gaps.append({"id": b["id"] + "_tokens", "text": tok.get("reason") or ""})
+        elif tok.get("value") is None:
+            gaps.append({"id": "cli_tokens", "text": tok.get("reason") or ""})
+        if b.get("used_percent") is None and b.get("percent_reason"):
+            gaps.append({"id": b["id"] + "_pool", "text": b["percent_reason"]})
+    if bot_status.get("used_percent") is None:
+        gaps.append({"id": "bot_meter", "text": bot_status["reason"]})
+    # xAI management spend is a different ledger. Surface it only when that provider ran.
+    xai = (readings or {}).get("xai_api") or {}
+    xai_spend = _reading_metric(readings, "xai_api", "spend_month") if xai.get("ok") else None
+
     return {
         "title": "Grok suite",
         "pool": "weekly",
@@ -363,6 +463,11 @@ def build_grok_suite(billing: Optional[Dict[str, Any]], events: Iterable[Dict[st
         "share_sum": share_sum,
         "share_gap_note": gap_note,
         "honesty": honesty,
+        "token_allowance": token_allowance,
+        "credit_allowance": credit_allowance,
+        "grok_bot_meter": bot_status,
+        "xai_api_spend_usd": None if not xai_spend else xai_spend.get("value"),
+        "gaps": [g for g in gaps if g.get("text")],
     }
 
 
@@ -377,6 +482,17 @@ def menu_lines(suite: Optional[Dict[str, Any]]) -> List[str]:
         if suite.get("used_percent") is not None:
             head += " · %s used" % _fmt_pct(suite["used_percent"])
     lines = [head]
+    allow = suite.get("token_allowance") or {}
+    if allow.get("value") is not None:
+        lines.append("Token allowance: %s" % _fmt_tok(allow["value"]))
+    cred = suite.get("credit_allowance") or {}
+    if cred.get("limit_usd") is not None:
+        used = cred.get("used_usd")
+        if used is None:
+            bit = "$%.2f cap" % cred["limit_usd"]
+        else:
+            bit = "$%.2f of $%.2f" % (used, cred["limit_usd"])
+        lines.append("Monthly credits: %s (USD, not tokens)" % bit)
     for b in suite.get("buckets") or []:
         pct = b.get("used_percent")
         tok = b.get("tokens") or {}
@@ -391,6 +507,12 @@ def menu_lines(suite: Optional[Dict[str, Any]]) -> List[str]:
         elif pct is None:
             why = "productUsage omitted" if not suite.get("products_reported") \
                 else "not in productUsage"
+            if b.get("id") == "bot":
+                meter = (suite.get("grok_bot_meter") or {}).get("used_percent")
+                if meter is not None:
+                    lines.append("Grok Bot meter: %s used (separate; tokens not available)"
+                                 % _fmt_pct(meter))
+                    continue
             lines.append("%s: not available (%s)" % (b["name"], why))
         else:
             lines.append("%s: %s · tokens not available" % (b["name"], bit))

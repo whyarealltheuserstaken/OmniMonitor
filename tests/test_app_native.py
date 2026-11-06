@@ -224,8 +224,11 @@ def test_menubar_ring_is_one_stroke_on_light_and_dark():
             groups = _stroke_groups(img, bg)
             assert len(groups) == 2, (remaining, bg, groups)
             for g in groups:
-                assert len(g) <= 11, (remaining, bg, len(g), g)
+                assert len(g) <= 9, (remaining, bg, len(g), g)
                 assert g.count("light") < 2, (remaining, bg, g)
+                # The inner black ring was a wider dark stroke. On a light bar it is a dark band.
+                if bg == light:
+                    assert g.count("dark") < 2, (remaining, g)
             if remaining == 100:
                 assert all("color" in g for g in groups), (bg, groups)
 

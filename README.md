@@ -213,7 +213,11 @@ why. Nothing is made up or silently estimated.
 - **Token counts come from the Grok CLI's own logs** (`~/.grok/sessions/**/updates.jsonl`,
   `turn_completed` events), read **read-only**. The experimental unified log is the same
   CLI. Usage on grok.com, in Grok Bot, in Cursor, in the mobile apps, or on other
-  computers is **not** in those logs.
+  computers is **not** in those logs. There is still no token allowance ("out of Y
+  tokens") on the billing payloads. A monthly figure, when `used` and `monthlyLimit`
+  are present, is a **USD** credit cap (cents), labeled as dollars. Grok Bot's weekly
+  percent comes from the opt-in Cursor session (`get-sand-usage-status`) and is a
+  percent, not a token count.
 - **The "≈Y" estimate** is `tokens this week ÷ (Grok Build % used ÷ 100)`, or the overall %
   when no per-product number is returned. It appears only if `estimate_weekly_limit` is
   true **and** at least `estimate_min_used_percent` (default 5 %) is used. It is always

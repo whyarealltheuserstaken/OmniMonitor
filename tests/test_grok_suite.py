@@ -145,6 +145,37 @@ def test_no_billing_reading():
     assert all(b["used_percent"] is None for b in suite["buckets"])
 
 
+def test_credit_cap_is_not_a_token_allowance_and_bot_meter_is_separate():
+    suite = build_grok_suite(billing(
+        credit_used_usd=29.31, credit_limit_usd=150.0,
+        products=[{"product": "GrokBuild", "used_percent": 27}],
+    ), [], {}, NOW, provider="grok_sessions", readings={
+        "cursor": {"ok": True, "metrics": [
+            {"key": "grok_bot_used_percent", "value": 18},
+        ]},
+    })
+    assert suite["token_allowance"]["value"] is None
+    assert "not tokens" in suite["token_allowance"]["reason"] or "not a token" in suite["token_allowance"]["reason"].lower() or "No token cap" in suite["token_allowance"]["reason"]
+    assert suite["credit_allowance"]["limit_usd"] == 150.0
+    assert suite["credit_allowance"]["used_usd"] == 29.31
+    assert suite["grok_bot_meter"]["used_percent"] == 18
+    # The Bot meter is not copied onto the suite share.
+    assert bucket(suite, "bot")["used_percent"] is None
+    cli = bucket(suite, "cli")
+    assert cli["tokens"]["value"] is None
+    lines = menu_lines(suite)
+    assert any(x.startswith("Monthly credits: $29.31 of $150.00") for x in lines)
+    assert any(x.startswith("Grok Bot meter: 18% used") for x in lines)
+
+
+def test_token_field_allowance_is_used_when_the_api_sends_one():
+    b = billing(products=[{"product": "GrokBuild", "used_percent": 27}],
+                token_fields={"weeklyTokenLimit": 1000000})
+    suite = build_grok_suite(b, [], {}, NOW, provider="grok_sessions")
+    assert suite["token_allowance"]["value"] == 1000000
+    assert "weeklyTokenLimit" in suite["token_allowance"]["source"]
+
+
 def test_menu_lines_do_not_invent():
     suite = build_grok_suite(billing(products=[
         {"product": "GrokBot", "used_percent": 20},

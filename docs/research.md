@@ -86,6 +86,20 @@ Not used for this breakdown, on purpose:
 If the listed product shares do not sum to `creditUsagePercent`, the difference is shown
 as unexplained. It is not assigned to a product.
 
+## 6. Token counts vs token allowance vs dollar cap (2026-11-06)
+
+| Figure | Source | What it is |
+|---|---|---|
+| Grok CLI token counts | `~/.grok/sessions/**/updates.jsonl`, or `~/.grok/logs/unified.jsonl` only when sessions have no events | Real tokens for this computer's CLI |
+| Grok CLI / grok.com / app token allowance ("out of Y tokens") | Not in either billing payload. Not in the local logs. `grok.com` `GetGrokCreditsConfig` needs a browser session this app does not send | **not available** |
+| Weekly pool % | `GET https://cli-chat-proxy.grok.com/v1/billing?format=credits` `creditUsagePercent` | A percent, not a token cap |
+| Monthly credit cap | `GET https://cli-chat-proxy.grok.com/v1/billing` `used` / `monthlyLimit` as USD cents, same CLI login | Dollars. Shown only when the fields are present |
+| Grok Bot percent | `POST https://cursor.com/api/dashboard/get-sand-usage-status` `usagePercent`, opt-in Cursor session, and only when `hasNonZeroIncludedLimit` is true | A percent. No token count, no token cap |
+| Grok Bot tokens | `~/.grokbot` has no usage figures. Sand status has none | **not available** |
+| Cursor plan | `GET https://cursor.com/api/usage-summary` (opt-in) | Cursor's own plan used/limit, not Grok tokens |
+| Grok-in-Cursor tokens | Not in `~/.grok` logs. usage-summary has no documented Grok token field | **not available** |
+| xAI API team | Management API already in the app (`xai_api`): USD spend and a postpaid limit | Not the consumer weekly pool and not tokens |
+
 ## Conclusions used in the design
 
 1. The weekly % and reset time are real but come from an unofficial API. Show them, with a

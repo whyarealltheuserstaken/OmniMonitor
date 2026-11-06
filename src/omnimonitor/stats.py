@@ -161,7 +161,8 @@ def compute(events: List[Dict[str, Any]], turns: List[Dict[str, Any]],
             billing: Optional[Dict[str, Any]], cfg: Dict[str, Any], now: datetime,
             provider: str, provider_note: str = "", data_since: Optional[float] = None,
             tz=None, snapshots: Optional[List[Dict[str, Any]]] = None,
-            tools: Optional[List[str]] = None) -> Dict[str, Any]:
+            tools: Optional[List[str]] = None,
+            readings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Build the JSON the stats page / tray menu render."""
     now_local = now.astimezone(tz) if tz else now.astimezone()
     today = now_local.date()
@@ -287,11 +288,13 @@ def compute(events: List[Dict[str, Any]], turns: List[Dict[str, Any]],
     out["top_models"] = top_models
     out["top_plugins"] = []  # not present in any known local data -> section hidden
     out["insights"] = insights
-    _extras(out, events, billing, cfg, now, tz, snapshots, tools, bool(reason), is_demo)
+    _extras(out, events, billing, cfg, now, tz, snapshots, tools, bool(reason), is_demo,
+            readings)
     return out
 
 
-def _extras(out, events, billing, cfg, now, tz, snapshots, tools, no_data, is_demo) -> None:
+def _extras(out, events, billing, cfg, now, tz, snapshots, tools, no_data, is_demo,
+            readings=None) -> None:
     """0.2.0 additions: breakdowns, cost, forecast, burn rate, personalization."""
     from omnimonitor import forecast as fc
     from omnimonitor.adapters import label as tool_label
@@ -336,4 +339,4 @@ def _extras(out, events, billing, cfg, now, tz, snapshots, tools, no_data, is_de
     from omnimonitor.grok_suite import build_grok_suite
     out["grok_suite"] = build_grok_suite(
         billing, events, cfg, now, provider=out.get("provider") or "",
-        provider_note=out.get("provider_note") or "")
+        provider_note=out.get("provider_note") or "", readings=readings)

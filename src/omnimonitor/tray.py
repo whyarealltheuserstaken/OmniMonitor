@@ -192,7 +192,7 @@ class TrayApp:
             Item(lambda _: self._tokens_line(), None, enabled=False),
             Item(lambda _: self._today_line(), None, enabled=False),
             Item(lambda _: self._pace_line(), None, enabled=False),
-            *[self._suite_item(i) for i in range(6)],
+            *[self._suite_item(i) for i in range(8)],
             Item(lambda _: self._error_line(), None, enabled=False,
                  visible=lambda _: bool(self.ctrl.error)),
             Item(lambda _: self._primary_line(), None, enabled=False,

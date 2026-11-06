@@ -33,7 +33,7 @@ only. Please report a mismatch with a redacted sample.
 
 | Family | Provider | id | Status | Source | Shows | Tray % |
 |---|---|---|---|---|---|---|
-| Grok | Grok weekly pool | `grok` | 🟡 partial | Grok billing | shared weekly pool % used/left, reset, per-product split when productUsage is present, ≈ token limit estimate | yes |
+| Grok | Grok weekly pool | `grok` | 🟡 partial | Grok billing | shared weekly pool % used/left, reset, per-product split when productUsage is present, monthly USD credit cap when used/monthlyLimit are present (not a token allowance), ≈ token limit estimate | yes |
 | Grok | Grok CLI sessions | `grok_sessions` | ✅ supported | local logs | tokens, recorded cost, models, projects | – |
 | Grok | Grok CLI unified log | `grok_unified` | 🧪 experimental | local logs | tokens per inference (prompt incl. cached, completion, reasoning), models | – |
 | Claude | Claude Code | `claude_code` | ✅ supported | local logs | tokens (incl. cache), models, projects; ≈ cost from your price table; ≈ 5-hour block + burn rate (estimate, `omnimonitor blocks`) | – |
@@ -56,7 +56,7 @@ only. Please report a mismatch with a redacted sample.
 | Volcengine | Volcengine Ark | `volcengine` | ❌ not supported | – | Balance lives in the Volcengine Billing OpenAPI, which needs AK/SK request signing with account-level credentials; not implemented (an Ark inference key cannot read it) | – |
 | Hugging Face | Hugging Face Inference Providers | `huggingface` | ❌ not supported | – | No documented API returns credit balance or inference spend; it is shown only on the billing settings page | – |
 | AWS | Amazon Bedrock | `bedrock` | ❌ not supported | – | Bedrock has no balance endpoint; spend is in Cost Explorer and token metrics in CloudWatch, both needing SigV4-signed AWS credentials | – |
-| Grok | Grok Bot | `grok_bot` | ❌ not supported | – | No Grok Bot token log, and no Grok Bot field is guaranteed on the shared weekly pool | – |
+| Grok | Grok Bot | `grok_bot` | ❌ not supported | – | No Grok Bot token count or token cap | – |
 | DeepSeek | DeepSeek API | `deepseek` | ✅ supported | official API | balance (total, granted, topped-up) per currency | – |
 | DeepSeek | DeepSeek Harness | `dsh` | 🧪 experimental | local logs | tokens (incl. cache, reasoning), models, projects | – |
 | DeepSeek | DeepSeek chat app | `deepseek_app` | ❌ not supported | – | The consumer app publishes no usage or limit data | – |
@@ -100,7 +100,7 @@ only. Please report a mismatch with a redacted sample.
 | Status | 🟡 partial |
 | Source | Grok CLI billing endpoint using the Grok CLI's own login file (see README) |
 | Auth | Grok CLI login (~/.grok/auth.json) |
-| Shows | shared weekly pool % used/left, reset, per-product split when productUsage is present, ≈ token limit estimate |
+| Shows | shared weekly pool % used/left, reset, per-product split when productUsage is present, monthly USD credit cap when used/monthlyLimit are present (not a token allowance), ≈ token limit estimate |
 | Reset period | weekly (from the API's period dates) |
 | Confidence / testing | high for %, ≈ for the token-limit estimate |
 | Key variables | – |
@@ -640,7 +640,7 @@ only. Please report a mismatch with a redacted sample.
 | Volcengine Ark | `volcengine` | Balance lives in the Volcengine Billing OpenAPI, which needs AK/SK request signing with account-level credentials; not implemented (an Ark inference key cannot read it). | A signed Billing OpenAPI client with a narrowly scoped IAM user. | – |
 | Hugging Face Inference Providers | `huggingface` | No documented API returns credit balance or inference spend; it is shown only on the billing settings page. | A documented billing endpoint. | – |
 | Amazon Bedrock | `bedrock` | Bedrock has no balance endpoint; spend is in Cost Explorer and token metrics in CloudWatch, both needing SigV4-signed AWS credentials. | A SigV4 Cost Explorer / CloudWatch reader with read-only IAM credentials. | – |
-| Grok Bot | `grok_bot` | No Grok Bot token log, and no Grok Bot field is guaranteed on the shared weekly pool. productUsage on the Grok CLI billing response lists whatever products the API returns (documented examples: GrokBuild, GrokChat, GrokTasks). A product literally named GrokBot is shown in the Grok suite breakdown; otherwise that percent is not available. Grok Bot's own weekly meter is POST https://cursor.com/api/dashboard/get-sand-usage-status with a Cursor session cookie, which OmniMonitor does not call. ~/.grokbot has daemon settings and logs, not token counts. ~/.grok/sessions and unified.jsonl are the Grok CLI. | An official usage endpoint, or a documented local log that records tokens. | – |
+| Grok Bot | `grok_bot` | No Grok Bot token count or token cap. productUsage on the Grok CLI billing response lists whatever products the API returns (documented examples: GrokBuild, GrokChat, GrokTasks). A product literally named GrokBot is a share of that weekly pool. The separate Grok Bot meter is usagePercent on POST https://cursor.com/api/dashboard/get-sand-usage-status, read only when the opt-in Cursor session is enabled. That payload has no token count. ~/.grokbot has daemon settings and logs, not token counts. ~/.grok/sessions and unified.jsonl are the Grok CLI. | A documented token log or a token-cap field on the Grok Bot meter. | – |
 | DeepSeek chat app | `deepseek_app` | The consumer app publishes no usage or limit data. | n/a | – |
 | Qwen API (Alibaba Model Studio) | `dashscope` | Balance is only available via Alibaba Cloud BSS OpenAPI (QueryAccountBalance), which needs an AccessKey pair and request signing; not implemented. | Signature V3 client + a RAM user with read-only billing permission. | [www.alibabacloud.com](https://www.alibabacloud.com/help/en/bss-openapi) |
 | Kimi app membership | `kimi_app` | The consumer app publishes no usage or limit API. | n/a | – |

@@ -84,6 +84,25 @@ def test_team_account_message():
         parse_billing(json.dumps({"error": "No personal team."}))
 
 
+def test_monthly_credit_cap_is_usd_cents_not_tokens():
+    r = parse_billing(body({
+        "creditUsagePercent": 10, "currentPeriod": {},
+        "monthlyLimit": {"val": 15000}, "used": {"val": 2931},
+        "billingPeriodEnd": "2026-08-01T00:00:00Z",
+    }))
+    assert r.credit_limit_usd == pytest.approx(150.0)
+    assert r.credit_used_usd == pytest.approx(29.31)
+    assert r.credit_period_end is not None
+    assert r.token_fields == {}
+
+
+def test_omitted_monthly_cap_is_not_zero():
+    r = parse_billing(body({"creditUsagePercent": 10, "currentPeriod": {},
+                            "billingPeriodEnd": "2026-11-09T00:00:00Z"}))
+    assert r.credit_limit_usd is None and r.credit_used_usd is None
+    assert r.credit_period_end is None
+
+
 def test_future_token_fields_are_surfaced():
     r = parse_billing(body({"creditUsagePercent": 5, "currentPeriod": {},
                             "weeklyTokenLimit": {"val": "1000000"}, "tokensUsed": 50000}))

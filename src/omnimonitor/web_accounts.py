@@ -278,7 +278,67 @@ def fetch_cursor(cfg, http: HttpFn, now: float) -> Reading:
                 break
     if r.limit_percent is None and not r.metrics:
         r.note += "; signed in but could not parse usage-summary fields"
+    _attach_grok_bot_meter(r, http, hdr)
     return r
+
+
+def parse_sand_usage(data: Any) -> Dict[str, Any]:
+    """Grok Bot weekly meter from get-sand-usage-status.
+
+    Returns ``{available, used_percent, resets_at, reason}``. ``usagePercent`` is a
+    percent, not a token count. A missing percent is not 0. An account with no
+    personal allowance (``hasNonZeroIncludedLimit`` is not true, pooled enterprise,
+    or ``includedLimitZero``) is not shown as 0% used.
+    """
+    if not isinstance(data, dict):
+        return {"available": False, "reason": "sand usage response was not an object"}
+    if data.get("usesPooledEnterpriseAllowance") is True or data.get(
+            "uses_pooled_enterprise_allowance") is True:
+        return {"available": False,
+                "reason": "uses a pooled enterprise allowance; no personal Grok Bot percent"}
+    if data.get("includedLimitZero") is True or data.get("included_limit_zero") is True:
+        return {"available": False,
+                "reason": "includedLimitZero: this account has no Grok Bot allowance"}
+    flag = data.get("hasNonZeroIncludedLimit", data.get("has_non_zero_included_limit"))
+    if flag is not True:
+        return {"available": False,
+                "reason": "hasNonZeroIncludedLimit is not true, so there is no personal "
+                          "Grok Bot allowance"}
+    raw = data.get("usagePercent", data.get("usage_percent"))
+    if raw is None:
+        return {"available": False, "reason": "usagePercent was omitted (not treated as 0)"}
+    try:
+        pct = float(raw)
+    except (TypeError, ValueError):
+        return {"available": False, "reason": "usagePercent was not a number"}
+    reset = data.get("nextResetTimestampUtc") or data.get("next_reset_timestamp_utc")
+    return {"available": True, "used_percent": pct,
+            "resets_at": reset if isinstance(reset, str) else None, "reason": ""}
+
+
+def _attach_grok_bot_meter(r: Reading, http: HttpFn, hdr: Dict[str, str]) -> None:
+    """Best-effort. A failure leaves the Cursor plan reading intact. No cookie is logged."""
+    sand_hdr = dict(hdr)
+    sand_hdr["Content-Type"] = "application/json"
+    sand_hdr["Referer"] = "https://cursor.com/bot"
+    try:
+        st, data = http("POST", "https://cursor.com/api/dashboard/get-sand-usage-status",
+                        sand_hdr, b"{}")
+    except AccountError:
+        r.note = (r.note + "; " if r.note else "") + "Grok Bot meter was not read (request failed)"
+        return
+    if st != 200:
+        r.note = (r.note + "; " if r.note else "") + (
+            "Grok Bot meter was not read (HTTP %s from get-sand-usage-status)" % st)
+        return
+    parsed = parse_sand_usage(data)
+    if not parsed.get("available"):
+        r.note = (r.note + "; " if r.note else "") + "Grok Bot meter: " + parsed.get("reason", "")
+        return
+    r.metric("grok_bot_used_percent", "Grok Bot used", parsed["used_percent"], "%", "used_percent")
+    reset = _reset_ts({"resets_at": parsed.get("resets_at")}) if parsed.get("resets_at") else None
+    if reset:
+        r.metric("grok_bot_resets_at", "Grok Bot resets", reset, "unix", "resets_at")
 
 
 def _session_meta_token(pid: str) -> str:

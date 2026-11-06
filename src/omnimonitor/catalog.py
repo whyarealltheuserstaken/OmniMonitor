@@ -51,7 +51,8 @@ CATALOG: Tuple[ProviderInfo, ...] = (
     # ---------------------------------------------------------------- Grok
     _P("grok", "Grok weekly pool", "Grok", "billing", PARTIAL,
        shows="shared weekly pool % used/left, reset, per-product split when productUsage "
-             "is present, ≈ token limit estimate",
+             "is present, monthly USD credit cap when used/monthlyLimit are present "
+             "(not a token allowance), ≈ token limit estimate",
        source="Grok CLI billing endpoint using the Grok CLI's own login file (see README)",
        auth="Grok CLI login (~/.grok/auth.json)", reset="weekly (from the API's period dates)",
        confidence="high for %, ≈ for the token-limit estimate",
@@ -217,16 +218,15 @@ CATALOG: Tuple[ProviderInfo, ...] = (
               "in CloudWatch, both needing SigV4-signed AWS credentials.",
        needs="A SigV4 Cost Explorer / CloudWatch reader with read-only IAM credentials."),
     _P("grok_bot", "Grok Bot", "Grok", "none", NOT_SUPPORTED,
-       reason="No Grok Bot token log, and no Grok Bot field is guaranteed on the shared "
-              "weekly pool. productUsage on the Grok CLI billing response lists whatever "
-              "products the API returns (documented examples: GrokBuild, GrokChat, "
-              "GrokTasks). A product literally named GrokBot is shown in the Grok suite "
-              "breakdown; otherwise that percent is not available. Grok Bot's own weekly "
-              "meter is POST https://cursor.com/api/dashboard/get-sand-usage-status with "
-              "a Cursor session cookie, which OmniMonitor does not call. ~/.grokbot has "
-              "daemon settings and logs, not token counts. ~/.grok/sessions and "
-              "unified.jsonl are the Grok CLI.",
-       needs="An official usage endpoint, or a documented local log that records tokens."),
+       reason="No Grok Bot token count or token cap. productUsage on the Grok CLI billing "
+              "response lists whatever products the API returns (documented examples: "
+              "GrokBuild, GrokChat, GrokTasks). A product literally named GrokBot is a "
+              "share of that weekly pool. The separate Grok Bot meter is usagePercent on "
+              "POST https://cursor.com/api/dashboard/get-sand-usage-status, read only "
+              "when the opt-in Cursor session is enabled. That payload has no token "
+              "count. ~/.grokbot has daemon settings and logs, not token counts. "
+              "~/.grok/sessions and unified.jsonl are the Grok CLI.",
+       needs="A documented token log or a token-cap field on the Grok Bot meter."),
     # -------------------------------------------------------- DeepSeek
     _P("deepseek", "DeepSeek API", "DeepSeek", "api", SUPPORTED,
        shows="balance (total, granted, topped-up) per currency",

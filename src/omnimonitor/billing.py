@@ -54,6 +54,11 @@ class UsageResult:
     # True when the payload contained a productUsage field (even if every share was 0).
     # False when the field was omitted — that is not the same as 0% per product.
     products_reported: bool = False
+    # Monthly included credits from GET /v1/billing (used / monthlyLimit are USD cents).
+    # Absent fields stay None. These are dollars, not a token allowance.
+    credit_used_usd: Optional[float] = None
+    credit_limit_usd: Optional[float] = None
+    credit_period_end: Optional[datetime] = None
     on_demand_cap: Optional[float] = None
     on_demand_used: Optional[float] = None
     token_fields: Dict[str, float] = field(default_factory=dict)  # any token-ish numbers seen
@@ -73,6 +78,9 @@ class UsageResult:
             "is_demo": self.is_demo,
             "products": [{"product": p, "used_percent": v} for p, v in self.products],
             "products_reported": self.products_reported,
+            "credit_used_usd": self.credit_used_usd,
+            "credit_limit_usd": self.credit_limit_usd,
+            "credit_period_end": iso(self.credit_period_end),
             "on_demand_cap": self.on_demand_cap,
             "on_demand_used": self.on_demand_used,
             "token_fields": dict(self.token_fields),
@@ -94,6 +102,27 @@ def _num(x: Any, what: str) -> float:
 
 def _clamp(v: float) -> float:
     return min(100.0, max(0.0, v))
+
+def _cents_usd(obj: Any) -> Optional[float]:
+    """USD from a proto money wrapper ``{"val": cents}``. Missing field -> None, not 0.
+
+    Third-party captures of ``GET /v1/billing`` (no ``format=credits``) document
+    ``used`` and ``monthlyLimit`` as USD cents. This is a credit cap, not tokens.
+    """
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        if "val" not in obj:
+            return None
+        obj = obj.get("val")
+    try:
+        v = float(obj)
+    except (TypeError, ValueError):
+        return None
+    if v != v or v in (float("inf"), float("-inf")):
+        return None
+    return v / 100.0
+
 
 def _val(obj: Any) -> Optional[float]:
     """Read proto-JSON money/int wrappers like {"val": "123"}; missing -> 0 (zero is omitted)."""
@@ -195,7 +224,11 @@ def parse_billing(body: str) -> UsageResult:
         products_reported=products_reported,
         on_demand_cap=_val(c.get("onDemandCap")) if "onDemandCap" in c else None,
         on_demand_used=_val(c.get("onDemandUsed")) if "onDemandUsed" in c else None,
-        token_fields=_find_token_fields(c), detail_lines=details)
+        token_fields=_find_token_fields(c), detail_lines=details,
+        credit_used_usd=_cents_usd(c.get("used")) if "used" in c else None,
+        credit_limit_usd=_cents_usd(c.get("monthlyLimit")) if "monthlyLimit" in c else None,
+        credit_period_end=(parse_time(c.get("billingPeriodEnd"))
+                           if ("used" in c or "monthlyLimit" in c) else None))
 
 # --------------------------------------------------------------------------- auth
 
@@ -379,7 +412,48 @@ def fetch_grok_cli_billing(cfg: Dict[str, Any]) -> UsageResult:
             raise UsageError("HTTP %d: pasted token expired/invalid" % e.code)
         else:
             raise UsageError("HTTP %d: run `grok login` once" % e.code)
-    return parse_billing(body)
+    result = parse_billing(body)
+    _fill_monthly_credits(result, url, token, timeout)
+    return result
+
+
+def _monthly_billing_url(credits_url: str) -> str:
+    """Same path as the credits URL, without the query. Empty if it is already bare."""
+    u = urllib.parse.urlsplit(credits_url)
+    bare = urllib.parse.urlunsplit((u.scheme, u.netloc, u.path, "", ""))
+    return "" if bare == credits_url else bare
+
+
+def _fill_monthly_credits(result: UsageResult, credits_url: str, token: str,
+                          timeout: float) -> None:
+    """GET /v1/billing (no format=credits) when the weekly payload has no monthly cap.
+
+    Failure here does not hide the weekly percent. The body is not logged.
+    """
+    if result.credit_limit_usd is not None:
+        return
+    bare = _monthly_billing_url(credits_url)
+    if not bare:
+        return
+    try:
+        check_billing_url(bare)
+        raw = billing_request(bare, token, timeout)
+        data = json.loads(raw)
+    except (UsageError, AuthRejected, ValueError, TypeError):
+        result.detail_lines.append(
+            "monthly USD credit cap was not read (GET /v1/billing without format=credits failed)")
+        return
+    c = data.get("config", data) if isinstance(data, dict) else None
+    if not isinstance(c, dict):
+        return
+    limit = _cents_usd(c.get("monthlyLimit")) if "monthlyLimit" in c else None
+    used = _cents_usd(c.get("used")) if "used" in c else None
+    if limit is None and used is None:
+        return
+    result.credit_limit_usd = limit
+    result.credit_used_usd = used
+    if "billingPeriodEnd" in c:
+        result.credit_period_end = parse_time(c.get("billingPeriodEnd"))
 
 def fetch_command(cfg: Dict[str, Any]) -> UsageResult:
     """Your own command; must print {"remaining_percent": 72, "resets_at": "..."}."""
