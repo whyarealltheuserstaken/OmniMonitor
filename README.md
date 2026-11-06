@@ -35,9 +35,10 @@ is no longer needed.
 
 ![Stats page (demo data)](docs/screenshot-stats.png)
 
-<sub>Screenshot rendered from **demo mode** (fake, labeled data). Tray icons: green ≥ 50 %
-left, yellow ≥ 20 %, red below that, gray `?` = no data yet, gray `!` = error, blue dot =
-demo.</sub>
+<sub>Screenshot rendered from **demo mode** (fake, labeled data). Tray icons: green ≥ 40 %
+left, amber 20–&lt;40 %, red below 20 %, gray `?` = no data yet, gray `!` = error, blue dot =
+demo. On macOS the green/amber/red ring is a non-template image (templates are monochrome)
+with a thin halo so it stays visible on light and dark menu bars.</sub>
 
 ![Tray icon styles](docs/tray-icons.png)
 

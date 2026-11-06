@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+- **Tray icon colors follow remaining %:** green when ≥ 40 % left, amber when 20–&lt;40 %,
+  red when &lt; 20 %. Same thresholds on macOS (menu-bar ring + optional %) and
+  Windows/Linux gauges. On macOS the colored states are **not** NSImage templates
+  (templates are monochrome); a thin dark+light halo keeps them readable on light and
+  dark menu bars. Error / no-data stay template gray (non-alarm).
+
 ### Added
 - **Opt-in web-session providers** (off by default): `claude_plan`, `chatgpt_web`, `cursor`.
   Per provider you choose **in-app sign-in** (pywebview on the real login page) or **import
