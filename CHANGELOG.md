@@ -1,14 +1,14 @@
 # Changelog
 
+All notable changes to this project are documented here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
+[Semantic Versioning](https://semver.org/).
+
 ## [Unreleased]
 
-### Changed
-- CI/Release: Apple Silicon builds now run on `macos-15` (GitHub retired `macos-14` images on 2026-11-02).
-- **Tray icon colors follow remaining %:** green when ≥ 40 % left, amber when 20–&lt;40 %,
-  red when &lt; 20 %. Same thresholds on macOS (menu-bar ring + optional %) and
-  Windows/Linux gauges. On macOS the colored states are **not** NSImage templates
-  (templates are monochrome); a thin dark+light halo keeps them readable on light and
-  dark menu bars. Error / no-data stay template gray (non-alarm).
+## [0.5.0-beta] - 2026-11-05
+
+Beta / prerelease. GitHub marks this release as a prerelease; `/releases/latest` stays on the last stable (0.4.2) until a final 0.5.0.
 
 ### Added
 - **Opt-in web-session providers** (off by default): `claude_plan`, `chatgpt_web`, `cursor`.
@@ -21,13 +21,21 @@
   no code copied). Confidence for each new reader is **experimental** until live-verified.
 
 ### Changed
+- **Tray icon colors follow remaining %:** green when ≥ 40 % left, amber when 20–&lt;40 %,
+  red when &lt; 20 %. Same thresholds on macOS (menu-bar ring + optional %) and
+  Windows/Linux gauges. On macOS the colored states are **not** NSImage templates
+  (templates are monochrome); a thin dark+light halo keeps them readable on light and
+  dark menu bars. Error / no-data stay template gray (non-alarm).
+- CI/Release: Apple Silicon builds now run on `macos-15` (GitHub retired `macos-14` images on 2026-11-02).
 - Privacy policy: cookie use is allowed only for explicitly enabled web-session providers,
   with a clear Settings explanation (Chromium Safe Storage prompt; Safari Full Disk Access).
 
-
-All notable changes to this project are documented here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
-[Semantic Versioning](https://semver.org/).
+### Not verified
+- Web-session providers are **experimental** and have not been live-verified against real
+  Claude / ChatGPT / Cursor accounts on a personal Mac.
+- Colored menu-bar icons were checked via 2× light/dark previews and CI, not on a real
+  Retina menu bar.
+- Binaries are ad-hoc signed only (macOS) and not notarized; Windows is unsigned.
 
 ## [0.4.2] - 2026-11-05
 

@@ -56,7 +56,11 @@ AI tools. OmniMonitor copies **no code, text, icons or images** from it. Everyth
 Python re-implementation of the ideas. See [docs/inspiration-notes.md](docs/inspiration-notes.md)
 for what we adopted, what we built differently and why.
 
-## What's new in 0.4.2
+## What's new in 0.5.0-beta
+
+**Beta / prerelease** (GitHub prerelease; `/releases/latest` stays on 0.4.2). Opt-in web-session providers (Claude plan, ChatGPT web, Cursor — off by default; in-app sign-in or browser import) and a green/amber/red tray icon by remaining weekly pool (macOS keeps the ring + optional %; colored states are non-template with a light/dark halo). See [release notes](docs/release-notes/v0.5.0-beta.md).
+
+### Earlier: 0.4.2
 
 Native window UX: redesigned tray icon (crisp macOS template ring / Windows-Linux gauge), real mini window that doesn't leave you in the browser, Full stats opens the native window, exports and external links work inside the app window, clearer empty-token reasons, and a Report a problem button. See [release notes](docs/release-notes/v0.4.2.md).
 

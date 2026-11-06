@@ -211,3 +211,5 @@ jobs:
           files: artifacts/*
           body_path: docs/release-notes/${{ github.ref_name }}.md
           draft: false
+          # beta / rc / alpha tags publish as GitHub prereleases (keeps /releases/latest on stable)
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') || contains(github.ref_name, 'alpha') }}
