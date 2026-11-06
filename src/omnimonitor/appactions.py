@@ -81,10 +81,17 @@ _SECRETISH = re.compile(r"(?i)\b(?:xai-|sk-|sk_|ghp_|gho_|eyJ)[A-Za-z0-9_\-.]{8,
 _URL_SECRET = re.compile(r"/s/[A-Za-z0-9_\-]{16,}/")
 
 
+_COOKIE_PAIR = re.compile(
+    r"(?i)\b(sessionKey|WorkosCursorSessionToken|__Secure-next-auth\.session-token|"
+    r"next-auth\.session-token|__Secure-authjs\.session-token|authjs\.session-token|"
+    r"wos-session|__Secure-wos-session|oai-did)=([^;\s]+)")
+
+
 def redact(text: str) -> str:
     text = _URL_SECRET.sub("/s/<secret>/", text)
     text = _SECRETISH.sub(lambda m: (m.group(1) + m.group(2) + "<redacted>") if m.group(1)
                           else "<redacted>", text)
+    text = _COOKIE_PAIR.sub(lambda m: m.group(1) + "=<redacted>", text)
     home = str(Path.home())
     return text.replace(home, "~") if len(home) > 1 else text
 
@@ -104,6 +111,13 @@ def diagnostics(ctrl, extra: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         lines.append("status: unavailable (%s)" % type(e).__name__)
     if getattr(ctrl, "token_note", ""):
         lines.append("token note: %s" % ctrl.token_note)
+    try:
+        from omnimonitor import sessions
+        st = sessions.status()
+        lines.append("web sessions: " + ", ".join(
+            ("%s=%s" % (k, v or "no")) for k, v in st.items()))
+    except Exception:  # noqa: BLE001
+        lines.append("web sessions: unavailable")
     for k, v in (extra or {}).items():
         lines.append("%s: %s" % (k, v))
     lines.append("")
@@ -149,3 +163,59 @@ def window_actions(launcher, base_url: Callable[[], str], cfg_get: Callable[[str
         browser(base_url() + _page(body))
         return {"ok": True}
     return {"window": window, "browser": open_browser}
+
+
+def session_actions(cfg_get) -> Dict[str, Callable[[Any], Dict[str, Any]]]:
+    """CSRF-protected actions for web-session providers: status, browser import, in-app login, forget."""
+    from omnimonitor import browser_cookies, catalog, session_login, sessions
+
+    def _pid(body) -> str:
+        pid = str((body or {}).get("provider") or "") if isinstance(body, dict) else ""
+        if pid not in catalog.WEB_SESSION_IDS:
+            raise ValueError("unknown web-session provider")
+        return pid
+
+    def status(body):
+        browsers = browser_cookies.available_browsers()
+        st = sessions.status()
+        rows = []
+        for pid in catalog.WEB_SESSION_IDS:
+            info = catalog.BY_ID[pid]
+            opts = (cfg_get("providers") or {}).get(pid) or {}
+            rows.append({
+                "id": pid, "name": info.name,
+                "enabled": bool(opts.get("enabled")),
+                "auth": opts.get("auth") or "off",
+                "browser": opts.get("browser") or "auto",
+                "session": st.get(pid) or "",
+                "confidence": info.confidence,
+                "shows": info.shows,
+            })
+        return {"ok": True, "providers": rows, "browsers": browsers}
+
+    def import_browser(body):
+        pid = _pid(body)
+        browser = str((body or {}).get("browser") or "auto")
+        try:
+            header = browser_cookies.read_for_provider(pid, browser)
+            where = sessions.save(pid, header, meta={"source": "browser", "browser": browser})
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": str(e)}
+        return {"ok": True, "stored": where, "provider": pid}
+
+    def login(body):
+        pid = _pid(body)
+        try:
+            msg = session_login.start_login(pid)
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": str(e)}
+        return {"ok": True, "message": msg, "provider": pid}
+
+    def forget(body):
+        pid = _pid(body)
+        gone = sessions.forget(pid)
+        return {"ok": True, "forgotten": gone, "provider": pid}
+
+    return {"session-status": status, "session-import": import_browser,
+            "session-login": login, "session-forget": forget}
+

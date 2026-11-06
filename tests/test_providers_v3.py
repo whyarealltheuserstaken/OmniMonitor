@@ -368,7 +368,11 @@ def test_catalog_enabled_ids_precedence_and_counts():
             assert p.reason and p.needs, p.id
         if p.kind == "api":
             assert p.env and p.id in accounts.FETCHERS and p.docs, p.id
-        assert "cookie" not in p.source.lower() or "never" in p.source.lower(), p.id
+        if p.kind == "web_session":
+            assert p.id in ("claude_plan", "chatgpt_web", "cursor")
+            assert "cookie" in (p.auth + p.source).lower()
+        else:
+            assert "cookie" not in p.source.lower() or "never" in p.source.lower(), p.id
 
 
 def test_every_catalog_id_is_documented():
@@ -377,13 +381,18 @@ def test_every_catalog_id_is_documented():
     assert not missing
 
 
-def test_no_cookie_or_keychain_access_in_sources():
-    pat = re.compile(r"keyring|keychain|Cookies|browser_cookie|secretstorage|SecKeychain",
-                     re.I)
+def test_cookie_access_only_in_web_session_modules():
+    """Cookie/Keychain access is confined to the opt-in web-session modules."""
+    allowed = {"browser_cookies.py", "sessions.py", "session_login.py", "web_accounts.py", "accounts.py",
+               "appactions.py", "settings.py", "catalog.py"}  # settings/catalog mention auth UI
+    pat = re.compile(r"keyring|keychain|Cookies|browser_cookie|secretstorage|SecKeychain|"
+                     r"get_cookies|Safe Storage", re.I)
     for f in (ROOT / "src" / "omnimonitor").glob("*.py"):
+        if f.name in allowed:
+            continue
         for n, line in enumerate(f.read_text("utf-8").splitlines(), 1):
             s = line.split("#")[0]
-            if pat.search(s) and not re.search(r"\b(never|not|no|nothing|without)\b", s, re.I):
+            if pat.search(s) and not re.search(r"\b(never|not|no|nothing|without|opt-in)\b", s, re.I):
                 pytest.fail("%s:%d %s" % (f.name, n, line))
 
 

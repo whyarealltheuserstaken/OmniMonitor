@@ -5,8 +5,7 @@ in *pixels* (22 px), so on Retina screens a 44 px icon is downsampled to 22 px a
 upscaled by AppKit: blurry. It also never marks the image as a template, so a colored image
 on a dark disc ignores light/dark menu bars. We replace that one method on the icon
 instance: the @2x PNG becomes an NSImage whose logical size is 22 pt tall (AppKit uses all
-44 px on Retina) and, unless the image is the red "critical" variant, ``setTemplate_(True)``
-so macOS tints it like the system icons.
+44 px on Retina) Colored green/amber/red gauges use ``setTemplate_(False)``; error / no-data stay templates.
 """
 
 from __future__ import annotations

@@ -1,5 +1,30 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- CI/Release: Apple Silicon builds now run on `macos-15` (GitHub retired `macos-14` images on 2026-11-02).
+- **Tray icon colors follow remaining %:** green when ≥ 40 % left, amber when 20–&lt;40 %,
+  red when &lt; 20 %. Same thresholds on macOS (menu-bar ring + optional %) and
+  Windows/Linux gauges. On macOS the colored states are **not** NSImage templates
+  (templates are monochrome); a thin dark+light halo keeps them readable on light and
+  dark menu bars. Error / no-data stay template gray (non-alarm).
+
+### Added
+- **Opt-in web-session providers** (off by default): `claude_plan`, `chatgpt_web`, `cursor`.
+  Per provider you choose **in-app sign-in** (pywebview on the real login page) or **import
+  from a browser** (Firefox / Chrome / Edge / Brave / Arc / Safari where feasible). Only that
+  provider's domains and cookie names are read. Sessions are stored in the OS keyring when
+  possible, else a chmod-600 file; never logged, exported, shown, or included in Report a
+  problem. Sign out / forget per provider.
+- Docs: [docs/cookies/](docs/cookies/) cites CodexBar's public endpoint/cookie notes (MIT;
+  no code copied). Confidence for each new reader is **experimental** until live-verified.
+
+### Changed
+- Privacy policy: cookie use is allowed only for explicitly enabled web-session providers,
+  with a clear Settings explanation (Chromium Safe Storage prompt; Safari Full Disk Access).
+
+
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).

@@ -202,7 +202,8 @@ class Controller:
             self.service_status = {}
             return
         self._refresh_status()
-        ids = config_mod.enabled_api_providers(self.cfg)
+        ids = list(dict.fromkeys(
+            config_mod.enabled_api_providers(self.cfg) + config_mod.enabled_web_providers(self.cfg)))
         if not ids:
             self.readings = {}
             return
@@ -217,7 +218,8 @@ class Controller:
     def _refresh_status(self) -> None:
         """Opt-in official status-page badges (cached 5 min; never raises)."""
         try:
-            ids = set(self.tools()) | set(config_mod.enabled_api_providers(self.cfg)) | {"grok"}
+            ids = set(self.tools()) | set(config_mod.enabled_api_providers(self.cfg)) | set(
+                config_mod.enabled_web_providers(self.cfg)) | {"grok"}
             fams = {catalog.get(i).family for i in ids if catalog.get(i)}
             self.service_status = status_mod.fetch_all(self.cfg, fams, http=self.http,
                                                        now=self.clock().timestamp())

@@ -288,7 +288,7 @@ class TrayApp:
             log.exception("tray icon update failed")
 
     def _set_mac_image(self, value, error: bool, demo: bool) -> None:
-        """macOS: template ring (+ optional %) at 22 pt / 44 px; see macicon.py."""
+        """macOS: colored ring (+ optional %) at 22 pt / 44 px; see macicon.py / icon.py."""
         img, template = render_menubar(value, error=error, demo=demo,
                                        show=self.ctrl.cfg.get("icon_value") or "remaining",
                                        text=self.ctrl.cfg.get("icon_text", True) is not False)

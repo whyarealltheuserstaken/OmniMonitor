@@ -143,16 +143,32 @@ def test_read_request_from_stdin():
     assert url == "http://127.0.0.1:1/s/x/" and not opts.get("on_top")
 
 
-@pytest.mark.parametrize("rem,err,template", [(80, False, True), (30, False, True),
-                                              (10, False, False), (None, True, True)])
+@pytest.mark.parametrize("rem,err,template", [
+    (80, False, False),   # green — colored, not a template
+    (30, False, False),   # amber — colored, not a template
+    (10, False, False),   # red — colored, not a template
+    (None, True, True),   # error — template (non-alarm)
+    (None, False, True),  # no data — template (non-alarm)
+])
 def test_menubar_icon_44px_template(rem, err, template):
     img, tpl = render_menubar(rem, error=err)
     assert img.height == 44 and img.mode == "RGBA" and tpl is template
     if tpl:  # template images: pure black + alpha only
         r, g, b, a = (ch.tobytes() for ch in img.split())
         assert {(r[i], g[i], b[i]) for i in range(len(a)) if a[i]} == {(0, 0, 0)}
+    else:  # colored gauges must actually use non-black pixels
+        r, g, b, a = (ch.tobytes() for ch in img.split())
+        assert any((r[i], g[i], b[i]) != (0, 0, 0) for i in range(len(a)) if a[i])
     small, _ = render_menubar(50, text=False)
     assert small.height == 44 and small.width <= 44
+
+
+def test_color_thresholds_green_amber_red():
+    from omnimonitor.icon import GREEN, RED, YELLOW, color_for, menubar_state
+    assert color_for(40) == GREEN and color_for(39.9) == YELLOW
+    assert color_for(20) == YELLOW and color_for(19.9) == RED
+    assert menubar_state(40) == "ok" and menubar_state(39.9) == "warn"
+    assert menubar_state(20) == "warn" and menubar_state(19.9) == "critical"
 
 
 def test_prompt_id_dedup_and_toplevel_usage_fallback():

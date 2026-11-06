@@ -16,12 +16,18 @@ _FONT_CANDIDATES = [
 ]
 
 
+# Remaining-pool tray colors (Henry, 2026-11-05): green ≥ 40 %, amber 20–<40 %, red < 20 %.
+# Same thresholds for macOS menu bar and Windows/Linux gauges.
+OK_REMAINING = 40.0
+WARN_REMAINING = 20.0
+
+
 def color_for(remaining: Optional[float]) -> tuple:
     if remaining is None:
         return GRAY
-    if remaining >= 50:
+    if remaining >= OK_REMAINING:
         return GREEN
-    if remaining >= 20:
+    if remaining >= WARN_REMAINING:
         return YELLOW
     return RED
 
@@ -154,9 +160,9 @@ def menubar_state(remaining: Optional[float], error: bool = False) -> str:
         return "error"
     if remaining is None:
         return "none"
-    if remaining < 20:
+    if remaining < WARN_REMAINING:
         return "critical"
-    if remaining < 50:
+    if remaining < OK_REMAINING:
         return "warn"
     return "ok"
 
@@ -166,12 +172,17 @@ def render_menubar(remaining: Optional[float], *, error: bool = False, demo: boo
     """Crisp macOS status-bar image. Returns (PIL image, is_template).
 
     Height is exactly 22pt * scale px (44 px at 2x), width fits the content. Drawn 8x
-    supersampled, then LANCZOS-reduced. Template images are pure black + alpha so macOS
-    tints them for light/dark menu bars; only the critical state (< 20% left) is drawn in
-    red as a non-template image, like the battery icon does.
+    supersampled, then LANCZOS-reduced.
+
+    When remaining % is known (ok / warn / critical), the ring and optional % label are
+    colored green / amber / red and ``is_template`` is False — NSImage templates are
+    monochrome, so a colored gauge cannot be a template. A thin dark+light halo keeps the
+    color readable on both light and dark menu bars. Error and "no data" stay template
+    (black + alpha) so macOS tints them for the bar; that is the non-alarm look.
     """
     state = menubar_state(remaining, error)
-    template = state != "critical"
+    # Colored states cannot be templates (macOS would discard the RGB).
+    template = state in ("error", "none")
     ss = 8
     u = scale * ss  # pixels per point while drawing
     h = MENUBAR_PT * u
@@ -184,40 +195,67 @@ def render_menubar(remaining: Optional[float], *, error: bool = False, demo: boo
     tw = bb[2] - bb[0]
     ring_d = 15 * u
     gap = 3.5 * u
-    w = int(ring_d + 2 * u + ((gap + tw + 1 * u) if text and label else 0))
+    # Halo needs a couple of extra pixels of width so the outline is not clipped.
+    halo = 0 if template else int(1.6 * u)
+    w = int(ring_d + 2 * u + 2 * halo + ((gap + tw + 1 * u + halo) if text and label else 0))
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    ink = (0, 0, 0) if template else (232, 60, 52)
-    track = (0, 0, 0, 80) if template else (232, 60, 52, 90)
-    x0, y0 = 1 * u, (h - ring_d) / 2
+    if template:
+        ink, track = (0, 0, 0), (0, 0, 0, 80)
+    else:
+        ink = color_for(remaining)  # green / amber / red from remaining
+        track = ink + (70,)
+    import math
+    x0, y0 = 1 * u + halo, (h - ring_d) / 2
     box = [x0, y0, x0 + ring_d, y0 + ring_d]
     stroke = int(2.4 * u)
-    d.arc(box, 0, 360, fill=track, width=stroke)
+
+    def _arc(fill, width, a0=0, a1=360, caps=False):
+        d.arc(box, a0, a1, fill=fill, width=width)
+        if caps and a1 != a0:
+            r = ring_d / 2 - width / 2
+            cx, cy = x0 + ring_d / 2, y0 + ring_d / 2
+            for a in (a0, a1):
+                px = cx + r * math.cos(math.radians(a))
+                py = cy + r * math.sin(math.radians(a))
+                d.ellipse([px - width / 2, py - width / 2, px + width / 2, py + width / 2],
+                          fill=fill if len(fill) == 4 else fill + (255,))
+
+    if not template:
+        # Dark then light halo so the colored stroke reads on light and dark menu bars.
+        _arc((0, 0, 0, 140), stroke + int(2.2 * u))
+        _arc((255, 255, 255, 200), stroke + int(1.1 * u))
+    _arc(track, stroke)
     if shown:
         a0, a1 = -90, -90 + 360 * shown / 100.0
-        d.arc(box, a0, a1, fill=ink + (255,), width=stroke)
-        import math
-        r = ring_d / 2 - stroke / 2
-        cx, cy = x0 + ring_d / 2, y0 + ring_d / 2
-        for a in (a0, a1):  # round caps
-            px, py = cx + r * math.cos(math.radians(a)), cy + r * math.sin(math.radians(a))
-            d.ellipse([px - stroke / 2, py - stroke / 2, px + stroke / 2, py + stroke / 2],
-                      fill=ink + (255,))
+        if not template:
+            _arc((0, 0, 0, 160), stroke + int(2.2 * u), a0, a1, caps=True)
+            _arc((255, 255, 255, 220), stroke + int(1.1 * u), a0, a1, caps=True)
+        _arc(ink + (255,), stroke, a0, a1, caps=True)
     if state == "error" or (pct is None and not text):
         cx, cy = x0 + ring_d / 2, y0 + ring_d / 2
         d.rounded_rectangle([cx - 0.9 * u, cy - 4 * u, cx + 0.9 * u, cy + 1.2 * u],
                             radius=0.9 * u, fill=ink + (255,))
         d.ellipse([cx - 1 * u, cy + 2.3 * u, cx + 1 * u, cy + 4.3 * u], fill=ink + (255,))
-    if demo:  # small solid dot badge, top right of the ring
+    if demo:  # small solid dot badge, top right of the ring (DEMO blue when colored)
         r = 2.6 * u
         cx, cy = x0 + ring_d - r * 0.6, y0 + r * 0.6
         d.ellipse([cx - r - 1.2 * u, cy - r - 1.2 * u, cx + r + 1.2 * u, cy + r + 1.2 * u],
                   fill=(0, 0, 0, 0))
-        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=ink + (255,))
+        dot = DEMO if not template else ink
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=dot + (255,))
     if text and label:
         asc, desc = font.getmetrics()
         ty = (h - (asc + desc)) / 2 + 0.3 * u
-        d.text((x0 + ring_d + gap - bb[0], ty), label, font=font, fill=ink + (255,))
+        tx = x0 + ring_d + gap - bb[0]
+        if not template:
+            # Soft outline so the % stays legible on light and dark bars.
+            for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, 1), (-1, 1), (1, -1)):
+                d.text((tx + dx * 0.55 * u, ty + dy * 0.55 * u), label, font=font,
+                       fill=(0, 0, 0, 160))
+            for dx, dy in ((-0.35, 0), (0.35, 0), (0, -0.35), (0, 0.35)):
+                d.text((tx + dx * u, ty + dy * u), label, font=font, fill=(255, 255, 255, 200))
+        d.text((tx, ty), label, font=font, fill=ink + (255,))
     out = img.resize((max(1, w // ss), MENUBAR_PT * scale), Image.LANCZOS)
     return out, template
 
