@@ -163,6 +163,73 @@ def test_menubar_icon_44px_template(rem, err, template):
     assert small.height == 44 and small.width <= 44
 
 
+def _near(a, b, tol=16):
+    return all(abs(int(a[i]) - int(b[i])) <= tol for i in range(3))
+
+
+def _pixel_kind(p, bg):
+    if _near(p, bg, 14):
+        return "bg"
+    r, g, b = p
+    if max(p) < 95:
+        return "dark"
+    if min(p) > 205 and max(p) - min(p) < 30:
+        return "light"
+    if max(p) - min(p) < 30:
+        return "edge"
+    return "color"
+
+
+def _stroke_groups(img, bg):
+    """Non-background stretches on the horizontal midline (one per ring wall)."""
+    from PIL import Image
+    base = Image.new("RGBA", img.size, bg + (255,))
+    base.alpha_composite(img)
+    rgb = base.convert("RGB")
+    y = rgb.height // 2
+    kinds = [_pixel_kind(rgb.getpixel((x, y)), bg) for x in range(rgb.width)]
+    groups = []
+    cur = []
+    for k in kinds:
+        if k == "bg":
+            if cur:
+                groups.append(cur)
+                cur = []
+        else:
+            cur.append(k)
+    if cur:
+        groups.append(cur)
+    return groups
+
+
+def test_menubar_ring_is_one_stroke_on_light_and_dark():
+    """A horizontal cut meets exactly two strokes (the left and right of one ring).
+
+    The old icon stacked a dark halo, a white halo and the color stroke, which
+    reads as nested rings. A near-white band inside a stroke is that bug. The
+    center stays empty — no filled disc.
+    """
+    from omnimonitor.icon import GREEN, RED, YELLOW, color_for
+    light, dark = (246, 246, 246), (28, 28, 30)
+    for remaining in (100, 73, 30, 12):
+        img, tpl = render_menubar(remaining, text=False, demo=False)
+        assert tpl is False
+        assert color_for(remaining) == (GREEN if remaining >= 40 else YELLOW if remaining >= 20 else RED)
+        y = img.height // 2
+        xs = [x for x in range(img.width) if img.getpixel((x, y))[3] > 20]
+        assert xs
+        mid = (xs[0] + xs[-1]) // 2
+        assert img.getpixel((mid, y))[3] == 0  # hollow
+        for bg in (light, dark):
+            groups = _stroke_groups(img, bg)
+            assert len(groups) == 2, (remaining, bg, groups)
+            for g in groups:
+                assert len(g) <= 11, (remaining, bg, len(g), g)
+                assert g.count("light") < 2, (remaining, bg, g)
+            if remaining == 100:
+                assert all("color" in g for g in groups), (bg, groups)
+
+
 def test_color_thresholds_green_amber_red():
     from omnimonitor.icon import GREEN, RED, YELLOW, color_for, menubar_state
     assert color_for(40) == GREEN and color_for(39.9) == YELLOW

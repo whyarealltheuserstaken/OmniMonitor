@@ -14,8 +14,8 @@ from typing import Any, Callable, Dict, List, Tuple
 from omnimonitor import catalog
 from omnimonitor.pricing import clean_prices
 
-HIDEABLE_CARDS = ("providers", "budgets", "forecast", "burn", "limit", "heatmap", "breakdown",
-                  "tools", "models",
+HIDEABLE_CARDS = ("providers", "budgets", "grok-suite", "forecast", "burn", "limit",
+                  "heatmap", "breakdown", "tools", "models",
                   "projects", "cost", "insights")
 
 

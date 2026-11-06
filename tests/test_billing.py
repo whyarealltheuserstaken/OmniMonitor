@@ -19,6 +19,7 @@ def test_typical_weekly():
     assert r.resets_at.isoformat() == "2026-11-09T00:00:00+00:00"
     assert r.period_start.isoformat() == "2026-11-02T00:00:00+00:00"
     assert ("GrokBuild", 20.0) in r.products
+    assert r.products_reported is True
     assert r.on_demand_cap == 0.0
     assert r.token_fields == {}  # billing exposes no token counts
 
@@ -70,6 +71,12 @@ def test_bad_shapes_raise_instead_of_guessing(payload):
 def test_missing_reset_is_none_not_invented():
     r = parse_billing(body({"creditUsagePercent": 10, "productUsage": []}))
     assert r.resets_at is None
+    assert r.products_reported is True and r.products == []
+
+
+def test_omitted_product_usage_is_not_a_zero_split():
+    r = parse_billing(body({"creditUsagePercent": 10, "currentPeriod": {}}))
+    assert r.products_reported is False and r.products == []
 
 
 def test_team_account_message():

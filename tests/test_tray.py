@@ -48,6 +48,10 @@ def test_menu_after_demo_refresh_is_labeled(tray):
     assert items[0].startswith("DEMO · ") and items[0].endswith("% left")
     assert items[1].startswith("Resets ")
     assert "Tokens" in items[2]
+    assert any(t.startswith("Grok suite:") for t in items)
+    assert any(t.startswith("Grok CLI:") for t in items)
+    assert any("Grok Bot:" in t and "not available" in t for t in items)
+    assert any(t.startswith("Cursor (Grok):") and "not available" in t for t in items)
     assert tray.icon.title.startswith("DEMO")
 
 

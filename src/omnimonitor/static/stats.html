@@ -79,6 +79,12 @@
   .legend { display:flex; gap:3px; align-items:center; justify-content:flex-end; color:var(--mut);
             font-size:11px; margin-top:8px; }
   .legend i { width:11px; height:11px; border-radius:3px; display:inline-block; }
+  .gs-row { padding:12px 0; border-bottom:1px solid var(--line); }
+  .gs-row:last-child { border-bottom:none; }
+  .gs-h { display:flex; justify-content:space-between; gap:12px; align-items:baseline; }
+  .gs-h .n { font-weight:600; }
+  .gs-why { color:var(--mut); font-size:12.5px; margin-top:4px; }
+  .gs-detail { color:var(--mut); font-size:12.5px; margin-top:4px; }
   .row { display:flex; justify-content:space-between; padding:11px 0; border-bottom:1px solid var(--line); }
   .row:last-child { border-bottom:none; }
   .row .l { color:var(--fg); } .row .r { color:var(--mut); }
@@ -114,7 +120,7 @@
 
   <div class="hero">
     <div class="card">
-      <div class="sub">Weekly pool remaining</div>
+      <div class="sub">Grok suite · weekly pool remaining</div>
       <div class="big" id="remaining">–</div>
       <div class="bar"><i id="barfill" style="width:0"></i></div>
       <div class="sub" id="reset"></div>
@@ -125,6 +131,13 @@
       <div class="big" id="weektokens">–</div>
       <div class="sub" id="weeklimit"></div>
     </div>
+  </div>
+
+  <div class="section card" id="grok-suite-card" data-card="grok-suite">
+    <h2>Grok suite <span class="sub" id="gs-window"></span></h2>
+    <div class="sub" id="gs-total"></div>
+    <div id="gs-banners"></div>
+    <div id="gs-rows"></div>
   </div>
 
   <div class="section card" data-card="forecast" id="forecast-card">

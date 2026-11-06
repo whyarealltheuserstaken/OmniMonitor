@@ -25,6 +25,12 @@ Every adapter produces events with the same meaning, so totals are comparable:
 estimate.** Claude Code and Codex tokens are shown separately by tool. They never change any
 Grok number.
 
+The dashboard's **Grok suite** card uses the same rule for its token detail. Grok Bot and
+Grok-in-Cursor have no rows in these logs. `grok_unified` is the Grok CLI as well
+(`shell.turn.inference_done`); when session events exist, the suite total does not add the
+unified log on top. Pool percents for CLI / Bot / Cursor come only from billing
+`productUsage` — see [research.md](research.md). A missing product is "not available", not 0%.
+
 ## `grok_sessions` (Grok CLI, always on)
 
 * Files: `<grok_home>/sessions/**/updates.jsonl` (`grok_home` = config, `$GROK_HOME` or

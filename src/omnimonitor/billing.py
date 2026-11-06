@@ -51,6 +51,9 @@ class UsageResult:
     period_start: Optional[datetime] = None
     period_type: str = ""
     products: List[Tuple[str, float]] = field(default_factory=list)
+    # True when the payload contained a productUsage field (even if every share was 0).
+    # False when the field was omitted — that is not the same as 0% per product.
+    products_reported: bool = False
     on_demand_cap: Optional[float] = None
     on_demand_used: Optional[float] = None
     token_fields: Dict[str, float] = field(default_factory=dict)  # any token-ish numbers seen
@@ -69,6 +72,7 @@ class UsageResult:
             "label": self.label,
             "is_demo": self.is_demo,
             "products": [{"product": p, "used_percent": v} for p, v in self.products],
+            "products_reported": self.products_reported,
             "on_demand_cap": self.on_demand_cap,
             "on_demand_used": self.on_demand_used,
             "token_fields": dict(self.token_fields),
@@ -169,13 +173,18 @@ def parse_billing(body: str) -> UsageResult:
     start = parse_time(period.get("start")) or parse_time(c.get("billingPeriodStart"))
     products: List[Tuple[str, float]] = []
     details: List[str] = []
-    for p in c.get("productUsage") or []:
+    products_reported = "productUsage" in c
+    raw_products = c.get("productUsage")
+    if products_reported and not isinstance(raw_products, list):
+        details.append("productUsage was present but not a list")
+        raw_products = []
+    for p in raw_products or []:
         if isinstance(p, dict) and p.get("product"):
             try:
-                pv = float(p.get("usagePercent") or 0)  # omitted = 0
+                pv = float(p.get("usagePercent") or 0)  # omitted = 0 (proto-JSON)
             except (TypeError, ValueError):
                 continue
-            products.append((str(p["product"]), pv))
+            products.append((str(p["product"])[:80], pv))
             details.append("%s: %.0f%% used" % (p["product"], pv))
     if raw_used > 100:
         details.append("Reported %.1f%% used (over the weekly pool)" % raw_used)
@@ -183,6 +192,7 @@ def parse_billing(body: str) -> UsageResult:
         remaining_percent=100.0 - used, resets_at=reset, label="Grok billing (unofficial)",
         used_percent=used, raw_used_percent=raw_used, period_start=start,
         period_type=str(period.get("type") or ""), products=products,
+        products_reported=products_reported,
         on_demand_cap=_val(c.get("onDemandCap")) if "onDemandCap" in c else None,
         on_demand_used=_val(c.get("onDemandUsed")) if "onDemandUsed" in c else None,
         token_fields=_find_token_fields(c), detail_lines=details)
@@ -334,6 +344,7 @@ def fetch_demo(cfg: Dict[str, Any], now: Optional[datetime] = None) -> UsageResu
     return UsageResult(100.0 - used, reset, label="DEMO (fake data)", is_demo=True,
                        used_percent=used, raw_used_percent=used, period_start=start,
                        period_type="DEMO", products=[("GrokBuild", round(used, 1))],
+                       products_reported=True,
                        detail_lines=["DEMO MODE - fake numbers, not your account"])
 
 def fetch_grok_cli_billing(cfg: Dict[str, Any]) -> UsageResult:

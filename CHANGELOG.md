@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- **macOS menu-bar icon is one ring.** The green / amber / red gauge had a dark halo and a light halo drawn as wider strokes on the same circle, so at a normal size (for example 73% left) it looked like three nested rings. Colored states are still not template images. A hairline dark edge keeps the single ring visible on a light menu bar; the color itself reads on a dark bar. No second ring and no filled inner disc. Thresholds are unchanged: green ≥ 40% left (`#3FB950`), amber 20–&lt;40% (`#D29922`), red &lt; 20% (`#F85149`). The optional % stays beside the ring. Preview: [docs/menubar-ring.png](docs/menubar-ring.png).
+
+### Added
+- **Grok suite breakdown** on the dashboard, mini view, and tray. The weekly total is still the shared pool from `GET https://cli-chat-proxy.grok.com/v1/billing?format=credits` (`creditUsagePercent`). `productUsage` shares of that same pool are grouped when the API names them:
+  - Grok CLI — `GrokBuild` (and a literal `Grok CLI` name)
+  - Grok Bot — only a product literally named Grok Bot
+  - Cursor (Grok) — a product named Cursor / Grok-in-Cursor
+  - Anything else the payload lists (Grok Chat, Grok Tasks, …) is shown as its own share and is not relabeled.
+- Token and activity detail for **Grok CLI** comes from `~/.grok/sessions/**/updates.jsonl`. The experimental `~/.grok/logs/unified.jsonl` (`shell.turn.inference_done`) is the same CLI and is used only when session logs have no usage events, so the two are not added together.
+- Missing figures stay **not available**, with the reason: `productUsage` omitted, product not listed (not treated as 0%), no CLI log yet, or no token log for Grok Bot / Cursor. Grok Bot's separate Cursor-account meter and Cursor's own plan % are not called from this view. If the product shares do not add up to the suite total, the gap is described and not filled in.
+
 ## [0.5.0-beta] - 2026-11-05
 
 Beta / prerelease. GitHub marks this release as a prerelease; `/releases/latest` stays on the last stable (0.4.2) until a final 0.5.0.
