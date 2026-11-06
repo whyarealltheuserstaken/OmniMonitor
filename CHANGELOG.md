@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.2-beta] - 2026-11-06
+
+Beta / prerelease. GitHub marks this release as a prerelease; `/releases/latest` stays on the last stable (0.4.2) until a final 0.5.0.
+
 ### Fixed
 - **Menu-bar ring has no inner black circle.** The hairline outline was a wider dark stroke on the same circle, so on a dark menu bar it read as a second ring inside the colored arc (seen at 70% left). The gauge is the colored arc and the dim track of that same stroke. Thresholds and the optional % are unchanged.
 
@@ -13,6 +17,11 @@ All notable changes to this project are documented here. The format follows
 - **Monthly USD credit cap**, when `GET https://cli-chat-proxy.grok.com/v1/billing` (same Grok CLI login, no `format=credits`) includes `used` and `monthlyLimit`. Those fields are USD cents. The suite shows them as dollars, not as a token allowance.
 - **Grok Bot meter** (`usagePercent`) from `POST https://cursor.com/api/dashboard/get-sand-usage-status`, only when the opt-in Cursor session is enabled and `hasNonZeroIncludedLimit` is true. A missing percent is not shown as 0. This is a separate weekly allowance, not a share of the Grok suite pool, and it has no token count or token cap.
 - The suite card groups missing token counts and the missing token allowance in one "Why some figures are missing" list. A billing field whose name is a token limit is shown as the token allowance when the payload actually contains it.
+
+### Not verified
+- The ring without the inner stroke was checked with light/dark previews and CI, not on a real Retina menu bar after this build.
+- The monthly credit cap and Grok Bot meter are tested with fixtures. They have not been live-checked on Henry's account in this build.
+- Binaries are ad-hoc signed only (macOS) and not notarized; Windows is unsigned.
 
 ## [0.5.1-beta] - 2026-11-06
 

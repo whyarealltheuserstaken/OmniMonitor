@@ -60,9 +60,13 @@ AI tools. OmniMonitor copies **no code, text, icons or images** from it. Everyth
 Python re-implementation of the ideas. See [docs/inspiration-notes.md](docs/inspiration-notes.md)
 for what we adopted, what we built differently and why.
 
-## What's new in 0.5.1-beta
+## What's new in 0.5.2-beta
 
-**Beta / prerelease** (GitHub prerelease; `/releases/latest` stays on 0.4.2). One macOS menu-bar ring (the 0.5.0-beta dark+light halo read as extra rings) and a Grok suite card: the shared weekly pool, plus CLI / Bot / Cursor shares only when billing names them, and Grok CLI tokens from local logs. See [release notes](docs/release-notes/v0.5.1-beta.md).
+**Beta / prerelease** (GitHub prerelease; `/releases/latest` stays on 0.4.2). The menu-bar gauge is only the colored arc and its dim track (the 0.5.1-beta hairline read as an inner black ring). The Grok suite shows a monthly USD credit cap when billing sends one, and a Grok Bot percent when the opt-in Cursor session has an allowance. There is still no token cap. See [release notes](docs/release-notes/v0.5.2-beta.md).
+
+### Earlier: 0.5.1-beta
+
+One macOS menu-bar ring and a Grok suite card: the shared weekly pool, plus CLI / Bot / Cursor shares only when billing names them, and Grok CLI tokens from local logs. See [release notes](docs/release-notes/v0.5.1-beta.md).
 
 ### Earlier: 0.5.0-beta
 
