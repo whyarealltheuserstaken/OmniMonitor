@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14        # Apple Silicon
+          - os: macos-15        # Apple Silicon (macos-14 retired 2026-11-02)
             asset: omnimonitor-macos-arm64
             arch: arm64
           - os: macos-15-intel  # Intel (macos-13 runners were retired Dec 2025)

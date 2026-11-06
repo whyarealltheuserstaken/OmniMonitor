@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- CI/Release: Apple Silicon builds now run on `macos-15` (GitHub retired `macos-14` images on 2026-11-02).
 - **Tray icon colors follow remaining %:** green when ≥ 40 % left, amber when 20–&lt;40 %,
   red when &lt; 20 %. Same thresholds on macOS (menu-bar ring + optional %) and
   Windows/Linux gauges. On macOS the colored states are **not** NSImage templates

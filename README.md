@@ -563,8 +563,8 @@ with a fixture. **Never return made-up numbers.**
 **Releases:** bump `__version__` (in `src/omnimonitor/__init__.py`) and
 `pyproject.toml`, update `CHANGELOG.md`, then tag `vX.Y.Z` and push the tag.
 `.github/workflows/release.yml` builds PyInstaller binaries (`omnimonitor-<os>-<arch>`, e.g.
-`omnimonitor-macos-arm64.dmg`/`.zip`, `omnimonitor-windows-x86_64.zip`, `omnimonitor-linux-x86_64.AppImage`/`.tar.gz`) on macOS 14 (arm64), macOS 15 Intel
-(`macos-15-intel`; GitHub retired `macos-13`), Windows and Ubuntu, and attaches them with `SHA256SUMS.txt` to a GitHub Release whose notes come from `docs/release-notes/vX.Y.Z.md`. The binaries are
+`omnimonitor-macos-arm64.dmg`/`.zip`, `omnimonitor-windows-x86_64.zip`, `omnimonitor-linux-x86_64.AppImage`/`.tar.gz`) on macOS 15 (arm64; GitHub retired `macos-14` 2026-11-02), macOS 15 Intel
+(`macos-15-intel`), Windows and Ubuntu, and attaches them with `SHA256SUMS.txt` to a GitHub Release whose notes come from `docs/release-notes/vX.Y.Z.md`. The binaries are
 unsigned, so macOS Gatekeeper and Windows SmartScreen will warn until signing is set up.
 
 ---
