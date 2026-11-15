@@ -192,6 +192,9 @@ log file (`~/Library/Logs/OmniMonitor/omnimonitor.log` on macOS). See CHANGELOG.
 | Grok suite weekly pool remaining %, reset time | billing `creditUsagePercent` | **real** (unofficial API); one shared pool |
 | CLI / Bot / Cursor pool % | billing `productUsage` only, and only for products the payload names | **real** when present; otherwise **not available** (not shown as 0%). Grok Chat and other named products are listed as themselves. Shares that do not add up to the suite total are not filled in. |
 | Grok CLI tokens (suite card) | `~/.grok/sessions/**/updates.jsonl`, or `unified.jsonl` only if sessions have no events | **real**, this computer's CLI only. Not Grok Bot or Cursor. |
+| Grok in Cursor tokens | opt-in Cursor provider, `get-filtered-usage-events`, model names containing `grok` | **real** when that response includes `tokenUsage`; otherwise **not available**. Not labeled Grok Bot unless the model name says so. |
+| Grok dollars | billing `used` / `monthlyLimit` or `history[]`, US cents | **real** dollars when those fields are present. Never shown as tokens. |
+| Usage resets left | `GetRemainingResets` with the Grok login token | shown only when the call returns a count |
 | Tokens used this billing week | Grok CLI session logs on **this computer** | **real**, but local CLI only |
 | Weekly token limit ("out of Y") | **not exposed by xAI anywhere** | shown as *not available*, or as a flagged **≈ estimate** (see below) |
 | Lifetime tokens, peak day, streaks, heatmap (Daily / Weekly / Cumulative) | session logs + local history | real, local CLI only |
@@ -255,13 +258,12 @@ omnimonitor --demo                     # try it with fake data
 `omnimonitor-macos-arm64.dmg` for Apple Silicon (M1–M4), `omnimonitor-macos-x86_64.dmg` for
 Intel (the same app as a `.zip` is attached too). Open the `.dmg` and drag `omnimonitor.app` onto
 the Applications link (or unzip the `.zip` and move the app to `/Applications`). The app is **not signed or
-notarized**, so macOS blocks the first launch. Either:
+notarized**, so macOS blocks the first launch.
 
-* **Finder:** right-click (Control-click) `omnimonitor.app` → **Open** → **Open**. On macOS 15
-  Sequoia and later, if there is no Open button: try to open it once, then go to **System
-  Settings → Privacy & Security**, click **Open Anyway** next to "omnimonitor" and confirm.
-* **Terminal:** `xattr -dr com.apple.quarantine /Applications/omnimonitor.app`, then open it
-  normally.
+macOS 15 (Sequoia) removed the old right-click → Open bypass. Use one of these instead:
+
+* **System Settings:** try to open `omnimonitor.app` once. Then open **System Settings → Privacy & Security**, click **Open Anyway** next to "omnimonitor", and confirm with an administrator password.
+* **Terminal:** `xattr -dr com.apple.quarantine /Applications/omnimonitor.app`, then open it normally.
 
 Only do this for a download you got from this repository's Releases page; you can check it
 against `SHA256SUMS.txt` (`shasum -a 256 omnimonitor-macos-arm64.zip`). The command-line

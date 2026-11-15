@@ -73,14 +73,17 @@ The weekly number is **one pool**. `creditUsagePercent` is the suite total (used
 | Grok suite total | `creditUsagePercent`, reset from `currentPeriod.end` or `billingPeriodEnd` | not a token figure |
 | Grok CLI | `productUsage` product `GrokBuild` (Grok Build / the `grok` CLI). A literal `Grok CLI` name is accepted. | `~/.grok/sessions/**/updates.jsonl` (`turn_completed`). Experimental `~/.grok/logs/unified.jsonl` lines with `msg == shell.turn.inference_done` are the **same CLI** (shell telemetry, not Grok Bot). If both logs have events, session logs win so turns are not counted twice. |
 | Grok Bot | Only if `productUsage` contains a product named Grok Bot. Documented captures of this payload list `GrokBuild` / `GrokChat` / `GrokTasks` and **do not** include Grok Bot. `GrokChat` is grok.com chat, not Grok Bot. | **Not available.** `~/.grokbot` has daemon settings and logs, not token counts. Transcript replicas under Application Support are not a usage API and are not read. |
-| Cursor (Grok-in-Cursor) | Only if `productUsage` names Cursor (or Grok-in-Cursor). | **Not available** from Grok CLI logs. |
+| Cursor (Grok-in-Cursor) | Only if `productUsage` names Cursor (or Grok-in-Cursor). | Opt-in Cursor provider: `POST /api/dashboard/get-filtered-usage-events`, summed for model names containing `grok`. Not Grok Bot unless the name says so. |
 
-Not used for this breakdown, on purpose:
+Separate from the weekly pool percent (not added into it):
 
 * `POST https://cursor.com/api/dashboard/get-sand-usage-status` — Grok Bot's own weekly
-  meter, Cursor session cookie. Separate from the shared Grok pool. Not called.
-* `GET https://cursor.com/api/usage-summary` — Cursor plan (the opt-in `cursor` provider).
-  A different pool. Not mixed into the Grok suite total.
+  meter, Cursor session cookie. Separate from the shared Grok pool. Read only when the
+  opt-in Cursor provider is on, and only when `hasNonZeroIncludedLimit` is true.
+* `GET https://cursor.com/api/dashboard/v2/usage-status?scope=user` — unified plan dollars
+  (`usedCents` / `limitCents`). Preferred over usage-summary when `availability` is
+  `available`. Not mixed into the Grok weekly pool.
+* `GET https://cursor.com/api/usage-summary` — fallback Cursor plan. A different pool.
 * xAI Management API — API-team spend, not the consumer weekly pool.
 
 If the listed product shares do not sum to `creditUsagePercent`, the difference is shown
@@ -93,11 +96,12 @@ as unexplained. It is not assigned to a product.
 | Grok CLI token counts | `~/.grok/sessions/**/updates.jsonl`, or `~/.grok/logs/unified.jsonl` only when sessions have no events | Real tokens for this computer's CLI |
 | Grok CLI / grok.com / app token allowance ("out of Y tokens") | Not in either billing payload. Not in the local logs. `grok.com` `GetGrokCreditsConfig` needs a browser session this app does not send | **not available** |
 | Weekly pool % | `GET https://cli-chat-proxy.grok.com/v1/billing?format=credits` `creditUsagePercent` | A percent, not a token cap |
-| Monthly credit cap | `GET https://cli-chat-proxy.grok.com/v1/billing` `used` / `monthlyLimit` as USD cents, same CLI login | Dollars. Shown only when the fields are present |
+| Monthly credit cap | billing `used` / `monthlyLimit` as USD cents (deprecated). `history[]` rows are the same cents per week | Dollars (`$X used of $Y` only when both numbers are present). Never tokens |
+| Usage reset credits | `POST https://grok.com/prod_mc_billing.ConsumerUiSvc/GetRemainingResets` with the Grok login token | "Usage resets left: N" only when the call returns a count |
 | Grok Bot percent | `POST https://cursor.com/api/dashboard/get-sand-usage-status` `usagePercent`, opt-in Cursor session, and only when `hasNonZeroIncludedLimit` is true | A percent. No token count, no token cap |
-| Grok Bot tokens | `~/.grokbot` has no usage figures. Sand status has none | **not available** |
-| Cursor plan | `GET https://cursor.com/api/usage-summary` (opt-in) | Cursor's own plan used/limit, not Grok tokens |
-| Grok-in-Cursor tokens | Not in `~/.grok` logs. usage-summary has no documented Grok token field | **not available** |
+| Grok Bot tokens | Only usage events whose model or kind is labeled Grok Bot. A `grok` model name is not enough | **not available** otherwise |
+| Cursor plan | `GET /api/dashboard/v2/usage-status?scope=user` when usable, else `GET /api/usage-summary` (opt-in) | v2 is dollars (`usedCents` / `limitCents`), not tokens |
+| Grok-in-Cursor tokens | `POST /api/dashboard/get-filtered-usage-events`, models whose name contains `grok` | Real per-request tokens when the opt-in cursor provider is on |
 | xAI API team | Management API already in the app (`xai_api`): USD spend and a postpaid limit | Not the consumer weekly pool and not tokens |
 
 ## Conclusions used in the design

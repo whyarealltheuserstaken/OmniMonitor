@@ -164,7 +164,7 @@ def test_credit_cap_is_not_a_token_allowance_and_bot_meter_is_separate():
     cli = bucket(suite, "cli")
     assert cli["tokens"]["value"] is None
     lines = menu_lines(suite)
-    assert any(x.startswith("Monthly credits: $29.31 of $150.00") for x in lines)
+    assert any(x.startswith("Monthly credits: $29.31 used of $150.00") for x in lines)
     assert any(x.startswith("Grok Bot meter: 18% used") for x in lines)
 
 
@@ -174,6 +174,59 @@ def test_token_field_allowance_is_used_when_the_api_sends_one():
     suite = build_grok_suite(b, [], {}, NOW, provider="grok_sessions")
     assert suite["token_allowance"]["value"] == 1000000
     assert "weeklyTokenLimit" in suite["token_allowance"]["source"]
+
+
+def test_cursor_grok_tokens_dollars_and_resets_are_not_invented():
+    suite = build_grok_suite(billing(
+        credit_used_usd=1.0, credit_limit_usd=5.0,
+        credit_history=[{"included_usd": 2.5, "start": "2026-10-01", "end": "2026-10-08"}],
+        resets_left=2,
+        products=[{"product": "GrokBuild", "used_percent": 27}],
+    ), [], {}, NOW, provider="grok_sessions", readings={
+        "cursor": {"ok": True, "detail": {
+            "models": ["gpt-5", "grok-4"],
+            "grok_in_cursor": {
+                "available": True, "value": 17, "input_tokens": 10, "output_tokens": 4,
+                "cache_read_tokens": 2, "cache_write_tokens": 1, "events": 1,
+                "models": [{"name": "grok-4", "tokens": 14}], "cost_usd": 0.05,
+                "source": "events",
+            },
+            "cursor_tokens": {
+                "available": True, "value": 21, "input_tokens": 13, "output_tokens": 5,
+                "events": 2, "models": [], "source": "events",
+            },
+        }},
+    })
+    assert bucket(suite, "cursor")["tokens"]["value"] == 17
+    assert bucket(suite, "cursor")["tokens"]["models"][0]["name"] == "grok-4"
+    assert bucket(suite, "bot")["tokens"]["value"] is None  # grok-4 is not labeled Grok Bot
+    assert suite["cursor_tokens"]["value"] == 21
+    assert suite["usage_resets"]["count"] == 2
+    assert suite["credit_allowance"]["text"] == "$1.00 used of $5.00"
+    assert "no cap" in suite["credit_history"][0]["text"]
+    lines = menu_lines(suite)
+    assert "Usage resets left: 2" in lines
+    assert any(x.startswith("Grok in Cursor:") and "17" in x for x in lines)
+    assert any(x.startswith("Cursor tokens:") for x in lines)
+
+
+def test_labeled_grok_bot_events_are_separate_from_grok_in_cursor():
+    suite = build_grok_suite(billing(
+        products=[{"product": "GrokBuild", "used_percent": 27}],
+    ), [], {}, NOW, provider="grok_sessions", readings={
+        "cursor": {"ok": True, "detail": {
+            "grok_in_cursor": {"available": True, "value": 9, "input_tokens": 9,
+                               "output_tokens": 0, "events": 1, "models": [{"name": "grok-bot"}]},
+            "grok_bot_labeled": {"available": True, "value": 9, "input_tokens": 9,
+                                 "output_tokens": 0, "events": 1,
+                                 "models": [{"name": "grok-bot"}]},
+            "cursor_tokens": {"available": True, "value": 9, "input_tokens": 9,
+                              "output_tokens": 0, "events": 1, "models": []},
+        }},
+    })
+    assert bucket(suite, "bot")["tokens"]["value"] == 9
+    assert "labeled Grok Bot" in bucket(suite, "bot")["tokens"]["note"]
+    assert bucket(suite, "cursor")["tokens"]["value"] == 9
 
 
 def test_menu_lines_do_not_invent():

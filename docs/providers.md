@@ -68,7 +68,7 @@ only. Please report a mismatch with a redacted sample.
 | Copilot | GitHub Copilot premium requests | `github_copilot` | 🟡 partial | official API | premium requests this month, billed USD; % only against an allowance you enter | yes |
 | Copilot | GitHub Copilot CLI (OpenTelemetry file) | `copilot_otel` | 🟡 partial | local logs | tokens (incl. cache, reasoning), models | – |
 | Cursor | Cursor (team Admin API) | `cursor_team` | 🟡 partial | official API | team cycle spend (USD), on-demand spend, your spend vs. your per-user limit | yes |
-| Cursor | Cursor (individual plans) | `cursor` | 🧪 experimental | web session (opt-in) | included plan % used / spend vs limit, on-demand spend, billing cycle when returned | yes |
+| Cursor | Cursor (individual plans) | `cursor` | 🧪 experimental | web session (opt-in) | unified plan dollars (usedCents/limitCents) when v2 usage-status is available, otherwise usage-summary; per-request tokens and cost from get-filtered-usage-events; Grok in Cursor is the total for model names containing grok. Dollars are not tokens. | yes |
 | OpenRouter | OpenRouter | `openrouter` | ✅ supported | official API | credits used (total/day/week/month), key limit % and reset | yes |
 | Ollama | Ollama Cloud | `ollama_cloud` | ✅ supported | official API | balance / allowance and % used when the API returns them | yes |
 | Ollama | Ollama (local) | `ollama_local` | ❌ not supported | – | A local Ollama server keeps no usage log; per-request counts only appear in API responses | – |
@@ -451,9 +451,9 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🧪 experimental |
-| Source | GET https://cursor.com/api/usage-summary with a cursor.com session cookie |
-| Auth | opt-in: in-app sign-in (authenticator.cursor.sh), or import cookies from a browser |
-| Shows | included plan % used / spend vs limit, on-demand spend, billing cycle when returned |
+| Source | GET https://cursor.com/api/dashboard/v2/usage-status?scope=user (preferred) and GET https://cursor.com/api/usage-summary; POST https://cursor.com/api/dashboard/get-filtered-usage-events |
+| Auth | opt-in, off by default: in-app sign-in, browser cookies, or the signed-in Cursor app's state.vscdb (cursorAuth/accessToken; macOS Keychain prompt when the token is cursor-safe-storage) |
+| Shows | unified plan dollars (usedCents/limitCents) when v2 usage-status is available, otherwise usage-summary; per-request tokens and cost from get-filtered-usage-events; Grok in Cursor is the total for model names containing grok. Dollars are not tokens. |
 | Reset period | billing cycle (from the API when present) |
 | Confidence / testing | experimental (endpoint/cookie names from CodexBar docs; response field names vary by plan — not verified on a live OmniMonitor account yet) |
 | Key variables | – |

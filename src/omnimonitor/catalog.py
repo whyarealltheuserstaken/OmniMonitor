@@ -299,9 +299,15 @@ CATALOG: Tuple[ProviderInfo, ...] = (
        docs=("https://cursor.com/docs/account/teams/admin-api",), env=("CURSOR_ADMIN_KEY",),
        has_limit=True),
     _P("cursor", "Cursor (individual plans)", "Cursor", "web_session", EXPERIMENTAL,
-       shows="included plan % used / spend vs limit, on-demand spend, billing cycle when returned",
-       source="GET https://cursor.com/api/usage-summary with a cursor.com session cookie",
-       auth="opt-in: in-app sign-in (authenticator.cursor.sh), or import cookies from a browser",
+       shows="unified plan dollars (usedCents/limitCents) when v2 usage-status is available, "
+             "otherwise usage-summary; per-request tokens and cost from get-filtered-usage-events; "
+             "Grok in Cursor is the total for model names containing grok. Dollars are not tokens.",
+       source="GET https://cursor.com/api/dashboard/v2/usage-status?scope=user (preferred) and "
+              "GET https://cursor.com/api/usage-summary; POST "
+              "https://cursor.com/api/dashboard/get-filtered-usage-events",
+       auth="opt-in, off by default: in-app sign-in, browser cookies, or the signed-in "
+            "Cursor app's state.vscdb (cursorAuth/accessToken; macOS Keychain prompt when "
+            "the token is cursor-safe-storage)",
        reset="billing cycle (from the API when present)",
        confidence="experimental (endpoint/cookie names from CodexBar docs; response field names "
                   "vary by plan — not verified on a live OmniMonitor account yet)",

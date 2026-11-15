@@ -88,6 +88,8 @@ _COOKIE_PAIR = re.compile(
 
 
 def redact(text: str) -> str:
+    text = re.sub(r"cursor-safe-storage:v1:[A-Za-z0-9+/=]+",
+                  "cursor-safe-storage:v1:<redacted>", text)
     text = _URL_SECRET.sub("/s/<secret>/", text)
     text = _SECRETISH.sub(lambda m: (m.group(1) + m.group(2) + "<redacted>") if m.group(1)
                           else "<redacted>", text)

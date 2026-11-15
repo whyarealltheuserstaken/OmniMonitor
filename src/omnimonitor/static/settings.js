@@ -37,7 +37,9 @@
         k.appendChild(document.createTextNode(p.shows || ""));
         var row = el("div", "checks"); row.style.marginTop = "6px";
         var auth = el("select"); auth.setAttribute("data-pv-auth", p.id);
-        [["off","Auth: off"],["login","In-app sign-in window"],["browser","Import from browser"]].forEach(function (o) {
+        var authOpts = [["off","Auth: off"],["login","In-app sign-in window"],["browser","Import from browser"]];
+        if (p.id === "cursor") authOpts.push(["cursor_app", "Use signed-in Cursor app"]);
+        authOpts.forEach(function (o) {
           var op = el("option", "", o[1]); op.value = o[0]; if ((cur.auth || "off") === o[0]) op.selected = true; auth.appendChild(op);
         });
         var br = el("select"); br.setAttribute("data-pv-browser", p.id);
@@ -55,6 +57,11 @@
         }
         btn("Sign in…", "login"); btn("Import now", "import"); btn("Sign out / forget", "forget");
         k.appendChild(row); k.appendChild(btns);
+        if (p.id === "cursor") {
+          var appNote = el("div", "s");
+          appNote.textContent = "“Use signed-in Cursor app” is off unless you select it. It reads cursorAuth/accessToken from the Cursor app's state.vscdb on this computer and does not copy the token into OmniMonitor. On macOS an encrypted token asks once for the Cursor Safe Storage keychain item.";
+          k.appendChild(appNote);
+        }
         if (p.status === "experimental") {
           var warn = el("div", "s"); warn.textContent = "Experimental: not yet verified against a live signed-in response in OmniMonitor.";
           k.appendChild(warn);

@@ -172,12 +172,23 @@
     if (allow.value === null || allow.value === undefined) summary.appendChild(OM.na(allow.reason, "not available"));
     else summary.appendChild(document.createTextNode(fmtTokens(allow.value) + (allow.source ? " · " + allow.source : "")));
     summary.appendChild(document.createTextNode(" · Monthly credits: "));
-    if (cred.limit_usd === null || cred.limit_usd === undefined) summary.appendChild(OM.na(cred.reason, "not available"));
+    if (cred.text) summary.appendChild(document.createTextNode(cred.text + " (USD, not tokens)"));
+    else if (cred.limit_usd === null || cred.limit_usd === undefined) summary.appendChild(OM.na(cred.reason, "not available"));
     else {
       var used = cred.used_usd === null || cred.used_usd === undefined ? "—" : ("$" + Number(cred.used_usd).toFixed(2));
-      summary.appendChild(document.createTextNode(used + " of $" + Number(cred.limit_usd).toFixed(2) + " (USD, not tokens)"));
+      summary.appendChild(document.createTextNode(used + " used of $" + Number(cred.limit_usd).toFixed(2) + " (USD, not tokens)"));
+    }
+    var resets = gs.usage_resets || {};
+    summary.appendChild(document.createTextNode(" · Usage resets left: "));
+    if (resets.count !== null && resets.count !== undefined) {
+      summary.appendChild(document.createTextNode(String(resets.count)));
+    } else {
+      summary.appendChild(OM.na(resets.reason || "not available"));
     }
     banners.appendChild(summary);
+    (gs.credit_history || []).forEach(function (h) {
+      if (h && h.text) banners.appendChild(el("div", "gs-detail", h.text));
+    });
     if (gs.xai_api_spend_usd !== null && gs.xai_api_spend_usd !== undefined) {
       banners.appendChild(el("div", "gs-detail", "xAI API spend this month: $" +
         Number(gs.xai_api_spend_usd).toFixed(2) + " (management API, USD — not this weekly pool and not tokens)"));
@@ -236,9 +247,19 @@
         (tok.cache_read_tokens ? " · cache " + fmtTokens(tok.cache_read_tokens) : "") +
         (tok.reasoning_tokens ? " · reasoning " + fmtTokens(tok.reasoning_tokens) : "") +
         " · " + (tok.events || 0) + " events" +
-        (models.length ? " · " + models.join(", ") : "")));
+        (models.length ? " · " + models.join(", ") : "") +
+        (tok.cost_usd !== null && tok.cost_usd !== undefined
+          ? " · $" + Number(tok.cost_usd).toFixed(2) + " token cost (USD, not a token count)" : "")));
     }
     row.appendChild(detail);
+    if (b.id === "cursor" && gs && gs.cursor_tokens) {
+      var all = gs.cursor_tokens;
+      var allLine = el("div", "gs-detail");
+      allLine.appendChild(document.createTextNode("Cursor tokens (all models): "));
+      if (all.value === null || all.value === undefined) allLine.appendChild(OM.na(all.reason));
+      else allLine.appendChild(document.createTextNode(fmtTokens(all.value) + " (not Grok Bot)"));
+      row.appendChild(allLine);
+    }
     if (b.id === "bot" && gs && gs.grok_bot_meter) {
       var meter = gs.grok_bot_meter;
       var line = el("div", "gs-detail");
