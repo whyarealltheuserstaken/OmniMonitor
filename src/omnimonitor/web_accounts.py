@@ -213,12 +213,30 @@ def fetch_chatgpt_web(cfg, http: HttpFn, now: float) -> Reading:
     return r
 
 
-def fetch_cursor(cfg, http: HttpFn, now: float) -> Reading:
-    """Cursor individual plan usage via cursor.com session cookie.
+def _cursor_cookie(cfg) -> str:
+    """Session cookie for the opt-in cursor provider. Never log the return value."""
+    opts = {}
+    if isinstance(cfg, dict):
+        raw = (cfg.get("providers") or {}).get("cursor") or {}
+        if isinstance(raw, dict):
+            opts = raw
+    if str(opts.get("auth") or "").lower() == "cursor_app":
+        from omnimonitor.cursor_app_auth import load_cookie
+        cookie, reason = load_cookie()
+        if not cookie:
+            raise AccountError(reason or "Cursor app session is not available")
+        return cookie
+    return _cookie_or_signed_out("cursor")
 
-    CodexBar: GET https://cursor.com/api/usage-summary (docs/cursor.md).
+
+def fetch_cursor(cfg, http: HttpFn, now: float) -> Reading:
+    """Cursor individual plan usage via a cursor.com session cookie.
+
+    Prefer ``GET /api/dashboard/v2/usage-status?scope=user`` (dollars) when that
+    payload is usable. Otherwise ``GET /api/usage-summary``. Per-request tokens
+    come from ``POST /api/dashboard/get-filtered-usage-events``.
     """
-    cookie = _cookie_or_signed_out("cursor")
+    cookie = _cursor_cookie(cfg)
     hdr = {
         "Cookie": cookie,
         "User-Agent": USER_AGENT,
@@ -226,6 +244,80 @@ def fetch_cursor(cfg, http: HttpFn, now: float) -> Reading:
         "Referer": "https://cursor.com/settings",
         "Origin": "https://cursor.com",
     }
+    when = _as_datetime(now)
+    unified = _read_usage_status(http, hdr, when)
+    if unified.get("signed_out"):
+        return Reading("cursor", False, now, error="signed out — sign in again",
+                       confidence="experimental")
+    if unified.get("available"):
+        r = _reading_from_usage_status(unified, now)
+        _attach_summary_extras(r, http, hdr)
+    else:
+        r = _fetch_usage_summary(http, hdr, now)
+        if not r.ok:
+            return r
+        if unified.get("reason"):
+            r.note = (r.note + "; " if r.note else "") + "v2 usage-status: " + unified["reason"]
+    _attach_grok_bot_meter(r, http, hdr)
+    _attach_usage_events(r, http, hdr, when)
+    _scrub_reading(r, cookie)
+    return r
+
+
+def _as_datetime(now: float):
+    from datetime import datetime, timezone
+    return datetime.fromtimestamp(now, timezone.utc)
+
+
+def _read_usage_status(http: HttpFn, hdr: Dict[str, str], when) -> Dict[str, Any]:
+    from omnimonitor.cursor_usage import USAGE_STATUS_URL, parse_usage_status
+    try:
+        st, data = http("GET", USAGE_STATUS_URL, hdr, None)
+    except AccountError as e:
+        return {"available": False, "reason": str(e)}
+    if _auth_failed(st):
+        return {"signed_out": True, "available": False, "reason": "signed out"}
+    if st != 200:
+        return {"available": False, "reason": "HTTP %s" % st}
+    parsed = parse_usage_status(data, when)
+    return parsed
+
+
+def _reading_from_usage_status(unified: Dict[str, Any], now: float) -> Reading:
+    r = Reading("cursor", True, now, period="billing cycle", confidence="experimental",
+                note="from GET /api/dashboard/v2/usage-status (USD cents, not tokens)",
+                period_start=unified.get("period_start"), resets_at=unified.get("resets_at"))
+    r.metric("plan_used_usd", "Plan used", unified["used_usd"], "USD", "usd")
+    r.metric("plan_limit_usd", "Plan limit", unified["limit_usd"], "USD", "usd")
+    limit = unified.get("limit_usd") or 0
+    if limit > 0:
+        r.limit_percent = max(0.0, min(100.0, 100.0 * float(unified["used_usd"]) / float(limit)))
+        r.metric("plan_used", "Plan used", r.limit_percent, "%", "used_percent")
+    else:
+        r.note += "; limitCents was 0, so no percent was computed"
+    return r
+
+
+def _attach_summary_extras(r: Reading, http: HttpFn, hdr: Dict[str, str]) -> None:
+    """On-demand dollars from usage-summary. Does not replace a v2 dollar headline."""
+    try:
+        st, data = http("GET", "https://cursor.com/api/usage-summary", hdr, None)
+    except AccountError:
+        return
+    if st != 200 or not isinstance(data, dict):
+        return
+    on_demand = data.get("onDemandUsage") or data.get("onDemand")
+    if isinstance(on_demand, dict):
+        for k in ("used", "spend", "totalSpend"):
+            if k in on_demand:
+                try:
+                    r.metric("on_demand", "On-demand spend", float(on_demand[k]), "USD", "usd")
+                except (TypeError, ValueError):
+                    pass
+                break
+
+
+def _fetch_usage_summary(http: HttpFn, hdr: Dict[str, str], now: float) -> Reading:
     st, data = http("GET", "https://cursor.com/api/usage-summary", hdr, None)
     if _auth_failed(st):
         return Reading("cursor", False, now, error="signed out — sign in again",
@@ -278,8 +370,115 @@ def fetch_cursor(cfg, http: HttpFn, now: float) -> Reading:
                 break
     if r.limit_percent is None and not r.metrics:
         r.note += "; signed in but could not parse usage-summary fields"
-    _attach_grok_bot_meter(r, http, hdr)
     return r
+
+
+def _attach_usage_events(r: Reading, http: HttpFn, hdr: Dict[str, str], when) -> None:
+    """Per-request tokens. A failure leaves the plan reading intact. No cookie is stored."""
+    from omnimonitor.cursor_usage import fetch_filtered_events
+    start = r.period_start
+    end = r.resets_at
+    if start is None or end is None:
+        end = when.timestamp()
+        start = end - 30 * 86400
+    try:
+        fetched = fetch_filtered_events(http, hdr, start, end)
+    except Exception:  # noqa: BLE001
+        r.detail = {"events_reason": "not available: get-filtered-usage-events failed"}
+        return
+    models = [m for m in (fetched.get("models") or []) if isinstance(m, str)]
+    if not fetched.get("ok"):
+        r.detail = {
+            "events_reason": "not available: " + str(fetched.get("reason") or "usage events were not read"),
+            "models": models,
+        }
+        return
+    detail = {
+        "events_reason": "",
+        "models": models,
+        "cursor_tokens": _public_tokens(fetched.get("cursor_tokens"), "Cursor usage events"),
+        "grok_in_cursor": _public_tokens(
+            fetched.get("grok_in_cursor"),
+            "POST get-filtered-usage-events, models whose name contains grok"),
+        "grok_bot_labeled": _public_tokens(
+            fetched.get("grok_bot_labeled"),
+            "events whose model or kind is labeled Grok Bot"),
+        "window_start": start,
+        "window_end": end,
+    }
+    r.detail = detail
+    grok = detail["grok_in_cursor"]
+    if grok.get("available") and grok.get("value") is not None:
+        r.metric("grok_in_cursor_tokens", "Grok in Cursor tokens", grok["value"], "tokens", "count")
+    overall = detail["cursor_tokens"]
+    if overall.get("available") and overall.get("value") is not None:
+        r.metric("cursor_tokens", "Cursor tokens", overall["value"], "tokens", "count")
+    if overall.get("cost_usd") is not None:
+        r.metric("cursor_token_cost_usd", "Cursor token cost", overall["cost_usd"], "USD", "usd")
+
+
+def _public_tokens(block: Any, source: str) -> Dict[str, Any]:
+    if not isinstance(block, dict):
+        return {"available": False, "value": None, "reason": "not available", "models": []}
+    out = {
+        "available": bool(block.get("available")),
+        "value": block.get("value"),
+        "input_tokens": block.get("input_tokens"),
+        "output_tokens": block.get("output_tokens"),
+        "cache_write_tokens": block.get("cache_write_tokens"),
+        "cache_read_tokens": block.get("cache_read_tokens"),
+        "events": block.get("events"),
+        "models": block.get("models") or [],
+        "cost_usd": block.get("cost_usd"),
+        "cost_reason": block.get("cost_reason") or "",
+        "reason": block.get("reason") or "",
+        "note": block.get("note") or "",
+        "source": source,
+    }
+    return out
+
+
+def _scrub_reading(r: Reading, cookie: str) -> None:
+    if cookie and cookie in (r.note or ""):
+        r.note = "cursor reading (session hidden)"
+    if cookie and cookie in (r.error or ""):
+        r.error = "cursor reading failed (session hidden)"
+    blob = json.dumps(r.detail or {})
+    if cookie and cookie in blob:
+        r.detail = {"events_reason": "not available: usage-event detail was dropped"}
+
+
+def cursor_model_probe(cfg, http: Optional[HttpFn] = None, now: Optional[float] = None
+                       ) -> Tuple[list, str]:
+    """Distinct model names from usage events. Names only — no costs, cookies, or token counts."""
+    import time as _time
+    now = _time.time() if now is None else now
+    try:
+        cookie = _cursor_cookie(cfg)
+    except AccountError as e:
+        return [], "not available: %s" % e
+    hdr = {
+        "Cookie": cookie,
+        "User-Agent": USER_AGENT,
+        "Accept": "application/json",
+        "Origin": "https://cursor.com",
+        "Referer": "https://cursor.com/settings",
+    }
+    from omnimonitor.cursor_usage import fetch_filtered_events
+    end = now
+    start = end - 30 * 86400
+    fetched = fetch_filtered_events(http or _json_http, hdr, start, end, max_pages=5)
+    names = [n for n in (fetched.get("models") or []) if isinstance(n, str) and n]
+    if cookie:
+        names = [n for n in names if cookie not in n]
+    if not fetched.get("ok"):
+        reason = str(fetched.get("reason") or "usage events were not read")
+        if names:
+            return names, "partial: " + reason
+        return [], "not available: " + reason
+    if not names:
+        return [], "no model names in get-filtered-usage-events for the last 30 days"
+    return names, ""
 
 
 def parse_sand_usage(data: Any) -> Dict[str, Any]:

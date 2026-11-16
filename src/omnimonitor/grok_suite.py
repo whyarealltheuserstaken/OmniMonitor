@@ -13,9 +13,10 @@ Token and activity detail is filled only from local logs this app already reads:
   (experimental ``grok_unified``). If both sources have events, only session logs are
   counted here so the same turns are not added twice.
 
-Grok Bot and Grok-in-Cursor have no token log in those files. Their pool % is shown
-only when ``productUsage`` names them. This module does not call Cursor's session
-endpoints and does not read ``~/.grokbot`` (no usage figures there).
+Grok-in-Cursor token totals are filled from the opt-in Cursor provider's
+``get-filtered-usage-events`` reading (model names containing ``grok``). They are
+not treated as Grok Bot unless the event label says so. This module does not read
+``~/.grokbot``.
 """
 
 from __future__ import annotations
@@ -73,10 +74,10 @@ _BOT_TOKENS = (
     "usage API and are not read. No public xAI API returns Grok Bot token totals."
 )
 _CURSOR_TOKENS = (
-    "not available: no local log this app reads records Grok-in-Cursor token counts. "
-    "~/.grok/sessions and unified.jsonl are the Grok CLI. Cursor's plan summary "
-    "(opt-in cursor provider, cursor.com/api/usage-summary) is a different pool and "
-    "is not a Grok token breakdown."
+    "not available: Grok-in-Cursor token counts come from POST "
+    "https://cursor.com/api/dashboard/get-filtered-usage-events (models whose name "
+    "contains grok) when the opt-in cursor provider is enabled. They are not in "
+    "~/.grok session logs, and they are not Grok Bot unless the model name says so."
 )
 _BOT_PERCENT_SEPARATE = (
     "Third-party captures of this billing payload list shares such as GrokBuild, "
@@ -277,19 +278,81 @@ def _token_allowance(billing: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     return {"value": None, "unit": "tokens", "source": "", "reason": _TOKEN_ALLOWANCE}
 
 
+def _money(n: Any) -> str:
+    return "$%.2f" % float(n)
+
+
 def _credit_allowance(billing: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if not billing:
-        return {"used_usd": None, "limit_usd": None,
+        return {"used_usd": None, "limit_usd": None, "text": "",
                 "reason": "no Grok billing reading yet"}
     used, limit = billing.get("credit_used_usd"), billing.get("credit_limit_usd")
     if used is None and limit is None:
-        return {"used_usd": None, "limit_usd": None,
+        return {"used_usd": None, "limit_usd": None, "text": "",
                 "reason": ("monthly USD credit cap not in this billing reading "
                            "(no used / monthlyLimit). That cap is dollars, not tokens.")}
-    return {"used_usd": used, "limit_usd": limit,
+    text = ""
+    if used is not None and limit is not None:
+        text = "%s used of %s" % (_money(used), _money(limit))
+    elif limit is not None:
+        text = "%s cap" % _money(limit)
+    elif used is not None:
+        text = "%s used (limit not in this reading)" % _money(used)
+    return {"used_usd": used, "limit_usd": limit, "text": text,
             "resets_at": billing.get("credit_period_end"),
-            "source": "GET https://cli-chat-proxy.grok.com/v1/billing (USD cents)",
+            "source": "billing used/monthlyLimit (USD cents, deprecated fields)",
             "reason": ""}
+
+
+def _history_dollars(billing: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Past weeks from history[]. Dollars only. A missing cap is not invented."""
+    rows = []
+    for item in (billing or {}).get("credit_history") or []:
+        if not isinstance(item, dict):
+            continue
+        used = item.get("included_usd")
+        if used is None:
+            used = item.get("total_usd")
+        if used is None:
+            continue
+        cap = item.get("limit_usd")
+        if cap is None:
+            text = "%s used (USD, not tokens; this history row has no cap)" % _money(used)
+        else:
+            text = "%s used of %s (USD, not tokens)" % (_money(used), _money(cap))
+        rows.append({"text": text, "used_usd": used, "limit_usd": cap,
+                     "start": item.get("start"), "end": item.get("end"),
+                     "cycle": item.get("cycle")})
+    return rows
+
+
+def _event_block(block: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(block, dict) or not block.get("available") or block.get("value") is None:
+        return None
+    cache = int(block.get("cache_read_tokens") or 0) + int(block.get("cache_write_tokens") or 0)
+    return {
+        "value": block.get("value"),
+        "input_tokens": block.get("input_tokens") or 0,
+        "output_tokens": block.get("output_tokens") or 0,
+        "cache_read_tokens": cache,
+        "cache_write_tokens": block.get("cache_write_tokens") or 0,
+        "reasoning_tokens": 0,
+        "events": block.get("events"),
+        "sessions": None,
+        "models": block.get("models") or [],
+        "window": "",
+        "source": block.get("source") or "",
+        "note": block.get("note") or "",
+        "reason": "",
+        "cost_usd": block.get("cost_usd"),
+        "cost_reason": block.get("cost_reason") or "",
+    }
+
+
+def _cursor_detail(readings: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    reading = (readings or {}).get("cursor") or {}
+    detail = reading.get("detail") if isinstance(reading, dict) else None
+    return detail if isinstance(detail, dict) else {}
 
 
 def build_grok_suite(billing: Optional[Dict[str, Any]], events: Iterable[Dict[str, Any]],
@@ -342,8 +405,9 @@ def build_grok_suite(billing: Optional[Dict[str, Any]], events: Iterable[Dict[st
         "Product percents are shares of that same pool, not separate allowances.",
         "A productUsage entry with no usagePercent is 0% (proto-JSON omits zero). "
         "A product that is not listed is not available — it is not shown as 0%.",
-        "Token counts are only this computer's Grok CLI. Grok Bot and Cursor (Grok) "
-        "have no token log in the files OmniMonitor reads.",
+        "Grok CLI tokens are this computer's session logs. Grok-in-Cursor tokens are "
+        "Cursor usage events whose model name contains grok, and only when that "
+        "opt-in provider is on. A model is Grok Bot only when its name says so.",
     ]
     if is_demo:
         honesty.insert(0, "DEMO: every figure in this card is fake sample data.")
@@ -371,6 +435,25 @@ def build_grok_suite(billing: Optional[Dict[str, Any]], events: Iterable[Dict[st
             cli_tokens = dict(cli_tokens)
             cli_tokens["reason"] = (cli_tokens.get("reason") or "").rstrip(".") + ". " + note[:400]
 
+    detail = _cursor_detail(readings)
+    events_reason = str(detail.get("events_reason") or "")
+    grok_events = _event_block(detail.get("grok_in_cursor"))
+    bot_events = _event_block(detail.get("grok_bot_labeled"))
+    overall_events = _event_block(detail.get("cursor_tokens"))
+    if overall_events is None:
+        if not (readings or {}).get("cursor"):
+            overall_reason = (
+                "not available: overall Cursor tokens come from get-filtered-usage-events "
+                "when the opt-in cursor provider is enabled.")
+        elif events_reason:
+            overall_reason = events_reason if events_reason.lower().startswith("not available") \
+                else "not available: " + events_reason
+        else:
+            overall_reason = "not available: Cursor usage events did not include token counts"
+        cursor_tokens = {"value": None, "reason": overall_reason, "models": detail.get("models") or []}
+    else:
+        cursor_tokens = overall_events
+
     buckets = []
     for bid, title, blurb in _BUCKETS:
         rows = by_bucket[bid]
@@ -378,7 +461,19 @@ def build_grok_suite(billing: Optional[Dict[str, Any]], events: Iterable[Dict[st
         if bid == "cli":
             tokens = cli_tokens
         elif bid == "bot":
-            tokens = _na_tokens(_BOT_TOKENS)
+            if bot_events is not None:
+                tokens = dict(bot_events)
+                tokens["note"] = (
+                    "These events are labeled Grok Bot in the model or kind. "
+                    "They are not inferred from other grok model names. "
+                    + (tokens.get("note") or "")).strip()
+            else:
+                tokens = _na_tokens(_BOT_TOKENS)
+        elif grok_events is not None:
+            tokens = grok_events
+        elif events_reason:
+            tokens = _na_tokens(events_reason if events_reason.lower().startswith("not available")
+                                else "not available: " + events_reason)
         else:
             tokens = _na_tokens(_CURSOR_TOKENS)
         if pct is not None:
@@ -396,6 +491,22 @@ def build_grok_suite(billing: Optional[Dict[str, Any]], events: Iterable[Dict[st
             "products": rows,
             "tokens": tokens,
         })
+
+    credit_history = _history_dollars(billing if used is not None else None)
+    if billing and billing.get("resets_left") is not None and not is_demo:
+        try:
+            usage_resets = {"count": int(billing["resets_left"]),
+                            "next_expires_at": billing.get("resets_next"), "reason": ""}
+        except (TypeError, ValueError):
+            usage_resets = {"count": None,
+                            "reason": "not available: GetRemainingResets count was not a number"}
+    elif is_demo:
+        usage_resets = {"count": None,
+                        "reason": "not available: demo mode does not invent reset credits"}
+    else:
+        why = (billing or {}).get("resets_reason") or (
+            "not available: GetRemainingResets was not read")
+        usage_resets = {"count": None, "next_expires_at": None, "reason": why}
 
     token_allowance = _token_allowance(billing if used is not None else None)
     if used is None and token_allowance["value"] is None:
@@ -440,6 +551,8 @@ def build_grok_suite(billing: Optional[Dict[str, Any]], events: Iterable[Dict[st
             gaps.append({"id": b["id"] + "_pool", "text": b["percent_reason"]})
     if bot_status.get("used_percent") is None:
         gaps.append({"id": "bot_meter", "text": bot_status["reason"]})
+    if usage_resets.get("count") is None and usage_resets.get("reason"):
+        gaps.append({"id": "usage_resets", "text": usage_resets["reason"]})
     # xAI management spend is a different ledger. Surface it only when that provider ran.
     xai = (readings or {}).get("xai_api") or {}
     xai_spend = _reading_metric(readings, "xai_api", "spend_month") if xai.get("ok") else None
@@ -465,6 +578,10 @@ def build_grok_suite(billing: Optional[Dict[str, Any]], events: Iterable[Dict[st
         "honesty": honesty,
         "token_allowance": token_allowance,
         "credit_allowance": credit_allowance,
+        "credit_history": credit_history,
+        "usage_resets": usage_resets,
+        "cursor_tokens": cursor_tokens,
+        "cursor_models": detail.get("models") or [],
         "grok_bot_meter": bot_status,
         "xai_api_spend_usd": None if not xai_spend else xai_spend.get("value"),
         "gaps": [g for g in gaps if g.get("text")],
@@ -486,13 +603,17 @@ def menu_lines(suite: Optional[Dict[str, Any]]) -> List[str]:
     if allow.get("value") is not None:
         lines.append("Token allowance: %s" % _fmt_tok(allow["value"]))
     cred = suite.get("credit_allowance") or {}
-    if cred.get("limit_usd") is not None:
-        used = cred.get("used_usd")
-        if used is None:
-            bit = "$%.2f cap" % cred["limit_usd"]
-        else:
-            bit = "$%.2f of $%.2f" % (used, cred["limit_usd"])
-        lines.append("Monthly credits: %s (USD, not tokens)" % bit)
+    if cred.get("text"):
+        lines.append("Monthly credits: %s (USD, not tokens)" % cred["text"])
+    for row in (suite.get("credit_history") or [])[:4]:
+        if row.get("text"):
+            lines.append("Grok history: " + row["text"])
+    resets = suite.get("usage_resets") or {}
+    if resets.get("count") is not None:
+        lines.append("Usage resets left: %d" % int(resets["count"]))
+    overall = suite.get("cursor_tokens") or {}
+    if overall.get("value") is not None:
+        lines.append("Cursor tokens: %s" % _fmt_tok(overall["value"]))
     for b in suite.get("buckets") or []:
         pct = b.get("used_percent")
         tok = b.get("tokens") or {}
@@ -502,6 +623,8 @@ def menu_lines(suite: Optional[Dict[str, Any]]) -> List[str]:
             bit = "%s of pool" % _fmt_pct(pct)
         if b.get("id") == "cli" and tok.get("value") is not None:
             lines.append("%s: %s · %s tokens" % (b["name"], bit, _fmt_tok(tok["value"])))
+        elif b.get("id") == "cursor" and tok.get("value") is not None:
+            lines.append("Grok in Cursor: %s · %s tokens" % (bit, _fmt_tok(tok["value"])))
         elif b.get("id") == "cli":
             lines.append("%s: %s · tokens not available" % (b["name"], bit))
         elif pct is None:

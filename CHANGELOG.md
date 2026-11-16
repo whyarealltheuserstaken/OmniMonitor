@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Grok in Cursor token counts** from `POST https://cursor.com/api/dashboard/get-filtered-usage-events` (paginated; `WorkosCursorSessionToken` plus `Origin: https://cursor.com`). The Grok suite shows totals for model names containing `grok` as **Grok in Cursor**, and a separate overall Cursor token total. A model is called Grok Bot only when the event's own model or kind says so. `omnimonitor doctor` lists the distinct model names it saw (names only).
+- **Cursor unified dollars.** `GET https://cursor.com/api/dashboard/v2/usage-status?scope=user` is preferred over `usage-summary` when `availability` is `available` and `monthlyUsage.usedCents` / `limitCents` are present. Those figures are dollars, not tokens.
+- **Use signed-in Cursor app** (off unless selected). Reads `cursorAuth/accessToken` from the Cursor app's `state.vscdb`. On macOS, a Cursor 3.27+ `cursor-safe-storage` token asks once for the "Cursor Safe Storage" keychain item. In-app sign-in and browser-cookie import stay available. The token is not copied into OmniMonitor.
+- **Usage resets left.** `POST https://grok.com/prod_mc_billing.ConsumerUiSvc/GetRemainingResets` with the existing Grok login token. The line is shown only when that call returns a count. Reset token ids are not stored or shown.
+- **Grok billing via the official CLI first.** `grok agent stdio` JSON-RPC `_x.ai/billing`, then `x.ai/billing` if the underscore name is missing, with a timeout. The cli-chat-proxy call remains the fallback. Set `grok_agent_billing` to false to skip the CLI (`omnimonitor config set grok_agent_billing false`).
+- **Grok dollars from `history[]`.** Deprecated `used` / `monthlyLimit` (US cents) still show `$X used of $Y`. Each `history[]` week shows the cents it actually contains, as dollars, never as tokens. A missing cap stays missing.
+
+### Changed
+- **macOS install instructions.** macOS 15 removed the right-click → Open bypass. First launch is **System Settings → Privacy & Security → Open Anyway**, or `xattr -dr com.apple.quarantine` on the app.
+
+### Not verified
+- None of the new Cursor or Grok endpoints were called against a live account in this change. Parsers are covered by recorded fixtures and mocked responses.
+- The macOS Keychain prompt for an encrypted Cursor token was not exercised on a Mac.
+- `grok agent stdio` was not run against a real `grok` binary.
+
 ## [0.5.2-beta] - 2026-11-06
 
 Beta / prerelease. GitHub marks this release as a prerelease; `/releases/latest` stays on the last stable (0.4.2) until a final 0.5.0.

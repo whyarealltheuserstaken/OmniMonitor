@@ -54,6 +54,8 @@ class Reading:
     error: str = ""
     demo: bool = False
     attempted_at: float = 0.0  # last try, successful or not (rate limiting)
+    # Non-secret aggregates (model names, dollar/token totals). Never cookies or tokens.
+    detail: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

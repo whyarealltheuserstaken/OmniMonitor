@@ -133,6 +133,89 @@ def test_sand_usage_percent_requires_an_allowance():
     assert not pooled["available"]
 
 
+def test_fetch_cursor_prefers_v2_dollars_and_grok_event_tokens(sess_home):
+    import json
+    from datetime import datetime, timezone
+    sessions.save("cursor", "WorkosCursorSessionToken=SUPERSECRET")
+    events = {
+        "totalUsageEventsCount": 2,
+        "usageEventsDisplay": [
+            {"timestamp": "1700000000000", "model": "grok-4", "kind": "chat",
+             "tokenUsage": {"inputTokens": 10, "outputTokens": 4, "cacheReadTokens": 2,
+                            "cacheWriteTokens": 1, "totalCents": 5}},
+            {"timestamp": "1700000001000", "model": "composer-1", "kind": "chat",
+             "tokenUsage": {"inputTokens": 3, "outputTokens": 1, "totalCents": 1}},
+        ],
+    }
+    seen = []
+
+    def http(method, url, headers, body):
+        seen.append((method, url, headers.get("Origin"), headers.get("Cookie")))
+        if url.endswith("usage-status?scope=user"):
+            return 200, {
+                "availability": "available",
+                "monthlyUsage": {
+                    "usedCents": 250, "limitCents": 2000,
+                    "periodStart": "2026-11-01T00:00:00Z",
+                    "resetsAt": "2026-12-01T00:00:00Z",
+                },
+            }
+        if "usage-summary" in url:
+            return 200, {"individualUsage": {"plan": {"used": 30, "limit": 100}},
+                         "onDemandUsage": {"spend": 1.5}}
+        if url.endswith("get-filtered-usage-events"):
+            page = json.loads(body)["page"]
+            return 200, events if page == 1 else {"totalUsageEventsCount": 2, "usageEventsDisplay": []}
+        return 404, None
+
+    now = datetime(2026, 11, 15, tzinfo=timezone.utc).timestamp()
+    r = web_accounts.fetch("cursor", {}, http=http, now=now)
+    assert r.ok
+    assert r.limit_percent == pytest.approx(12.5)  # $2.50 of $20, not the summary's 30%
+    used = next(m for m in r.metrics if m["key"] == "plan_used_usd")
+    assert used["unit"] == "USD" and used["value"] == pytest.approx(2.5)
+    assert r.detail["grok_in_cursor"]["value"] == 17
+    assert r.detail["cursor_tokens"]["value"] == 21
+    assert r.detail["models"] == ["composer-1", "grok-4"]
+    assert not r.detail["grok_bot_labeled"]["available"]
+    blob = json.dumps(r.to_dict())
+    assert "SUPERSECRET" not in blob
+    assert any(url.endswith("get-filtered-usage-events") and origin == "https://cursor.com"
+               for _m, url, origin, _c in seen)
+
+    from omnimonitor.grok_suite import build_grok_suite
+    suite = build_grok_suite(
+        {"used_percent": 10, "remaining_percent": 90, "raw_used_percent": 10,
+         "products_reported": False, "products": []},
+        [], {}, datetime.fromtimestamp(now, timezone.utc), readings={"cursor": r.to_dict()})
+    cursor = next(b for b in suite["buckets"] if b["id"] == "cursor")
+    assert cursor["tokens"]["value"] == 17
+    assert suite["cursor_tokens"]["value"] == 21
+    assert next(b for b in suite["buckets"] if b["id"] == "bot")["tokens"]["value"] is None
+
+
+def test_cursor_app_auth_is_opt_in(sess_home, monkeypatch):
+    monkeypatch.setattr("omnimonitor.cursor_app_auth.load_cookie",
+                        lambda *a, **k: ("", "state.vscdb was not found"))
+    r = web_accounts.fetch("cursor", {"providers": {"cursor": {"auth": "cursor_app"}}},
+                           http=_http_map({}), now=1.0)
+    assert not r.ok and "state.vscdb" in r.error
+
+
+def test_doctor_lists_model_names_without_secrets(sess_home, monkeypatch):
+    from omnimonitor import doctor
+    monkeypatch.setattr(
+        "omnimonitor.web_accounts.cursor_model_probe",
+        lambda cfg, http=None, now=None: (["composer-1", "grok-4"], ""))
+    rows = doctor.cursor_event_checks(
+        {"providers": {"cursor": {"enabled": True, "auth": "login"}}}, online=True)
+    text = rows[0][2]
+    assert "grok-4" in text and "composer-1" in text
+    assert "Grok Bot" not in text
+    off = doctor.cursor_event_checks({}, online=True)
+    assert off[0][0] == doctor.OK and "off" in off[0][2]
+
+
 def test_fetch_cursor_reads_grok_bot_meter(sess_home):
     sessions.save("cursor", "WorkosCursorSessionToken=abc")
     http = _http_map({
@@ -166,8 +249,10 @@ def test_fetch_chatgpt_web_windows(sess_home):
 
 
 def test_redact_strips_session_cookies():
-    t = appactions.redact("Cookie: sessionKey=sk-ant-SECRETVALUE; WorkosCursorSessionToken=WWW")
-    assert "SECRETVALUE" not in t and "WWW" not in t
+    t = appactions.redact(
+        "Cookie: sessionKey=sk-ant-SECRETVALUE; WorkosCursorSessionToken=WWW "
+        "cursor-safe-storage:v1:AAAA")
+    assert "SECRETVALUE" not in t and "WWW" not in t and "AAAA" not in t
     assert "sessionKey=<redacted>" in t
 
 
@@ -183,6 +268,10 @@ def test_settings_providers_accept_auth(tmp_path, monkeypatch):
     from omnimonitor.settings import SettingError
     with pytest.raises(SettingError):
         settings._providers({"claude_code": {"enabled": True, "auth": "browser"}})
+    with pytest.raises(SettingError):
+        settings._providers({"claude_plan": {"enabled": True, "auth": "cursor_app"}})
+    cursor = settings._providers({"cursor": {"enabled": True, "auth": "cursor_app"}})
+    assert cursor["cursor"]["auth"] == "cursor_app"
 
 
 def test_diagnostics_has_session_flags_not_values(sess_home):

@@ -136,7 +136,7 @@ def _providers(v: Any) -> Dict[str, Dict[str, Any]]:
             raise SettingError("providers must be a JSON object") from None
     if not isinstance(v, dict):
         raise SettingError('expected {"provider_id": {"enabled": true|false}, ...}')
-    allowed_auth = {"off", "login", "browser"}
+    allowed_auth = {"off", "login", "browser", "cursor_app"}
     allowed_browsers = {"auto", "chrome", "edge", "brave", "arc", "firefox", "safari"}
     out = {}
     for pid, opts in v.items():
@@ -152,8 +152,9 @@ def _providers(v: Any) -> Dict[str, Dict[str, Any]]:
         entry = {"enabled": _bool(opts.get("enabled", False))}
         if pid in getattr(catalog, "WEB_SESSION_IDS", ()):
             auth = str(opts.get("auth") or "off").lower()
-            if auth not in allowed_auth:
-                raise SettingError("%s.auth must be one of %s" % (pid, sorted(allowed_auth)))
+            choices = allowed_auth if pid == "cursor" else allowed_auth - {"cursor_app"}
+            if auth not in choices:
+                raise SettingError("%s.auth must be one of %s" % (pid, sorted(choices)))
             entry["auth"] = auth
             browser = str(opts.get("browser") or "auto").lower()
             if browser not in allowed_browsers:
@@ -279,6 +280,9 @@ SCHEMA: Dict[str, Tuple[Callable[[Any], Any], bool, str]] = {
                      "your email in the Cursor team (own spend row)"),
     "token_source": (_choice("auto", "grok_sessions", "demo", "none"), False,
                      "where Grok token counts come from"),
+    "grok_agent_billing": (_bool, False,
+                           "try `grok agent stdio` (_x.ai/billing, then x.ai/billing) "
+                           "before the cli-chat-proxy billing call"),
 }
 
 

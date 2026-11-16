@@ -41,6 +41,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "refresh_timeout_seconds": 60,
     "refresh_skew_seconds": 300,
     "timeout_seconds": 15,
+    # Try `grok agent stdio` before the proxy. False keeps the HTTP call only.
+    "grok_agent_billing": True,
     # Manual token instead of the CLI auth file (expires after ~6 h). Prefer the auth file.
     "token": "",
     "command": "",

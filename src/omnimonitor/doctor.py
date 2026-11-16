@@ -86,13 +86,59 @@ def checks(cfg: Dict[str, Any], online: bool = True) -> List[Tuple[str, str, str
     if online:
         try:
             r = fetch_grok_cli_billing(cfg)
-            out.append((OK, "billing", "%.0f%% remaining, resets %s" % (
-                r.remaining_percent, fmt_local(r.resets_at))))
+            via = (" via %s" % r.billing_via) if r.billing_via else ""
+            out.append((OK, "billing", "%.0f%% remaining, resets %s%s" % (
+                r.remaining_percent, fmt_local(r.resets_at), via)))
+            if r.present_fields:
+                out.append((OK, "billing fields",
+                            "names only: " + ", ".join(r.present_fields)))
+            if r.resets_left is not None:
+                out.append((OK, "usage resets", "Usage resets left: %d" % r.resets_left))
+            elif r.resets_reason:
+                out.append((WARN, "usage resets", r.resets_reason))
         except UsageError as e:
             out.append((FAIL, "billing", str(e)))
         except Exception as e:  # noqa: BLE001
             out.append((FAIL, "billing", "%s: %s" % (type(e).__name__, e)))
+    out += cursor_event_checks(cfg, online=online)
     return out
+
+
+def cursor_event_checks(cfg: Dict[str, Any], online: bool = True
+                        ) -> List[Tuple[str, str, str]]:
+    """Model names from Cursor usage events, so a Grok Bot label can be spotted.
+
+    Names only. No cookies, costs, or token counts. Off unless the cursor provider
+    is enabled. A name is not called Grok Bot here; the list is the evidence.
+    """
+    opts = (cfg.get("providers") or {}).get("cursor")
+    enabled = isinstance(opts, dict) and bool(opts.get("enabled"))
+    if not enabled:
+        return [(OK, "cursor events",
+                 "off — enable the cursor provider to list model names from "
+                 "get-filtered-usage-events. Nothing is called Grok Bot unless that "
+                 "name is in the list.")]
+    auth = str(opts.get("auth") or "off")
+    if not online:
+        extra = ""
+        if auth == "cursor_app":
+            from omnimonitor.cursor_app_auth import default_db_path
+            path = default_db_path()
+            extra = "; Cursor state.vscdb %s" % ("found" if path.is_file() else "not found")
+        return [(OK, "cursor events", "skipped (--offline)" + extra)]
+    try:
+        from omnimonitor.web_accounts import cursor_model_probe
+        names, note = cursor_model_probe(cfg)
+    except Exception as e:  # noqa: BLE001
+        return [(WARN, "cursor events", "not available (%s)" % type(e).__name__)]
+    if not names:
+        return [(WARN, "cursor models", note or "not available")]
+    shown = ", ".join(names[:40])
+    more = "" if len(names) <= 40 else " (+%d more)" % (len(names) - 40)
+    tail = ""
+    if note:
+        tail = " — " + note
+    return [(OK, "cursor models", shown + more + tail)]
 
 
 def _pid_alive(pid: Any) -> bool:

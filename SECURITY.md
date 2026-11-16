@@ -14,7 +14,7 @@ about a week. This is a volunteer project.
 | Grok CLI auth file (`~/.grok/auth.json`, `$GROK_AUTH_PATH`) | **read-only**; access token only; never written; refresh token never used |
 | Grok CLI session logs (`~/.grok/sessions/**/updates.jsonl`) | read-only; only token counts, timestamps, model names, ids and durations are stored |
 | `grok models` | run without a shell when the token is stale or rejected, so the official CLI refreshes itself |
-| Network | `GET https://cli-chat-proxy.grok.com/v1/billing?format=credits` only (configurable to other `*.grok.com` or loopback hosts; anything else is rejected) |
+| Network | Grok: `grok agent stdio` billing, then `GET https://cli-chat-proxy.grok.com/v1/billing` and `POST https://grok.com/.../GetRemainingResets` (bearer from the CLI login; hosts limited to `*.grok.com` / `grok.com`). Cursor, Claude, and ChatGPT web sessions only when that provider is enabled, to the fixed dashboard hosts, no redirects |
 | Local stats page | `127.0.0.1` only, random port, random per-run URL secret, `Host` header check, GET/HEAD plus one write (below), CSP `default-src 'self'`, `no-store` |
 | Claude Code / Codex logs (`~/.claude/projects/**/*.jsonl`, `~/.codex/sessions/**/rollout-*.jsonl`) | **only if enabled** in `extra_token_sources`; read-only; only token counts, model names, timestamps, session ids and the project folder **name** are stored |
 | Settings page write (`POST …/api/settings`) | same host/secret rules, plus `Origin` must equal the page's origin (403), per-run CSRF token in `X-OmniMonitor-CSRF` (403), `Content-Type: application/json` (415), body ≤ 64 KB (411/413), valid JSON (400), allow-listed and validated keys only (400). It can never set `source`, `token_source`, `token`, `command`, `grok_refresh_command`, `grok_billing_url`, `usage_page_url` or any path. Changes are merged into the config file only, so env-provided tokens are not persisted |
@@ -25,9 +25,13 @@ about a week. This is a volunteer project.
 | Desktop notifications | via the tray library; contain only percentages and times |
 | Config + history (`config.json`, `history.sqlite3`) | in the per-user config dir, chmod 600 where supported |
 
-It reads browser cookies only for opt-in web-session providers (see docs/cookies/), the macOS Keychain, Windows Credential Manager, other
-apps' login sessions or tokens (other than the Grok CLI auth file above), and never calls
-undocumented provider endpoints. There is no telemetry.
+Browser cookies are read only for opt-in web-session providers (see docs/cookies/). The opt-in
+"Use signed-in Cursor app" method reads `cursorAuth/accessToken` from Cursor's `state.vscdb`
+and, on macOS when that value is `cursor-safe-storage`, asks once for the "Cursor Safe Storage"
+keychain item. That token stays in memory for the request. It is not copied into OmniMonitor's
+keyring, logs, exports, or Report a problem. Other apps' tokens are not read. Several of these
+dashboard endpoints are unofficial; a failure is shown as "not available" and is not turned into
+a number. There is no telemetry.
 
 ## Known limitations
 

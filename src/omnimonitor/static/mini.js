@@ -38,6 +38,15 @@
       (gs.other_products || []).forEach(function (p) {
         rows.appendChild(row(p.label || p.product, (Math.round(p.used_percent * 10) / 10) + "% of pool"));
       });
+      var resets = gs.usage_resets || {};
+      rows.appendChild(row("Usage resets left",
+        (resets.count !== null && resets.count !== undefined) ? String(resets.count) : null,
+        resets.reason || "not available"));
+      var cred = gs.credit_allowance || {};
+      if (cred.text) rows.appendChild(row("Grok dollars", cred.text + " (USD, not tokens)"));
+      var ct = gs.cursor_tokens || {};
+      rows.appendChild(row("Cursor tokens", ct.value !== null && ct.value !== undefined ? T(ct.value) : null,
+        ct.reason || "not available"));
     }
     var wk = d.week_tokens || {};
     rows.appendChild(row("Tokens this week", wk.value !== null && wk.value !== undefined ? T(wk.value) : null, wk.reason));

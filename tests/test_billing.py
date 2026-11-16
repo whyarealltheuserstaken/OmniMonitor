@@ -103,6 +103,79 @@ def test_omitted_monthly_cap_is_not_zero():
     assert r.credit_period_end is None
 
 
+def test_history_cents_are_dollars_and_a_missing_cap_is_not_invented():
+    r = parse_billing(body({
+        "creditUsagePercent": 10, "currentPeriod": {},
+        "used": {"val": 100}, "monthlyLimit": {"val": 500},
+        "history": [
+            {"billingCycle": {"start": "2026-10-01T00:00:00Z", "end": "2026-10-08T00:00:00Z"},
+             "includedUsed": {"val": 250}, "totalUsed": {"val": 250}},
+            {"includedUsed": {"val": "nope"}},
+        ],
+    }))
+    assert r.credit_used_usd == pytest.approx(1.0)
+    assert r.credit_limit_usd == pytest.approx(5.0)
+    assert r.token_fields == {}
+    assert len(r.credit_history) == 1
+    assert r.credit_history[0]["included_usd"] == pytest.approx(2.5)
+    assert "limit_usd" not in r.credit_history[0]
+    assert "250" not in r.present_fields
+    assert "used" in r.present_fields and "history.includedUsed" in r.present_fields
+
+
+def test_agent_stdio_is_preferred_and_proxy_is_the_fallback(monkeypatch):
+    from omnimonitor import billing
+    calls = []
+
+    def agent(binary, timeout=8):
+        calls.append("agent")
+        return json.dumps({"config": {"creditUsagePercent": 4, "currentPeriod": {},
+                                       "used": {"val": 100}, "monthlyLimit": {"val": 200}}})
+
+    def proxy(url, token, timeout):
+        calls.append("proxy")
+        raise AssertionError("proxy should not run when the CLI billing parses")
+
+    monkeypatch.setattr(billing, "find_grok_binary", lambda cfg: "/usr/bin/grok")
+    monkeypatch.setattr("omnimonitor.grok_rpc.fetch_agent_billing", agent)
+    monkeypatch.setattr(billing, "billing_request", proxy)
+    monkeypatch.setattr(billing, "_fill_resets", lambda result, token: None)
+    result = billing.fetch_grok_cli_billing({
+        "token": "secret-token",
+        "grok_billing_url": billing.DEFAULT_BILLING_URL,
+        "grok_agent_billing": True,
+    })
+    assert calls == ["agent"]
+    assert result.billing_via == "grok agent stdio"
+    assert result.used_percent == 4
+    assert result.credit_used_usd == pytest.approx(1.0)
+    assert result.credit_limit_usd == pytest.approx(2.0)
+    assert "secret-token" not in json.dumps(result.to_dict())
+
+
+def test_agent_failure_falls_back_to_the_proxy(monkeypatch):
+    from omnimonitor import billing
+
+    def agent(binary, timeout=8):
+        raise billing.UsageError("grok agent stdio timed out on _x.ai/billing")
+
+    monkeypatch.setattr(billing, "find_grok_binary", lambda cfg: "/usr/bin/grok")
+    monkeypatch.setattr("omnimonitor.grok_rpc.fetch_agent_billing", agent)
+    monkeypatch.setattr(billing, "billing_request", lambda url, token, timeout: json.dumps(
+        {"config": {"creditUsagePercent": 10, "currentPeriod": {}}}))
+    monkeypatch.setattr(billing, "_fill_resets", lambda result, token: setattr(
+        result, "resets_left", 3) or None)
+    result = billing.fetch_grok_cli_billing({
+        "token": "secret-token",
+        "grok_billing_url": billing.DEFAULT_BILLING_URL,
+    })
+    assert result.billing_via == "cli-chat-proxy"
+    assert result.used_percent == 10
+    assert result.resets_left == 3
+    assert any("timed out" in line for line in result.detail_lines)
+    assert "secret-token" not in " ".join(result.detail_lines)
+
+
 def test_future_token_fields_are_surfaced():
     r = parse_billing(body({"creditUsagePercent": 5, "currentPeriod": {},
                             "weeklyTokenLimit": {"val": "1000000"}, "tokensUsed": 50000}))

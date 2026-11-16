@@ -28,7 +28,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -63,6 +63,15 @@ class UsageResult:
     on_demand_used: Optional[float] = None
     token_fields: Dict[str, float] = field(default_factory=dict)  # any token-ish numbers seen
     detail_lines: List[str] = field(default_factory=list)
+    # Per-week history rows, dollars only. Each item may omit a cap; that is not zero.
+    credit_history: List[Dict[str, Any]] = field(default_factory=list)
+    # Config field names that came back. Names only — never values.
+    present_fields: List[str] = field(default_factory=list)
+    # GetRemainingResets. None means the call did not return a count.
+    resets_left: Optional[int] = None
+    resets_reason: str = ""
+    resets_next: Optional[datetime] = None
+    billing_via: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         def iso(d):
@@ -85,6 +94,12 @@ class UsageResult:
             "on_demand_used": self.on_demand_used,
             "token_fields": dict(self.token_fields),
             "detail_lines": list(self.detail_lines),
+            "credit_history": list(self.credit_history),
+            "present_fields": list(self.present_fields),
+            "resets_left": self.resets_left,
+            "resets_reason": self.resets_reason,
+            "resets_next": iso(self.resets_next),
+            "billing_via": self.billing_via,
         }
 
 # --------------------------------------------------------------------------- parsing
@@ -122,6 +137,65 @@ def _cents_usd(obj: Any) -> Optional[float]:
     if v != v or v in (float("inf"), float("-inf")):
         return None
     return v / 100.0
+
+
+def _history_rows(raw: Any) -> List[Dict[str, Any]]:
+    """``history[]`` cents (includedUsed, onDemandUsed, totalUsed) as dollars.
+
+    A missing money field stays None. Rows with no money fields are skipped.
+    """
+    if not isinstance(raw, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    for item in raw[:24]:
+        if not isinstance(item, dict):
+            continue
+        row: Dict[str, Any] = {}
+        for src, dst in (("includedUsed", "included_usd"), ("onDemandUsed", "on_demand_usd"),
+                         ("totalUsed", "total_usd")):
+            if src in item:
+                row[dst] = _cents_usd(item.get(src))
+        cycle = item.get("billingCycle")
+        if isinstance(cycle, dict):
+            start = cycle.get("start") or cycle.get("billingPeriodStart")
+            end = cycle.get("end") or cycle.get("billingPeriodEnd")
+            if isinstance(start, str):
+                row["start"] = start[:40]
+            if isinstance(end, str):
+                row["end"] = end[:40]
+        elif isinstance(cycle, str) and cycle.strip():
+            row["cycle"] = cycle.strip()[:80]
+        if any(row.get(k) is not None for k in ("included_usd", "on_demand_usd", "total_usd")):
+            out.append(row)
+    return out
+
+
+_SECRET_FIELD = ("token", "secret", "cookie", "authorization", "password", "refresh")
+
+
+def _present_fields(config: Dict[str, Any]) -> List[str]:
+    """Field names only, so doctor can say what came back without printing amounts."""
+    names = []
+    for key in config:
+        low = str(key).lower()
+        if any(word in low for word in _SECRET_FIELD):
+            continue
+        names.append(str(key)[:80])
+    history = config.get("history")
+    if isinstance(history, list):
+        seen = set()
+        for item in history[:24]:
+            if not isinstance(item, dict):
+                continue
+            for key in item:
+                low = str(key).lower()
+                if any(word in low for word in _SECRET_FIELD):
+                    continue
+                label = "history.%s" % str(key)[:60]
+                if label not in seen:
+                    seen.add(label)
+                    names.append(label)
+    return names[:40]
 
 
 def _val(obj: Any) -> Optional[float]:
@@ -228,7 +302,9 @@ def parse_billing(body: str) -> UsageResult:
         credit_used_usd=_cents_usd(c.get("used")) if "used" in c else None,
         credit_limit_usd=_cents_usd(c.get("monthlyLimit")) if "monthlyLimit" in c else None,
         credit_period_end=(parse_time(c.get("billingPeriodEnd"))
-                           if ("used" in c or "monthlyLimit" in c) else None))
+                           if ("used" in c or "monthlyLimit" in c) else None),
+        credit_history=_history_rows(c.get("history")) if "history" in c else [],
+        present_fields=_present_fields(c))
 
 # --------------------------------------------------------------------------- auth
 
@@ -398,23 +474,65 @@ def fetch_grok_cli_billing(cfg: Dict[str, Any]) -> UsageResult:
             run_refresh(cfg)
             refreshed = True
             token, _ = read_grok_auth(path)
-    try:
-        body = billing_request(url, token, timeout)
-    except AuthRejected as e:
-        if can_refresh and not refreshed:
-            run_refresh(cfg)
-            token, _ = read_grok_auth(grok_auth_file(cfg))
-            try:
-                body = billing_request(url, token, timeout)
-            except AuthRejected as e2:
-                raise UsageError("HTTP %d after CLI refresh - run `grok login` once" % e2.code)
-        elif manual:
-            raise UsageError("HTTP %d: pasted token expired/invalid" % e.code)
-        else:
-            raise UsageError("HTTP %d: run `grok login` once" % e.code)
-    result = parse_billing(body)
+    result, agent_note = _billing_from_agent(cfg, url)
+    if result is None:
+        try:
+            body = billing_request(url, token, timeout)
+        except AuthRejected as e:
+            if can_refresh and not refreshed:
+                run_refresh(cfg)
+                token, _ = read_grok_auth(grok_auth_file(cfg))
+                try:
+                    body = billing_request(url, token, timeout)
+                except AuthRejected as e2:
+                    raise UsageError("HTTP %d after CLI refresh - run `grok login` once" % e2.code)
+            elif manual:
+                raise UsageError("HTTP %d: pasted token expired/invalid" % e.code)
+            else:
+                raise UsageError("HTTP %d: run `grok login` once" % e.code)
+        result = parse_billing(body)
+        result.billing_via = "cli-chat-proxy"
+        if agent_note:
+            result.detail_lines.append(agent_note[:240])
     _fill_monthly_credits(result, url, token, timeout)
+    _fill_resets(result, token)
     return result
+
+
+def _billing_from_agent(cfg: Dict[str, Any], url: str) -> Tuple[Optional[UsageResult], str]:
+    """Official CLI first. ``(None, note)`` means the HTTP fallback should run."""
+    if cfg.get("grok_agent_billing") is False:
+        return None, ""
+    if (url or DEFAULT_BILLING_URL) != DEFAULT_BILLING_URL:
+        return None, ""
+    binary = find_grok_binary(cfg)
+    if not binary:
+        return None, ""
+    from omnimonitor.grok_rpc import fetch_agent_billing
+    limit = float(cfg.get("grok_agent_timeout_seconds") or 8)
+    try:
+        body = fetch_agent_billing(binary, timeout=min(8.0, max(1.0, limit)))
+        result = parse_billing(body)
+    except UsageError as e:
+        return None, "grok agent stdio was not used (%s); fell back to cli-chat-proxy" % e
+    result.billing_via = "grok agent stdio"
+    result.detail_lines.append("billing read via grok agent stdio")
+    return result, ""
+
+
+def _fill_resets(result: UsageResult, token: str) -> None:
+    """Best-effort. A failure leaves the weekly percent in place and does not invent a count."""
+    from omnimonitor.grok_resets import fetch_remaining_resets
+    info = fetch_remaining_resets(token, timeout=2.0)
+    if info.get("count") is None:
+        result.resets_reason = info.get("reason") or (
+            "not available: GetRemainingResets did not return a count")
+        return
+    result.resets_left = int(info["count"])
+    result.resets_reason = ""
+    ts = info.get("next_expires_at")
+    if isinstance(ts, (int, float)) and not isinstance(ts, bool):
+        result.resets_next = datetime.fromtimestamp(float(ts), timezone.utc)
 
 
 def _monthly_billing_url(credits_url: str) -> str:
