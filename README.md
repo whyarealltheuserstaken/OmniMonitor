@@ -60,9 +60,13 @@ AI tools. OmniMonitor copies **no code, text, icons or images** from it. Everyth
 Python re-implementation of the ideas. See [docs/inspiration-notes.md](docs/inspiration-notes.md)
 for what we adopted, what we built differently and why.
 
-## What's new in 0.5.2-beta
+## What's new in 0.5.3-beta
 
-**Beta / prerelease** (GitHub prerelease; `/releases/latest` stays on 0.4.2). The menu-bar gauge is only the colored arc and its dim track (the 0.5.1-beta hairline read as an inner black ring). The Grok suite shows a monthly USD credit cap when billing sends one, and a Grok Bot percent when the opt-in Cursor session has an allowance. There is still no token cap. See [release notes](docs/release-notes/v0.5.2-beta.md).
+**Beta / prerelease** (GitHub prerelease; `/releases/latest` stays on 0.4.2). The opt-in Cursor provider can show Grok-in-Cursor token totals, overall Cursor tokens and token cost, and unified plan dollars. Grok billing tries the official CLI first, and shows reset credits and dollar amounts only when the payload includes them. These reads have not been checked against a live account yet. See [release notes](docs/release-notes/v0.5.3-beta.md).
+
+### Earlier: 0.5.2-beta
+
+The menu-bar gauge is only the colored arc and its dim track. The Grok suite shows a monthly USD credit cap when billing sends one, and a Grok Bot percent when the opt-in Cursor session has an allowance. See [release notes](docs/release-notes/v0.5.2-beta.md).
 
 ### Earlier: 0.5.1-beta
 
