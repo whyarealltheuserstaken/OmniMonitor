@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-from omnimonitor import catalog
+from omnimonitor import catalog, suites
 from omnimonitor.pricing import DEMO_PRICES, clean_prices, estimate_event_cost
 
 DEMO_BUDGETS = {"daily": 1.0, "weekly": 5.0, "monthly": 20.0}  # DEMO ONLY
@@ -213,8 +213,43 @@ def build(events: List[Dict[str, Any]], cfg: Dict[str, Any], now: datetime, *,
            "budgets": budgets(events, cfg, now, tz),
            "catalog_counts": catalog.counts(), "is_demo": is_demo,
            "demo_prices": demo_prices}
+    out["suites"] = suite_view(cards)
     out["primary"] = primary(cfg, billing, readings, codex_limits, out["budgets"], nowts)
     out["thresholds"] = {c["id"]: provider_thresholds(cfg, c["id"]) for c in cards}
+    return out
+
+
+def suite_view(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Group provider cards into suites (SUITES order, only suites that have a card).
+
+    The headline is the non-stale limit with the highest % used across the suite's cards;
+    without one it is None with a reason. Nothing is filled in."""
+    by_suite: Dict[str, List[Dict[str, Any]]] = {}
+    for c in cards:
+        by_suite.setdefault(suites.suite_of(c["id"]), []).append(c)
+    out = []
+    for s in suites.SUITES:
+        cs = by_suite.get(s.id)
+        if not cs:
+            continue
+        best = None
+        for c in cs:
+            for w in c.get("limits") or []:
+                if w.get("stale") or w.get("used_percent") is None:
+                    continue
+                if best is None or w["used_percent"] > best["used_percent"]:
+                    best = {"used_percent": float(w["used_percent"]),
+                            "resets_at": w.get("resets_at"),
+                            "label": "%s %s" % (c["name"], w.get("name") or "limit"),
+                            "source": c["id"]}
+        today = [((c.get("ranges") or {}).get("today") or {}) for c in cs]
+        usd = [t["usd"] for t in today if t.get("usd") is not None]
+        out.append({"id": s.id, "name": s.name, "usage_url": s.usage_url,
+                    "card_ids": [c["id"] for c in cs], "headline": best,
+                    "reason": "" if best else "no limit reading yet",
+                    "today_tokens": sum(int(t.get("tokens") or 0) for t in today),
+                    "today_usd": sum(usd) if usd else None,
+                    "demo": any(c.get("demo") for c in cs)})
     return out
 
 
