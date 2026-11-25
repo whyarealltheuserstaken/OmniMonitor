@@ -84,9 +84,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # {"gemini_cli": {"enabled": true}, "deepseek": {"enabled": true}, ...}
     # API KEYS NEVER GO HERE: use environment variables or `omnimonitor secrets set`.
     "providers": {},
-    # What the tray icon shows: "grok", "codex", "openrouter", "ollama_cloud",
-    # "github_copilot", "cursor_team" or "budget" (the tightest USD budget cap).
-    "primary_provider": "grok",
+    # What the tray icon shows: a suite id ("anthropic", "openai", "google", "xai", ...),
+    # "tightest" (the highest % used across all suites) or "budget" (tightest USD budget).
+    # Replaces the old "primary_provider" (migrated on load).
+    "tray_suite": "tightest",
     # Per-provider "% used" alert thresholds, e.g. {"codex": [75, 90]}. Missing ->
     # notify_thresholds.
     "provider_thresholds": {},
@@ -207,6 +208,7 @@ def load_config(path: Optional[Path] = None) -> Dict[str, Any]:
             if isinstance(user, dict):
                 if user.get("token"):
                     secure_file(path)  # holds a secret: keep it owner-only
+                migrate_tray_suite(user)
                 cfg.update({k: v for k, v in user.items() if not str(k).startswith("_")})
                 cfg["_configured"] = True
             else:
@@ -219,6 +221,16 @@ def load_config(path: Optional[Path] = None) -> Dict[str, Any]:
         cfg["token"] = env("TOKEN")
     cfg["poll_interval_seconds"] = clamp_poll(cfg.get("poll_interval_seconds"))
     return cfg
+
+
+def migrate_tray_suite(user: Dict[str, Any]) -> Dict[str, Any]:
+    """0.6: ``primary_provider`` (a provider id) became ``tray_suite`` (a suite id).
+    An explicit ``tray_suite`` wins; an unknown old value maps to ``tightest``."""
+    old = user.pop("primary_provider", None)
+    if "tray_suite" not in user and isinstance(old, str) and old:
+        from omnimonitor import suites  # late import: suites imports this module
+        user["tray_suite"] = suites.map_legacy_primary(old)
+    return user
 
 
 def clamp_poll(value: Any) -> int:

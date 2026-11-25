@@ -83,3 +83,70 @@ def test_build_includes_suites_in_demo():
     ids = [s["id"] for s in ov["suites"]]
     assert "xai" in ids and "anthropic" in ids
     assert next(s for s in ov["suites"] if s["id"] == "xai")["demo"] is True
+
+
+# ------------------------------------------------------------- tray_suite (Task 3)
+import json  # noqa: E402
+
+from omnimonitor import config as config_mod  # noqa: E402
+from omnimonitor import settings as settings_mod  # noqa: E402
+
+
+def _ov(cards, cfg, budgets=None):
+    sv = overview.suite_view(cards)
+    return {"suites": sv,
+            "primary": overview.primary(cfg, sv, budgets or {"periods": {}}, T)}
+
+
+def _lim(pct, stale=False):
+    return [{"name": "weekly", "used_percent": pct, "resets_at": T + 99, "stale": stale}]
+
+
+def test_migrate_primary_provider(tmp_path):
+    p = tmp_path / "config.json"
+    p.write_text(json.dumps({"primary_provider": "codex"}))
+    cfg = config_mod.load_config(p)
+    assert cfg["tray_suite"] == "openai" and "primary_provider" not in cfg
+
+
+def test_migrate_unknown_primary_and_default(tmp_path):
+    p = tmp_path / "config.json"
+    p.write_text(json.dumps({"primary_provider": "gone_provider"}))
+    assert config_mod.load_config(p)["tray_suite"] == "tightest"
+    p.write_text(json.dumps({"primary_provider": "codex", "tray_suite": "google"}))
+    assert config_mod.load_config(p)["tray_suite"] == "google"  # explicit wins
+    assert config_mod.load_config(tmp_path / "missing.json")["tray_suite"] == "tightest"
+
+
+def test_primary_tightest():
+    ov = _ov([_c("grok", _lim(20.0)), _c("claude_plan", _lim(70.0))], {})
+    p = ov["primary"]
+    assert p["available"] and p["id"] == "tightest" and p["used_percent"] == 70.0
+    assert p["label"] == "Anthropic" and p["remaining_percent"] == 30.0
+
+
+def test_primary_suite_falls_back_labelled():
+    ov = _ov([_c("grok", _lim(20.0)), _c("claude_code")], {"tray_suite": "anthropic"})
+    p = ov["primary"]
+    assert p["available"] and p["used_percent"] == 20.0
+    assert p["label"] == "Grok & Cursor (Anthropic not available)"
+    assert overview.tray_value(ov, None) == (80.0, p["label"])
+
+
+def test_tray_value_none_without_data():
+    ov = _ov([_c("claude_code"), _c("grok", _lim(90.0, stale=True))], {"tray_suite": "xai"})
+    assert overview.tray_value(ov, {"remaining_percent": 70.0})[0] is None  # no Grok fallback
+
+
+def test_primary_budget():
+    b = {"periods": {"daily": {"percent": 150.0, "resets_at": T + 5}}}
+    p = _ov([], {"tray_suite": "budget"}, b)["primary"]
+    assert p["used_percent"] == 100.0 and p["label"] == "daily budget"
+
+
+def test_settings_accepts_tray_suite():
+    v = settings_mod.validate
+    assert v("tray_suite", "anthropic") == "anthropic"
+    import pytest
+    with pytest.raises(settings_mod.SettingError):
+        v("tray_suite", "grok")

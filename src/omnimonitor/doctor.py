@@ -243,10 +243,14 @@ def provider_checks(cfg: Dict[str, Any], online: bool = True, http=None
             out.append((OK, pid, "key set (%s); read OK: %s" % (src, shown)))
         else:
             out.append((FAIL, pid, "key set (%s); %s" % (src, r.error)))
-    p = cfg.get("primary_provider") or "grok"
-    if p not in ("grok", "budget") and p not in catalog.enabled_ids(cfg):
-        out.append((WARN, "primary", "primary_provider %s is not enabled - the tray falls back "
-                                     "to the Grok pool" % p))
+    from omnimonitor import suites
+    p = cfg.get("tray_suite") or "tightest"
+    on = set(catalog.enabled_ids(cfg))
+    if cfg.get("source") not in (None, "", "demo"):
+        on.add("grok")
+    if p not in ("tightest", "budget") and not on.intersection(suites.members(p)):
+        out.append((WARN, "tray", "tray_suite %s has no enabled source - the tray shows the "
+                                  "tightest limit instead" % p))
     return out
 
 
