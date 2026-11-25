@@ -15,9 +15,8 @@ import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
-from omnimonitor import catalog
+from omnimonitor import catalog, vault
 from omnimonitor import config as config_mod
-from omnimonitor import vault
 
 _MIGRATED: Set[str] = set()
 
