@@ -50,7 +50,8 @@ def default_dir() -> Path:
 
 def targets(cfg: Dict[str, Any]) -> List[str]:
     on = set(catalog.enabled_ids(cfg))
-    return [p for p in catalog.API_IDS + catalog.WEB_SESSION_IDS if p in on]
+    return [p for p in catalog.API_IDS + catalog.WEB_SESSION_IDS + catalog.CLI_LOGIN_IDS
+            if p in on]
 
 
 def run(cfg: Dict[str, Any], pids: Optional[List[str]] = None, http: Optional[Http] = None,
@@ -69,6 +70,9 @@ def run(cfg: Dict[str, Any], pids: Optional[List[str]] = None, http: Optional[Ht
             cookie = sessions.load(pid) or ""
             secrets += [p.split("=", 1)[-1] for p in cookie.split(";") if "=" in p]
             r = web_accounts.fetch(pid, cfg, http=rec)
+        elif pid in catalog.CLI_LOGIN_IDS:
+            from omnimonitor import cli_accounts
+            r = cli_accounts.fetch(pid, cfg, http=rec)
         else:
             r = accounts.fetch(pid, cfg, http=rec)
         info = catalog.BY_ID.get(pid)

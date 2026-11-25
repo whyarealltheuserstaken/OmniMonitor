@@ -23,6 +23,7 @@ WEB_HOSTS = frozenset({
     "claude.ai", "www.claude.ai",
     "chatgpt.com", "www.chatgpt.com", "openai.com", "www.openai.com",
     "cursor.com", "www.cursor.com", "authenticator.cursor.sh",
+    "cloudcode-pa.googleapis.com",  # Gemini CLI quota (cli_accounts, official CLI login)
 })
 
 TIMEOUT = 20
@@ -180,6 +181,16 @@ def fetch_chatgpt_web(cfg, http: HttpFn, now: float) -> Reading:
                        confidence="experimental")
     r = Reading("chatgpt_web", True, now, period="plan windows", confidence="experimental",
                 note="from chatgpt.com session (experimental; shape from CodexBar docs)")
+    parse_plan_windows(data, r)
+    return r
+
+
+_WINDOW_NAMES = {18000: "5-hour", 604800: "Weekly"}
+
+
+def parse_plan_windows(data: Dict[str, Any], r: Reading) -> bool:
+    """Fill ``r`` from a ChatGPT / Codex ``wham/usage`` payload: metrics, ``limits`` (one per
+    window), and the tightest window as ``limit_percent``. Returns False when no window parsed."""
     # rate_limit.primary_window / secondary_window (CodexBar codex.md)
     rl = data.get("rate_limit") if isinstance(data.get("rate_limit"), dict) else data
     best = None
@@ -204,13 +215,17 @@ def fetch_chatgpt_web(cfg, http: HttpFn, now: float) -> Reading:
             continue
         r.metric(key, label + " used", used, "%", "used_percent")
         resets = _reset_ts(block)
+        secs = block.get("limit_window_seconds")
+        name = _WINDOW_NAMES.get(secs if isinstance(secs, int) else -1, label)
+        r.limits.append({"name": name, "used_percent": used, "resets_at": resets})
         if best is None or used > best:
             best = used
             r.limit_percent = used
             r.resets_at = resets
     if best is None:
         r.note += "; no rate_limit windows parsed — response shape may have changed"
-    return r
+        return False
+    return True
 
 
 def _cursor_cookie(cfg) -> str:

@@ -96,3 +96,105 @@ def test_enabled_cli_providers_helper():
     from omnimonitor import config as config_mod
     cfg = {"providers": {"claude_cli_plan": {"enabled": True}}}
     assert config_mod.enabled_cli_providers(cfg) == ["claude_cli_plan"]
+
+
+# ------------------------------------------- Claude and Codex plan fetchers (Task 2)
+from pathlib import Path  # noqa: E402
+
+from omnimonitor import accounts, cli_accounts  # noqa: E402
+
+FIX = Path(__file__).parent / "fixtures"
+
+
+def _fx(name):
+    return json.loads((FIX / name).read_text("utf-8"))
+
+
+class _Http:
+    def __init__(self, status, data):
+        self.status, self.data, self.calls = status, data, []
+
+    def __call__(self, method, url, headers, body):
+        self.calls.append((method, url, headers, body))
+        return self.status, self.data
+
+
+def test_claude_plan_windows(tmp_path):
+    cfg = _claude_home(tmp_path)
+    http = _Http(200, _fx("claude_oauth_usage.json"))
+    r = cli_accounts.fetch("claude_cli_plan", cfg, http, NOW)
+    assert r.ok and [(w["name"], w["used_percent"]) for w in r.limits] == [
+        ("5-hour", 12.0), ("Weekly", 34.0), ("Weekly (Sonnet)", 5.0)]
+    assert r.limit_percent == 34.0 and r.resets_at == r.limits[1]["resets_at"]
+    method, url, headers, _ = http.calls[0]
+    assert (method, url) == ("GET", "https://api.anthropic.com/api/oauth/usage")
+    assert headers["Authorization"] == "Bearer " + TOKEN
+    assert headers["anthropic-beta"] == "oauth-2025-04-20"
+
+
+def test_claude_utilization_is_a_percent(tmp_path):
+    http = _Http(200, {"five_hour": {"utilization": 0.4, "resets_at": None}})
+    r = cli_accounts.fetch("claude_cli_plan", _claude_home(tmp_path), http, NOW)
+    assert r.limits[0]["used_percent"] == 0.4 and r.limits[0]["resets_at"] is None
+
+
+def test_claude_all_null_windows(tmp_path):
+    r = cli_accounts.fetch("claude_cli_plan", _claude_home(tmp_path),
+                           _Http(200, {"five_hour": None, "seven_day": None}), NOW)
+    assert r.ok and r.limits == [] and r.limit_percent is None
+    assert "no usage windows" in r.note
+
+
+def test_claude_401(tmp_path):
+    r = cli_accounts.fetch("claude_cli_plan", _claude_home(tmp_path), _Http(401, None), NOW)
+    assert not r.ok and r.error == "login rejected - run `claude` once to refresh it"
+
+
+def test_claude_expired_makes_no_request(tmp_path):
+    http = _Http(200, {})
+    cfg = _claude_home(tmp_path, expires_ms=(NOW - 5) * 1000)
+    r = cli_accounts.fetch("claude_cli_plan", cfg, http, NOW)
+    assert not r.ok and "expired" in r.error and http.calls == []
+
+
+def test_claude_missing_login(tmp_path):
+    r = cli_accounts.fetch("claude_cli_plan", {"claude_home": str(tmp_path / "x")},
+                           _Http(200, {}), NOW)
+    assert not r.ok and r.error == "not signed in to Claude Code on this computer"
+
+
+def _codex_home(tmp_path):
+    _write(tmp_path / "codex" / "auth.json", {"tokens": {
+        "access_token": "eyJ.codex.TOKEN-DO-NOT-LEAK", "refresh_token": "R",
+        "account_id": "acct-1"}})
+    return {"codex_home": str(tmp_path / "codex")}
+
+
+def test_codex_plan_windows(tmp_path):
+    http = _Http(200, _fx("codex_wham_usage.json"))
+    r = cli_accounts.fetch("codex_cli_plan", _codex_home(tmp_path), http, NOW)
+    assert r.ok and [(w["name"], w["used_percent"]) for w in r.limits] == [
+        ("5-hour", 15.0), ("Weekly", 40.0)]
+    assert r.limit_percent == 40.0 and r.resets_at == 1792400000.0
+    _, url, headers, _ = http.calls[0]
+    assert url == "https://chatgpt.com/backend-api/wham/usage"
+    assert headers["Authorization"].startswith("Bearer eyJ.codex")
+    assert headers["chatgpt-account-id"] == "acct-1"
+
+
+def test_no_token_in_reading(tmp_path):
+    for pid, cfg, data in (
+            ("claude_cli_plan", _claude_home(tmp_path), _fx("claude_oauth_usage.json")),
+            ("codex_cli_plan", _codex_home(tmp_path), _fx("codex_wham_usage.json"))):
+        for status in (200, 401, 500):
+            r = cli_accounts.fetch(pid, cfg, _Http(status, data), NOW)
+            text = json.dumps(r.to_dict())
+            assert "DO-NOT-LEAK" not in text and "REFRESH" not in text
+
+
+def test_refresh_dispatches_cli_login(tmp_path):
+    cfg = dict(_claude_home(tmp_path), providers={"claude_cli_plan": {"enabled": True}},
+               provider_poll_seconds=900)
+    out = accounts.refresh(cfg, None, ["claude_cli_plan"], force=True,
+                           http=_Http(200, _fx("claude_oauth_usage.json")), now=NOW)
+    assert out["claude_cli_plan"].ok and len(out["claude_cli_plan"].limits) == 3
