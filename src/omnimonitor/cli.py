@@ -214,6 +214,14 @@ def _set_tray(cfg, choice: str) -> int:
     return 0
 
 
+def cmd_login(args) -> int:
+    from omnimonitor import login_specs, session_login
+    if args.provider not in login_specs.SPECS:
+        print("sign-in is available for: %s" % ", ".join(login_specs.ids()), file=sys.stderr)
+        return 2
+    return session_login.run_login(args.provider)
+
+
 def cmd_tray(args) -> int:
     return _set_tray(_load(args), args.choice)
 
@@ -525,6 +533,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("action", nargs="?", choices=("list", "enable", "disable", "primary", "check"))
     s.add_argument("id", nargs="?")
     s.add_argument("--json", action="store_true")
+    s = sub.add_parser("login", help="in-app sign-in window for a web-session provider")
+    s.add_argument("provider")
     s = sub.add_parser("tray", help="which suite the tray icon follows (or tightest / budget)")
     s.add_argument("choice")
     s = sub.add_parser("secrets", help="API keys for account providers (chmod-600 file)")
@@ -692,7 +702,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         from omnimonitor.applog import log_path
         print(log_path())
         return 0
-    handlers = {"export": cmd_export, "providers": cmd_providers, "tray": cmd_tray, "breakdown": cmd_breakdown, "blocks": cmd_blocks, "statusline": cmd_statusline,
+    handlers = {"export": cmd_export, "providers": cmd_providers, "tray": cmd_tray, "login": cmd_login, "breakdown": cmd_breakdown, "blocks": cmd_blocks, "statusline": cmd_statusline,
                 "config": cmd_config, "notify-test": cmd_notify_test, "secrets": cmd_secrets, "deps": cmd_deps}
     if cmd in handlers:
         return handlers[cmd](args)
