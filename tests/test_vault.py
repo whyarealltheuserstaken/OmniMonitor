@@ -70,6 +70,11 @@ import os  # noqa: E402
 from omnimonitor import apikeys, sessions  # noqa: E402
 
 
+def _write_private(path, text):
+    path.write_text(text)
+    os.chmod(path, 0o600)  # POSIX ignores a secrets file other users can read
+
+
 def _legacy_dir():
     d = config_mod.config_dir() / "sessions"
     d.mkdir(parents=True, exist_ok=True)
@@ -121,7 +126,7 @@ def test_legacy_keyring_entry_moved(_fake_keyring):
 def test_apikey_file_migrated_then_deleted(monkeypatch):
     monkeypatch.delenv("OMNIMONITOR_SECRETS_FILE")  # the default file next to the config
     path = apikeys.secrets_path()
-    path.write_text(json.dumps({"DEEPSEEK_API_KEY": "sk-file-123"}))
+    _write_private(path, json.dumps({"DEEPSEEK_API_KEY": "sk-file-123"}))
     apikeys._MIGRATED.clear()
     assert apikeys.get("DEEPSEEK_API_KEY") == "sk-file-123"
     assert apikeys.where("DEEPSEEK_API_KEY") == "vault" and not path.exists()
@@ -190,7 +195,7 @@ def test_failed_vault_put_keeps_legacy_session(monkeypatch):
 
 def test_env_secrets_file_keeps_unmigrated_entries():
     path = apikeys.secrets_path()  # conftest points this at an env-provided path
-    path.write_text(json.dumps({"DEEPSEEK_API_KEY": "sk-file-123", "NOT_OURS": "keep"}))
+    _write_private(path, json.dumps({"DEEPSEEK_API_KEY": "sk-file-123", "NOT_OURS": "keep"}))
     apikeys._MIGRATED.clear()
     assert apikeys.get("DEEPSEEK_API_KEY") == "sk-file-123"
     left = json.loads(path.read_text())

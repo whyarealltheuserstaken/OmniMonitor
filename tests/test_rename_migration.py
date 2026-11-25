@@ -20,6 +20,7 @@ def test_names():
 def linux_home(tmp_path, monkeypatch):
     if sys.platform in ("darwin", "win32"):
         pytest.skip("XDG layout only")
+    monkeypatch.delenv("OMNIMONITOR_HOME", raising=False)  # conftest sets one per test
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     return tmp_path
 
