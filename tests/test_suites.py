@@ -177,3 +177,10 @@ def test_cli_tray_maps_provider_id(tmp_path, monkeypatch, capsys):
     assert cli.main(["tray", "tightest"]) == 0
     assert json.loads(next(tmp_path.rglob("config.json")).read_text())["tray_suite"] == "tightest"
     assert cli.main(["tray", "nonsense"]) == 2
+
+
+def test_unflagged_past_reset_is_not_a_headline():
+    # readings / billing cards carry "stale": False even when the window already reset
+    sv = overview.suite_view([_c("openrouter", [{"name": "limit", "used_percent": 95.0,
+                                                 "resets_at": T - 60, "stale": False}])], now=T)
+    assert sv[0]["headline"] is None

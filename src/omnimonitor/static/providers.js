@@ -182,7 +182,7 @@
     last = ov; sec.hidden = false; $("budgets-card").hidden = false;
     var p = ov.primary || {};
     $("pv-primary").textContent = p.available ? "Tray follows: " + p.label + " (" + Math.round(p.used_percent) + "% used)"
-      : (p.name ? "Tray follows " + p.name + ": not available - " + (p.reason || "") + " (falls back to the Grok pool)" : "");
+      : (p.name ? "Tray follows " + p.name + ": not available - " + (p.reason || "") : "");
     renderAll(ov); renderBudgets(ov); renderCards(ov);
   }
   document.addEventListener("click", function (ev) {

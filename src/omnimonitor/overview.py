@@ -205,13 +205,14 @@ def build(events: List[Dict[str, Any]], cfg: Dict[str, Any], now: datetime, *,
            "budgets": budgets(events, cfg, now, tz),
            "catalog_counts": catalog.counts(), "is_demo": is_demo,
            "demo_prices": demo_prices}
-    out["suites"] = suite_view(cards)
+    out["suites"] = suite_view(cards, nowts)
     out["primary"] = primary(cfg, out["suites"], out["budgets"], nowts)
     out["thresholds"] = {c["id"]: provider_thresholds(cfg, c["id"]) for c in cards}
     return out
 
 
-def suite_view(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def suite_view(cards: List[Dict[str, Any]], now: Optional[float] = None
+               ) -> List[Dict[str, Any]]:
     """Group provider cards into suites (SUITES order, only suites that have a card).
 
     The headline is the non-stale limit with the highest % used across the suite's cards;
@@ -229,6 +230,9 @@ def suite_view(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             for w in c.get("limits") or []:
                 if w.get("stale") or w.get("used_percent") is None:
                     continue
+                reset = _ts(w.get("resets_at"))
+                if now is not None and reset is not None and reset < now:
+                    continue  # the window already reset: this % is no longer true
                 if best is None or w["used_percent"] > best["used_percent"]:
                     best = {"used_percent": float(w["used_percent"]),
                             "resets_at": w.get("resets_at"),
