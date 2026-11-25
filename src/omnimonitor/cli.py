@@ -288,7 +288,8 @@ def cmd_secrets(args) -> int:
     if args.action == "list":
         print("API keys (values are never shown):")
         for n, src in apikeys.status().items():
-            print("  %-22s %s" % (n, {"env": "set (environment)", "file": "set (secrets file)"}
+            print("  %-22s %s" % (n, {"env": "set (environment)", "vault": "set (encrypted vault)",
+                                  "file": "set (secrets file)"}
                                   .get(src, "not set")))
         prob = apikeys.file_problem()
         print("Secrets file: %s%s" % (apikeys.secrets_path(), " - " + prob if prob else ""))
@@ -298,8 +299,7 @@ def cmd_secrets(args) -> int:
         return 2
     if args.action == "unset":
         ok = apikeys.unset_secret(args.name)
-        print("Removed %s from the secrets file." % args.name if ok else
-              "%s was not in the secrets file." % args.name)
+        print("Removed %s." % args.name if ok else "%s was not set." % args.name)
         return 0
     import getpass
     try:

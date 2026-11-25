@@ -66,8 +66,8 @@ def _fake_keyring(monkeypatch, tmp_path_factory):
         yield kr
         return
     vault.set_backend(kr)
-    from omnimonitor import sessions
-    if hasattr(sessions, "_keyring"):  # legacy direct keyring use: never the real OS store
-        monkeypatch.setattr(sessions, "_keyring", lambda: kr)
+    from omnimonitor import apikeys, sessions
+    sessions._MIGRATED.clear()
+    apikeys._MIGRATED.clear()
     yield kr
     vault.set_backend(None)

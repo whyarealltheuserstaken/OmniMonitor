@@ -541,29 +541,10 @@ def _attach_grok_bot_meter(r: Reading, http: HttpFn, hdr: Dict[str, str]) -> Non
 
 
 def _session_meta_token(pid: str) -> str:
-    """Optional bearer stored in the session file's meta (never logged)."""
-    # sessions.load only returns the cookie; re-read file/keyring payload for meta
+    """Optional bearer stored with the session (never logged)."""
     from omnimonitor import sessions as S
-    kr = S._keyring()
-    raw = None
-    if kr is not None:
-        try:
-            raw = kr.get_password(S._SERVICE, pid)
-        except Exception:  # noqa: BLE001
-            raw = None
-    if not raw:
-        path = S._file(pid)
-        try:
-            raw = path.read_text("utf-8")
-        except OSError:
-            return ""
-    try:
-        data = json.loads(raw)
-    except ValueError:
-        return ""
-    meta = data.get("meta") if isinstance(data, dict) else None
-    tok = (meta or {}).get("bearer") if isinstance(meta, dict) else None
-    return tok.strip() if isinstance(tok, str) else ""
+    tok = S.meta(pid).get("bearer", "")
+    return tok.strip()
 
 
 def _util(block: Dict[str, Any]) -> Optional[float]:

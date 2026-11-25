@@ -1,4 +1,7 @@
-"""API keys for account providers: environment variables first, then a chmod-600 file.
+"""API keys for account providers: environment variables first, then the encrypted vault.
+
+Without a system keychain (no vault) keys stay in the owner-only ``secrets.json`` file.
+An existing ``secrets.json`` is moved into the vault once, then deleted.
 
 Keys are NEVER stored in config.json, never accepted from the web UI and never returned
 by any API: callers only learn *whether* a key is set and where it comes from.
@@ -10,10 +13,13 @@ import os
 import stat
 import tempfile
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 from omnimonitor import catalog
 from omnimonitor import config as config_mod
+from omnimonitor import vault
+
+_MIGRATED: Set[str] = set()
 
 
 def allowed_names() -> List[str]:
@@ -55,18 +61,54 @@ def _load(path: Optional[Path] = None) -> Dict[str, str]:
     return {k: v for k, v in data.items() if k in allowed_names() and isinstance(v, str) and v}
 
 
+def _vname(name: str) -> str:
+    return "apikey.%s" % name
+
+
+def migrate_file(path: Optional[Path] = None) -> int:
+    """Move every key from ``secrets.json`` into the vault, then delete the file (only if
+    every key was stored). Returns how many keys moved. No vault -> nothing happens."""
+    path = path or secrets_path()
+    key = str(path)
+    if key in _MIGRATED:
+        return 0
+    _MIGRATED.add(key)
+    data = _load(path)
+    if not data or not vault.available():
+        return 0
+    try:
+        for n, v in data.items():
+            vault.put(_vname(n), v.encode("utf-8"))
+    except (vault.VaultUnavailable, OSError):
+        return 0
+    try:
+        path.unlink()
+    except OSError:
+        pass
+    return len(data)
+
+
+def _from_vault(name: str) -> str:
+    raw = vault.get(_vname(name)) if name in allowed_names() else None
+    return raw.decode("utf-8").strip() if raw else ""
+
+
 def get(name: str) -> str:
     """The key value, for the HTTP client only. Never log or display it."""
     v = os.environ.get(name, "").strip()
     if v:
         return v
-    return _load().get(name, "").strip()
+    migrate_file()
+    return _from_vault(name) or _load().get(name, "").strip()
 
 
 def where(name: str) -> str:
-    """'env', 'file' or '' (not set)."""
+    """'env', 'vault', 'file' or '' (not set)."""
     if os.environ.get(name, "").strip():
         return "env"
+    migrate_file()
+    if _from_vault(name):
+        return "vault"
     return "file" if _load().get(name) else ""
 
 
@@ -96,6 +138,9 @@ def set_secret(name: str, value: str, path: Optional[Path] = None) -> Path:
     if not value or len(value) > 4096 or any(c in value for c in "\r\n\x00"):
         raise ValueError("empty or malformed key")
     path = path or secrets_path()
+    if vault.available():
+        vault.put(_vname(name), value.encode("utf-8"))
+        return config_mod.config_dir() / "vault"
     data = _load(path) if path.is_file() else {}
     data[name] = value
     _write(data, path)
@@ -104,9 +149,10 @@ def set_secret(name: str, value: str, path: Optional[Path] = None) -> Path:
 
 def unset_secret(name: str, path: Optional[Path] = None) -> bool:
     path = path or secrets_path()
+    gone = vault.delete(_vname(name)) if name in allowed_names() else False
     data = _load(path)
     if name not in data:
-        return False
+        return gone
     del data[name]
     _write(data, path)
     return True
