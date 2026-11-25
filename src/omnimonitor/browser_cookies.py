@@ -27,6 +27,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence, Tuple
 
+from omnimonitor import login_specs
+
 # (browser_id, display name)
 BROWSERS: Tuple[Tuple[str, str], ...] = (
     ("firefox", "Firefox"),
@@ -37,24 +39,9 @@ BROWSERS: Tuple[Tuple[str, str], ...] = (
     ("safari", "Safari"),
 )
 
-# provider_id -> (hosts to match, cookie names to keep; empty names = all cookies on host)
+# provider_id -> (hosts to match, cookie names to keep), from the one sign-in table
 PROVIDER_COOKIE_FILTER: Dict[str, Tuple[Tuple[str, ...], Tuple[str, ...]]] = {
-    # CodexBar docs/claude.md — Domain claude.ai, cookie sessionKey (sk-ant-…)
-    "claude_plan": (("claude.ai",), ("sessionKey",)),
-    # CodexBar docs/codex.md — domains chatgpt.com, openai.com; no name filter there.
-    # We keep a short allow-list of session-ish names to avoid shipping unrelated cookies.
-    "chatgpt_web": (("chatgpt.com", "openai.com", "auth.openai.com"),
-                    ("__Secure-next-auth.session-token", "next-auth.session-token",
-                     "__Secure-authjs.session-token", "authjs.session-token",
-                     "oai-did", "_account", "cf_clearance", "__cf_bm",
-                     "__Secure-next-auth.callback-url", "__Host-next-auth.csrf-token",
-                     "session-token")),
-    # CodexBar docs/cursor.md — WorkosCursorSessionToken and next-auth variants
-    "cursor": (("cursor.com", "www.cursor.com", "cursor.sh", "authenticator.cursor.sh"),
-               ("WorkosCursorSessionToken", "__Secure-next-auth.session-token",
-                "next-auth.session-token", "wos-session", "__Secure-wos-session",
-                "authjs.session-token", "__Secure-authjs.session-token")),
-}
+    pid: (spec.hosts, spec.cookie_names) for pid, spec in login_specs.SPECS.items()}
 
 
 @dataclass
