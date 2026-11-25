@@ -222,6 +222,21 @@ def cmd_login(args) -> int:
     return session_login.run_login(args.provider)
 
 
+def cmd_verify(args) -> int:
+    from omnimonitor import verify
+    cfg = _load(args)
+    res = verify.run(cfg, list(args.ids) or None)
+    if args.json:
+        print(json.dumps(res, indent=2))
+    else:
+        if not res:
+            print("No account or sign-in sources are enabled. Enable one: omnimonitor providers enable <id>")
+        for r in res:
+            print("%s %-18s %s" % ("✔" if r["ok"] else "✘", r["pid"], r["error"] or "read OK"))
+        print("Scrubbed responses: %s" % verify.default_dir())
+    return 0 if all(r["ok"] for r in res) else 1
+
+
 def cmd_tray(args) -> int:
     return _set_tray(_load(args), args.choice)
 
@@ -535,6 +550,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--json", action="store_true")
     s = sub.add_parser("login", help="in-app sign-in window for a web-session provider")
     s.add_argument("provider")
+    s = sub.add_parser("verify", help="check each enabled account/sign-in source; save scrubbed responses")
+    s.add_argument("ids", nargs="*")
+    s.add_argument("--json", action="store_true")
     s = sub.add_parser("tray", help="which suite the tray icon follows (or tightest / budget)")
     s.add_argument("choice")
     s = sub.add_parser("secrets", help="API keys for account providers (chmod-600 file)")
@@ -702,7 +720,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         from omnimonitor.applog import log_path
         print(log_path())
         return 0
-    handlers = {"export": cmd_export, "providers": cmd_providers, "tray": cmd_tray, "login": cmd_login, "breakdown": cmd_breakdown, "blocks": cmd_blocks, "statusline": cmd_statusline,
+    handlers = {"export": cmd_export, "providers": cmd_providers, "tray": cmd_tray, "verify": cmd_verify, "login": cmd_login, "breakdown": cmd_breakdown, "blocks": cmd_blocks, "statusline": cmd_statusline,
                 "config": cmd_config, "notify-test": cmd_notify_test, "secrets": cmd_secrets, "deps": cmd_deps}
     if cmd in handlers:
         return handlers[cmd](args)
