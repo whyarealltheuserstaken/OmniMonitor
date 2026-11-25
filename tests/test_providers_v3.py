@@ -382,7 +382,7 @@ def test_every_catalog_id_is_documented():
 def test_cookie_access_only_in_web_session_modules():
     """Cookie/Keychain access is confined to the opt-in web-session modules."""
     allowed = {"browser_cookies.py", "sessions.py", "session_login.py", "web_accounts.py", "accounts.py",
-               "appactions.py", "settings.py", "catalog.py",
+               "appactions.py", "settings.py", "catalog.py", "vault.py",
                "cursor_app_auth.py"}  # settings/catalog mention auth UI; cursor app auth is opt-in
     pat = re.compile(r"keyring|keychain|Cookies|browser_cookie|secretstorage|SecKeychain|"
                      r"get_cookies|Safe Storage", re.I)
