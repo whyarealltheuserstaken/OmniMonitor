@@ -54,6 +54,8 @@ class Reading:
     error: str = ""
     demo: bool = False
     attempted_at: float = 0.0  # last try, successful or not (rate limiting)
+    # Plan windows [{name, used_percent, resets_at}] (5-hour, weekly, per model...).
+    limits: List[Dict[str, Any]] = field(default_factory=list)
     # Non-secret aggregates (model names, dollar/token totals). Never cookies or tokens.
     detail: Dict[str, Any] = field(default_factory=dict)
 

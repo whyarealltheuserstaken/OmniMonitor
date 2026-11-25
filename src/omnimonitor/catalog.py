@@ -8,6 +8,8 @@ Every provider is opt-in. ``kind`` says where numbers come from:
                    (environment variable or the chmod-600 secrets file, never the web UI)
 * ``web_session``- opt-in session cookie to the provider's own usage endpoints
                    (in-app sign-in window, or import from a chosen browser; off by default)
+* ``cli_login``  - plan limits via the login an official CLI already holds on this
+                   computer (read-only; never refreshed or written by us)
 * ``none``       - not supported; ``reason`` says why and ``needs`` what would be required
 
 Cookie / web-session providers (``kind="web_session"``) are opt-in and off by default.
@@ -97,6 +99,18 @@ CATALOG: Tuple[ProviderInfo, ...] = (
        docs=("docs/cookies/codexbar.md",
              "https://github.com/steipete/CodexBar/blob/main/docs/claude.md"),
        has_limit=True),
+    _P("claude_cli_plan", "Claude plan (Claude Code login)", "Claude", "cli_login", EXPERIMENTAL,
+       shows="5-hour and weekly (and model-scoped) % used with reset times, from the plan you "
+             "already use in Claude Code",
+       source="GET https://api.anthropic.com/api/oauth/usage with the Claude Code login "
+              "(~/.claude/.credentials.json), read-only",
+       auth="none to set up: sign in to Claude Code once (`claude`); OmniMonitor never "
+            "refreshes or writes that login",
+       reset="per window (from the API)",
+       confidence="experimental (undocumented endpoint, shape from community clients; "
+                  "not verified on a live OmniMonitor account yet)",
+       docs=("https://docs.anthropic.com/en/docs/claude-code/setup",),
+       has_limit=True),
     # ---------------------------------------------------------- OpenAI
     _P("codex", "Codex CLI (+ ChatGPT plan limits)", "ChatGPT", "local_logs", SUPPORTED,
        shows="tokens, models, projects; plan limit % (5-hour and weekly windows) when Codex logs them",
@@ -131,6 +145,17 @@ CATALOG: Tuple[ProviderInfo, ...] = (
        docs=("docs/cookies/codexbar.md",
              "https://github.com/steipete/CodexBar/blob/main/docs/codex.md"),
        has_limit=True),
+    _P("codex_cli_plan", "ChatGPT plan (Codex login)", "ChatGPT", "cli_login", EXPERIMENTAL,
+       shows="5-hour and weekly plan windows from the ChatGPT plan you use in Codex",
+       source="GET https://chatgpt.com/backend-api/wham/usage with the Codex login "
+              "(~/.codex/auth.json), read-only",
+       auth="none to set up: sign in to Codex once (`codex login`); never refreshed or "
+            "written by OmniMonitor",
+       reset="per window (from the API)",
+       confidence="experimental (undocumented endpoint, shape from CodexBar docs; "
+                  "not verified on a live OmniMonitor account yet)",
+       docs=("https://github.com/steipete/CodexBar/blob/main/docs/codex.md",),
+       has_limit=True),
     # ---------------------------------------------------------- Google
     _P("gemini_cli", "Gemini CLI", "Gemini", "local_logs", SUPPORTED,
        shows="tokens (input incl. tool, output incl. thoughts, cached), models, projects",
@@ -152,6 +177,18 @@ CATALOG: Tuple[ProviderInfo, ...] = (
                   "from real files; synthetic fixtures only",
        docs=("docs/token-adapters.md",),
        extra={"note": "The Gemini app has no usage API; Antigravity plan quotas are not shown."}),
+    _P("gemini_cli_quota", "Gemini CLI quota (Google login)", "Gemini", "cli_login", EXPERIMENTAL,
+       shows="per-model request quota % used and reset times for your Google login",
+       source="POST https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist, then "
+              ":retrieveUserQuota, with the Gemini CLI login (~/.gemini/oauth_creds.json), "
+              "read-only",
+       auth="none to set up: sign in to Gemini CLI once (`gemini`); never refreshed or "
+            "written by OmniMonitor",
+       reset="per model bucket (from the API)",
+       confidence="experimental (internal Code Assist endpoints, shape from community "
+                  "clients; not verified on a live account yet)",
+       docs=("https://developers.google.com/gemini-code-assist/resources/quotas",),
+       has_limit=True),
     _P("xai_api", "xAI API (prepaid credits)", "Grok", "api", PARTIAL,
        shows="prepaid credit balance, month-to-date spend, postpaid spending limit % used",
        source="GET .../billing/teams/{team_id}/prepaid/balance; POST .../usage; "
@@ -429,9 +466,11 @@ BY_ID: Dict[str, ProviderInfo] = {p.id: p for p in CATALOG}
 LOCAL_IDS: Tuple[str, ...] = tuple(p.id for p in CATALOG if p.kind == "local_logs")
 API_IDS: Tuple[str, ...] = tuple(p.id for p in CATALOG if p.kind == "api")
 WEB_SESSION_IDS: Tuple[str, ...] = tuple(p.id for p in CATALOG if p.kind == "web_session")
+#: Plan limits read from the login an official CLI already holds (read-only, no sign-in).
+CLI_LOGIN_IDS: Tuple[str, ...] = tuple(p.id for p in CATALOG if p.kind == "cli_login")
 #: Ids that can be switched on (local adapters other than the built-in Grok one, APIs, web sessions).
 SWITCHABLE: Tuple[str, ...] = tuple(
-    i for i in LOCAL_IDS + API_IDS + WEB_SESSION_IDS if i != "grok_sessions")
+    i for i in LOCAL_IDS + API_IDS + WEB_SESSION_IDS + CLI_LOGIN_IDS if i != "grok_sessions")
 #: Choices for the tray's primary provider. ``budget`` = the tightest budget cap.
 PRIMARY_CHOICES: Tuple[str, ...] = tuple(p.id for p in CATALOG if p.has_limit) + ("budget",)
 

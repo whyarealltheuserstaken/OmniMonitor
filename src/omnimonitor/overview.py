@@ -186,7 +186,12 @@ def build(events: List[Dict[str, Any]], cfg: Dict[str, Any], now: datetime, *,
         c.update({"metrics": r.get("metrics") or [], "error": r.get("error") or "",
                   "note": r.get("note") or "", "fetched_at": r.get("fetched_at"),
                   "period": r.get("period") or "", "ok": bool(r.get("ok"))})
-        if r.get("limit_percent") is not None:
+        if r.get("limits"):
+            c["limits"] = [{"name": w.get("name") or "limit", "used_percent": w["used_percent"],
+                            "resets_at": w.get("resets_at"), "stale": False,
+                            "pace": None} for w in r["limits"]
+                           if w.get("used_percent") is not None]
+        elif r.get("limit_percent") is not None:
             c["limits"] = [{"name": r.get("period") or "limit",
                             "used_percent": r["limit_percent"], "resets_at": r.get("resets_at"),
                             "stale": False,
