@@ -27,9 +27,24 @@ _CLAUDE_WINDOWS = (("five_hour", "5-hour"), ("seven_day", "Weekly"),
                    ("seven_day_opus", "Weekly (Opus)"), ("seven_day_sonnet", "Weekly (Sonnet)"))
 
 
-def _default_http() -> HttpFn:
+#: The only hosts a CLI login token may be sent to (kept apart from the cookie readers').
+CLI_HOSTS = frozenset({"api.anthropic.com", "chatgpt.com", "cloudcode-pa.googleapis.com"})
+
+
+def _cli_http(method: str, url: str, headers: Dict[str, str],
+              body: Optional[bytes] = None) -> Tuple[int, Any]:
+    from urllib.parse import urlparse
+
     from omnimonitor import web_accounts
-    return web_accounts._json_http
+    from omnimonitor.accounts import AccountError
+    u = urlparse(url)
+    if u.scheme != "https" or (u.hostname or "").lower() not in CLI_HOSTS:
+        raise AccountError("host not allow-listed")
+    return web_accounts._request(method, url, headers, body)
+
+
+def _default_http() -> HttpFn:
+    return _cli_http
 
 
 def _failed(pid: str, now: float, msg: str) -> Reading:

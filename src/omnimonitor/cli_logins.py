@@ -31,28 +31,36 @@ class CliLogin:
     extra: Dict[str, str] = field(default_factory=dict)
 
 
+MAX_FILE = 1024 * 1024  # a real login file is a few hundred bytes
+
+
 def _read_json(path: Path) -> Dict[str, Any]:
     try:
+        if path.stat().st_size > MAX_FILE:
+            raise LoginMissing("unreadable")
         data = json.loads(path.read_text("utf-8"))
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         raise LoginMissing("unreadable")
     if not isinstance(data, dict):
         raise LoginMissing("unreadable")
     return data
 
 
-def _first_file(homes, name: str) -> Optional[Path]:
+def _first_file(homes, name: str, also_under: str = "") -> Optional[Path]:
     for h in homes:
-        p = Path(h) / name
-        if p.is_file():
-            return p
+        for p in ([Path(h) / name] + ([Path(h) / also_under / name] if also_under else [])):
+            if p.is_file():
+                return p
     return None
 
 
 def _ms_to_s(v: Any) -> Optional[float]:
     if isinstance(v, bool) or not isinstance(v, (int, float)):
         return None
-    return float(v) / 1000.0 if v > 1e11 else float(v)  # ms vs s
+    try:
+        return float(v) / 1000.0 if v > 1e11 else float(v)  # ms vs s
+    except (OverflowError, ValueError):
+        return None
 
 
 def _check(token: Any, expires: Optional[float], now: float, cli: str, cmd: str) -> str:
@@ -98,7 +106,8 @@ def codex(cfg: Dict[str, Any], now: Optional[float] = None) -> CliLogin:
 
 def gemini(cfg: Dict[str, Any], now: Optional[float] = None) -> CliLogin:
     now = time.time() if now is None else now
-    path = _first_file(config_mod.gemini_homes(cfg), "oauth_creds.json")
+    # GEMINI_CLI_HOME may point at the .gemini folder itself or replace the home directory
+    path = _first_file(config_mod.gemini_homes(cfg), "oauth_creds.json", also_under=".gemini")
     if path is None:
         raise LoginMissing("not signed in to Gemini CLI on this computer")
     try:

@@ -23,7 +23,6 @@ WEB_HOSTS = frozenset({
     "claude.ai", "www.claude.ai",
     "chatgpt.com", "www.chatgpt.com", "openai.com", "www.openai.com",
     "cursor.com", "www.cursor.com", "authenticator.cursor.sh",
-    "cloudcode-pa.googleapis.com",  # Gemini CLI quota (cli_accounts, official CLI login)
 })
 
 TIMEOUT = 20
@@ -36,9 +35,15 @@ HttpFn = Callable[[str, str, Dict[str, str], Optional[bytes]], Tuple[int, Any]]
 def _json_http(method: str, url: str, headers: Dict[str, str],
                body: Optional[bytes] = None) -> Tuple[int, Any]:
     from urllib.parse import urlparse
-    host = (urlparse(url).hostname or "").lower()
-    if host not in WEB_HOSTS and host not in ALLOWED_HOSTS:
+    u = urlparse(url)
+    if u.scheme != "https" or (u.hostname or "").lower() not in WEB_HOSTS | ALLOWED_HOSTS:
         raise AccountError("host not allow-listed")
+    return _request(method, url, headers, body)
+
+
+def _request(method: str, url: str, headers: Dict[str, str],
+             body: Optional[bytes] = None) -> Tuple[int, Any]:
+    """HTTPS JSON request, no redirects, capped body. Callers must have checked the host."""
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     opener = urllib.request.build_opener(_NoRedirect)
     try:

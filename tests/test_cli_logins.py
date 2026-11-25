@@ -287,3 +287,64 @@ def test_live_verified_sources_are_recorded():
     assert catalog.verified("claude_cli_plan") == "live"
     assert catalog.verified("codex_cli_plan") == "live"
     assert catalog.verified("gemini_cli_quota") == "fixtures"  # Gemini CLI not installed there
+
+
+# ------------------------------------------------------ security review fixes (step 3a)
+def test_huge_expiry_and_deep_json_are_missing_not_crashes(tmp_path):
+    p = tmp_path / "claude" / ".credentials.json"
+    p.parent.mkdir()
+    p.write_text('{"claudeAiOauth": {"accessToken": "t", "expiresAt": 1' + "0" * 400 + "}}")
+    login = cli_logins.claude({"claude_home": str(tmp_path / "claude")}, now=NOW)
+    assert login.expires_at is None  # unreadable expiry is treated as unknown, no OverflowError
+    p.write_text("[" * 100000)
+    with pytest.raises(cli_logins.LoginMissing):  # RecursionError is not a traceback
+        cli_logins.claude({"claude_home": str(tmp_path / "claude")}, now=NOW)
+
+
+def test_oversized_credential_file_is_refused(tmp_path):
+    p = tmp_path / "claude" / ".credentials.json"
+    p.parent.mkdir()
+    p.write_text('{"claudeAiOauth": {"accessToken": "t", "pad": "' + "x" * (2 * 1024 * 1024) + '"}}')
+    with pytest.raises(cli_logins.LoginMissing):
+        cli_logins.claude({"claude_home": str(tmp_path / "claude")}, now=NOW)
+
+
+def test_gemini_login_found_under_dot_gemini_too(tmp_path):
+    # GEMINI_CLI_HOME may replace the home directory: the login is then <home>/.gemini/...
+    _write(tmp_path / "h" / ".gemini" / "oauth_creds.json", {
+        "access_token": "ya29.tok", "expiry_date": (NOW + 100) * 1000})
+    assert cli_logins.gemini({"gemini_home": str(tmp_path / "h")}, now=NOW).token == "ya29.tok"
+
+
+def test_verify_scrubs_account_and_project_ids(tmp_path):
+    from omnimonitor import redact
+    out = redact.scrub({"cloudaicompanionProject": "my-gcp-proj", "project": "p1",
+                        "used": 4})
+    assert out["cloudaicompanionProject"] == out["project"] == "<redacted>" and out["used"] == 4
+    from omnimonitor import verify
+    rec = verify.RecordingHttp(lambda m, u, h, b: (200, {"echo": "acct-12"}))
+    rec("GET", "https://chatgpt.com/x", {"chatgpt-account-id": "acct-12"}, None)
+    assert "acct-12" in rec.secrets
+
+
+def test_gemini_secrets_include_project_in_verify(tmp_path):
+    from omnimonitor import verify
+    fx = _fx("gemini_quota.json")
+    import time
+    home = _gemini_home(tmp_path, expires_ms=(time.time() + 3600) * 1000)
+    cfg = dict(home, providers={"gemini_cli_quota": {"enabled": True}})
+    http = _GeminiHttp(fx["loadCodeAssist"], fx["retrieveUserQuota"])
+    res = verify.run(cfg, http=http, out_dir=tmp_path / "v")
+    saved = (tmp_path / "v" / res[0]["saved"]).read_text("utf-8")
+    assert "my-project-123" not in saved and "GEMINI-DO-NOT-LEAK" not in saved
+
+
+def test_json_http_requires_https_and_cli_hosts_are_separate():
+    from omnimonitor import web_accounts
+    from omnimonitor.accounts import AccountError
+    with pytest.raises(AccountError):
+        web_accounts._json_http("GET", "http://chatgpt.com/backend-api/wham/usage", {}, None)
+    assert "cloudcode-pa.googleapis.com" not in web_accounts.WEB_HOSTS  # not shared with cookies
+    assert "cloudcode-pa.googleapis.com" in cli_accounts.CLI_HOSTS
+    with pytest.raises(AccountError):  # the CLI client refuses hosts outside its own list
+        cli_accounts._cli_http("GET", "https://claude.ai/x", {}, None)

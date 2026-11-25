@@ -18,7 +18,7 @@ from urllib.parse import urlsplit, urlunsplit
 from omnimonitor import catalog, redact
 from omnimonitor import config as config_mod
 
-_SECRET_HEADER = re.compile(r"(?i)auth|cookie|key|token|secret|session")
+_SECRET_HEADER = re.compile(r"(?i)auth|cookie|key|token|secret|session|account")
 
 Http = Callable[[str, str, Dict[str, str], Optional[bytes]], Tuple[int, Any]]
 
