@@ -60,6 +60,16 @@ AI tools. OmniMonitor copies **no code, text, icons or images** from it. Everyth
 Python re-implementation of the ideas. See [docs/inspiration-notes.md](docs/inspiration-notes.md)
 for what we adopted, what we built differently and why.
 
+## What's new (unreleased, 0.6 work)
+
+OmniMonitor is becoming a monitor for every major AI platform, organised in **suites**
+(Anthropic, OpenAI, Google, Grok & Cursor, DeepSeek, Qwen, Kimi, ...). The tray follows the
+suite you pick, or the tightest limit across all of them (`omnimonitor tray`). **Plan limits for
+Claude, ChatGPT/Codex and Gemini** can now be read from the login the official CLI already holds
+(read-only, off by default, `omnimonitor providers enable claude_cli_plan`). Website sessions and
+API keys live in an **encrypted vault**, and `omnimonitor verify` checks your sources. See the
+[CHANGELOG](CHANGELOG.md).
+
 ## What's new in 0.5.3-beta
 
 **Beta / prerelease** (GitHub prerelease; `/releases/latest` stays on 0.4.2). The opt-in Cursor provider can show Grok-in-Cursor token totals, overall Cursor tokens and token cost, and unified plan dollars. Grok billing tries the official CLI first, and shows reset credits and dollar amounts only when the payload includes them. These reads have not been checked against a live account yet. See [release notes](docs/release-notes/v0.5.3-beta.md).

@@ -19,6 +19,8 @@ HttpFn = Callable[[str, str, Dict[str, str], Optional[bytes]], Tuple[int, Any]]
 
 CLAUDE_USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
 CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
+GEMINI_LOAD_URL = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
+GEMINI_QUOTA_URL = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota"
 CONF = "experimental"
 
 _CLAUDE_WINDOWS = (("five_hour", "5-hour"), ("seven_day", "Weekly"),
@@ -97,7 +99,54 @@ def fetch_codex(cfg: Dict[str, Any], http: HttpFn, now: float) -> Reading:
     return r
 
 
-FETCHERS = {"claude_cli_plan": fetch_claude, "codex_cli_plan": fetch_codex}
+def fetch_gemini(cfg: Dict[str, Any], http: HttpFn, now: float) -> Reading:
+    """Per-model request quota for the Google login Gemini CLI holds (Code Assist)."""
+    import json
+    pid = "gemini_cli_quota"
+    try:
+        login = cli_logins.gemini(cfg, now)
+    except (cli_logins.LoginMissing, cli_logins.LoginExpired) as e:
+        return _failed(pid, now, str(e))
+    hdr = {"Authorization": "Bearer " + login.token, "Content-Type": "application/json",
+           "Accept": "application/json"}
+    body = json.dumps({"metadata": {"ideType": "GEMINI_CLI", "pluginType": "GEMINI"}}).encode()
+    st, loaded = http("POST", GEMINI_LOAD_URL, hdr, body)
+    if st in (401, 403):
+        return _failed(pid, now, "login rejected - run `gemini` once to refresh it")
+    if st != 200:
+        return _failed(pid, now, "Gemini Code Assist HTTP %s" % st)
+    project = loaded.get("cloudaicompanionProject") if isinstance(loaded, dict) else None
+    qbody = {"project": project} if isinstance(project, str) and project else {}
+    st, data = http("POST", GEMINI_QUOTA_URL, hdr, json.dumps(qbody).encode())
+    if st in (401, 403):
+        return _failed(pid, now, "login rejected - run `gemini` once to refresh it")
+    if st != 200 or not isinstance(data, dict):
+        return _failed(pid, now, "Gemini quota HTTP %s" % st)
+    r = Reading(pid, True, now, period="per-model quota", confidence=CONF,
+                note="from your Gemini CLI login (experimental; internal endpoint)")
+    tightest: Dict[str, Tuple[float, Optional[float]]] = {}
+    for b in data.get("buckets") or []:
+        if not isinstance(b, dict) or not isinstance(b.get("modelId"), str):
+            continue
+        frac = b.get("remainingFraction")
+        if isinstance(frac, bool) or not isinstance(frac, (int, float)):
+            continue
+        used = round(max(0.0, min(100.0, 100.0 * (1.0 - float(frac)))), 4)
+        cur = tightest.get(b["modelId"])
+        if cur is None or used > cur[0]:
+            tightest[b["modelId"]] = (used, _iso(b.get("resetTime")))
+    for model, (used, resets) in sorted(tightest.items(), key=lambda kv: -kv[1][0]):
+        r.metric(model, model + " used", used, "%", "used_percent")
+        r.limits.append({"name": model, "used_percent": used, "resets_at": resets})
+    if r.limits:
+        r.limit_percent, r.resets_at = r.limits[0]["used_percent"], r.limits[0]["resets_at"]
+    else:
+        r.note = "Gemini returned no quota buckets for this login"
+    return r
+
+
+FETCHERS = {"claude_cli_plan": fetch_claude, "codex_cli_plan": fetch_codex,
+            "gemini_cli_quota": fetch_gemini}
 
 
 def fetch(pid: str, cfg: Dict[str, Any], http: Optional[HttpFn] = None,

@@ -190,7 +190,7 @@ only. Please report a mismatch with a redacted sample.
 | Auth | none to set up: sign in to Claude Code once (`claude`); OmniMonitor never refreshes or writes that login |
 | Shows | 5-hour and weekly (and model-scoped) % used with reset times, from the plan you already use in Claude Code |
 | Reset period | per window (from the API) |
-| Confidence / testing | experimental (undocumented endpoint, shape from community clients; not verified on a live OmniMonitor account yet) |
+| Confidence / testing | experimental (undocumented endpoint, shape from community clients). Read successfully with a real Claude Code login on 2026-11-25; the numbers have not been compared with claude.ai's usage page yet |
 | Key variables | – |
 | Can drive the tray % | yes |
 | Docs | [docs.anthropic.com](https://docs.anthropic.com/en/docs/claude-code/setup) |
@@ -246,7 +246,7 @@ only. Please report a mismatch with a redacted sample.
 | Auth | none to set up: sign in to Codex once (`codex login`); never refreshed or written by OmniMonitor |
 | Shows | 5-hour and weekly plan windows from the ChatGPT plan you use in Codex |
 | Reset period | per window (from the API) |
-| Confidence / testing | experimental (undocumented endpoint, shape from CodexBar docs; not verified on a live OmniMonitor account yet) |
+| Confidence / testing | experimental (undocumented endpoint, shape from CodexBar docs). Read successfully with a real Codex login on 2026-11-25; the numbers have not been compared with the ChatGPT usage page yet |
 | Key variables | – |
 | Can drive the tray % | yes |
 | Docs | [github.com](https://github.com/steipete/CodexBar/blob/main/docs/codex.md) |

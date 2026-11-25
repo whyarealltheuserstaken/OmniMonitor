@@ -188,9 +188,9 @@ def build(events: List[Dict[str, Any]], cfg: Dict[str, Any], now: datetime, *,
                   "period": r.get("period") or "", "ok": bool(r.get("ok"))})
         if r.get("limits"):
             c["limits"] = [{"name": w.get("name") or "limit", "used_percent": w["used_percent"],
-                            "resets_at": w.get("resets_at"), "stale": False,
-                            "pace": None} for w in r["limits"]
-                           if w.get("used_percent") is not None]
+                            "resets_at": w.get("resets_at"),
+                            "stale": _past(w.get("resets_at"), nowts), "pace": None}
+                           for w in r["limits"] if w.get("used_percent") is not None]
         elif r.get("limit_percent") is not None:
             c["limits"] = [{"name": r.get("period") or "limit",
                             "used_percent": r["limit_percent"], "resets_at": r.get("resets_at"),
@@ -214,6 +214,12 @@ def build(events: List[Dict[str, Any]], cfg: Dict[str, Any], now: datetime, *,
     out["primary"] = primary(cfg, out["suites"], out["budgets"], nowts)
     out["thresholds"] = {c["id"]: provider_thresholds(cfg, c["id"]) for c in cards}
     return out
+
+
+def _past(resets_at: Any, now: float) -> bool:
+    """True when a window's reset time has already passed (its % is no longer current)."""
+    t = _ts(resets_at)
+    return t is not None and t < now
 
 
 def suite_view(cards: List[Dict[str, Any]], now: Optional[float] = None
