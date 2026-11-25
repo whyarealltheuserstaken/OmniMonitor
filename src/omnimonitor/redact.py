@@ -15,11 +15,11 @@ _KEY = re.compile(r"\b(?:sk-[A-Za-z0-9_-]{8,}|sk-ant-[A-Za-z0-9_-]+|xai-[A-Za-z0
                   r"gh[pousr]_[A-Za-z0-9]{16,}|github_pat_[A-Za-z0-9_]{16,})")
 _LONG = re.compile(r"[A-Za-z0-9_\-+/=]{32,}")
 _ID_KEY = re.compile(r"(?i)(^|_)(id|uuid|email|org|organization|account|user|team|name|"
-                     r"login|username|owner|customer|member|phone|phone_number|address|ip|"
+                     r"login|username|owner|customer|member|phone|phone_number|address|ip|project|"
                      r"ip_address|avatar|avatar_url|picture|image|slug|workspace|title|"
                      r"company|domain|handle|display_name)s?$|^billing_")
 _ID_CAMEL = re.compile(r"[a-z](Id|Uuid|Email|Org|Account|User|Team|Name|Login|Phone|"
-                       r"Address|Avatar|Picture|Slug|Workspace)s?$")
+                       r"Address|Avatar|Picture|Slug|Workspace|Project)s?$")
 
 
 def _key_is_identifying(k: str) -> bool:

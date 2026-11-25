@@ -29,7 +29,7 @@ only. Please report a mismatch with a redacted sample.
 
 ## Summary
 
-57 entries: 13 supported, 11 partial, 14 experimental, 19 not supported.
+60 entries: 13 supported, 11 partial, 17 experimental, 19 not supported.
 
 | Family | Provider | id | Status | Source | Shows | Tray % |
 |---|---|---|---|---|---|---|
@@ -39,13 +39,16 @@ only. Please report a mismatch with a redacted sample.
 | Claude | Claude Code | `claude_code` | ✅ supported | local logs | tokens (incl. cache), models, projects; ≈ cost from your price table; ≈ 5-hour block + burn rate (estimate, `omnimonitor blocks`) | – |
 | Claude | Claude API (organization cost) | `anthropic_api` | ✅ supported | official API | month-to-date USD cost (UTC month) | – |
 | Claude | Claude Pro/Max plan limits | `claude_plan` | 🧪 experimental | web session (opt-in) | 5-hour session and weekly (and model-scoped) % used, reset times when returned | yes |
+| Claude | Claude plan (Claude Code login) | `claude_cli_plan` | 🧪 experimental | CLI login (read-only) | 5-hour and weekly (and model-scoped) % used with reset times, from the plan you already use in Claude Code | yes |
 | ChatGPT | Codex CLI (+ ChatGPT plan limits) | `codex` | ✅ supported | local logs | tokens, models, projects; plan limit % (5-hour and weekly windows) when Codex logs them | yes |
 | ChatGPT | OpenAI API (organization cost) | `openai_api` | ✅ supported | official API | month-to-date USD cost (UTC month) | – |
 | ChatGPT | ChatGPT app message limits | `chatgpt_app` | ❌ not supported | – | No official API for the consumer ChatGPT app message counters | – |
 | ChatGPT | ChatGPT / Codex web plan limits | `chatgpt_web` | 🧪 experimental | web session (opt-in) | session and weekly plan windows when chatgpt.com returns them | yes |
+| ChatGPT | ChatGPT plan (Codex login) | `codex_cli_plan` | 🧪 experimental | CLI login (read-only) | 5-hour and weekly plan windows from the ChatGPT plan you use in Codex | yes |
 | Gemini | Gemini CLI | `gemini_cli` | ✅ supported | local logs | tokens (input incl. tool, output incl. thoughts, cached), models, projects | – |
 | Gemini | Gemini API (AI Studio) | `gemini_api` | ❌ not supported | – | The Gemini API has no balance/usage endpoint; spend is only in Google Cloud Billing (export to BigQuery) | – |
 | Gemini | Antigravity (CLI / IDE) | `antigravity` | 🧪 experimental | local logs | tokens (input incl. cache, output incl. thinking), models | – |
+| Gemini | Gemini CLI quota (Google login) | `gemini_cli_quota` | 🧪 experimental | CLI login (read-only) | per-model request quota % used and reset times for your Google login | yes |
 | Grok | xAI API (prepaid credits) | `xai_api` | 🟡 partial | official API | prepaid credit balance, month-to-date spend, postpaid spending limit % used | – |
 | Venice | Venice API | `venice` | 🧪 experimental | official API | USD / DIEM / credit balances; DIEM % used of the epoch allocation | yes |
 | DeepInfra | DeepInfra | `deepinfra` | 🟡 partial | official API | prepaid balance, usage since last invoice, spending limit % used | yes |
@@ -178,6 +181,20 @@ only. Please report a mismatch with a redacted sample.
 | Can drive the tray % | yes |
 | Docs | [codexbar.md](../docs/cookies/codexbar.md), [github.com](https://github.com/steipete/CodexBar/blob/main/docs/claude.md) |
 
+### Claude plan (Claude Code login) (`claude_cli_plan`)
+
+| | |
+|---|---|
+| Status | 🧪 experimental |
+| Source | GET https://api.anthropic.com/api/oauth/usage with the Claude Code login (~/.claude/.credentials.json), read-only |
+| Auth | none to set up: sign in to Claude Code once (`claude`); OmniMonitor never refreshes or writes that login |
+| Shows | 5-hour and weekly (and model-scoped) % used with reset times, from the plan you already use in Claude Code |
+| Reset period | per window (from the API) |
+| Confidence / testing | experimental (undocumented endpoint, shape from community clients). Read successfully with a real Claude Code login on 2026-11-25; the numbers have not been compared with claude.ai's usage page yet |
+| Key variables | – |
+| Can drive the tray % | yes |
+| Docs | [docs.anthropic.com](https://docs.anthropic.com/en/docs/claude-code/setup) |
+
 ### Codex CLI (+ ChatGPT plan limits) (`codex`)
 
 | | |
@@ -220,6 +237,20 @@ only. Please report a mismatch with a redacted sample.
 | Can drive the tray % | yes |
 | Docs | [codexbar.md](../docs/cookies/codexbar.md), [github.com](https://github.com/steipete/CodexBar/blob/main/docs/codex.md) |
 
+### ChatGPT plan (Codex login) (`codex_cli_plan`)
+
+| | |
+|---|---|
+| Status | 🧪 experimental |
+| Source | GET https://chatgpt.com/backend-api/wham/usage with the Codex login (~/.codex/auth.json), read-only |
+| Auth | none to set up: sign in to Codex once (`codex login`); never refreshed or written by OmniMonitor |
+| Shows | 5-hour and weekly plan windows from the ChatGPT plan you use in Codex |
+| Reset period | per window (from the API) |
+| Confidence / testing | experimental (undocumented endpoint, shape from CodexBar docs). Read successfully with a real Codex login on 2026-11-25; the numbers have not been compared with the ChatGPT usage page yet |
+| Key variables | – |
+| Can drive the tray % | yes |
+| Docs | [github.com](https://github.com/steipete/CodexBar/blob/main/docs/codex.md) |
+
 ### Gemini CLI (`gemini_cli`)
 
 | | |
@@ -248,6 +279,20 @@ only. Please report a mismatch with a redacted sample.
 | Can drive the tray % | no |
 | Docs | [token-adapters.md](../docs/token-adapters.md) |
 | Note | The Gemini app has no usage API; Antigravity plan quotas are not shown. |
+
+### Gemini CLI quota (Google login) (`gemini_cli_quota`)
+
+| | |
+|---|---|
+| Status | 🧪 experimental |
+| Source | POST https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist, then :retrieveUserQuota, with the Gemini CLI login (~/.gemini/oauth_creds.json), read-only |
+| Auth | none to set up: sign in to Gemini CLI once (`gemini`); never refreshed or written by OmniMonitor |
+| Shows | per-model request quota % used and reset times for your Google login |
+| Reset period | per model bucket (from the API) |
+| Confidence / testing | experimental (internal Code Assist endpoints, shape from community clients; not verified on a live account yet) |
+| Key variables | – |
+| Can drive the tray % | yes |
+| Docs | [developers.google.com](https://developers.google.com/gemini-code-assist/resources/quotas) |
 
 ### xAI API (prepaid credits) (`xai_api`)
 

@@ -241,6 +241,20 @@ def cmd_tray(args) -> int:
     return _set_tray(_load(args), args.choice)
 
 
+def _cli_login_state(pid: str, cfg) -> str:
+    """'login found' / 'login expired' / 'no login' for the CLI behind a plan source."""
+    from omnimonitor import cli_logins
+    reader = {"claude_cli_plan": cli_logins.claude, "codex_cli_plan": cli_logins.codex,
+              "gemini_cli_quota": cli_logins.gemini}[pid]
+    try:
+        reader(cfg)
+        return "login found"
+    except cli_logins.LoginExpired:
+        return "login expired"
+    except cli_logins.LoginMissing:
+        return "no login"
+
+
 def cmd_providers(args) -> int:
     from omnimonitor import accounts, apikeys, catalog
     from omnimonitor.adapters import describe
@@ -281,12 +295,19 @@ def cmd_providers(args) -> int:
                 r["enabled"] = found[p.id]["enabled"]
         if p.kind == "api":
             r["key"] = apikeys.where(accounts.key_for(p.id)[1]) or "not set"
+        if p.kind == "cli_login":
+            r["login"] = _cli_login_state(p.id, cfg)
+        if p.kind == "web_session":
+            from omnimonitor import sessions
+            r["login"] = "signed in" if sessions.has(p.id) else "not signed in"
         rows.append(r)
     if args.json:
         print(json.dumps(rows, indent=2))
         return 0
     groups = (("Local logs (read-only files on this computer)", "local_logs"),
               ("Account APIs (official, your key)", "api"),
+              ("Plan limits via a CLI login (read-only, no sign-in)", "cli_login"),
+              ("Plan limits via website sign-in (opt-in)", "web_session"),
               ("Grok weekly pool", "billing"), ("Not supported", "none"))
     for title, kind in groups:
         print("\n" + title)
@@ -296,7 +317,7 @@ def cmd_providers(args) -> int:
                 continue
             on = "-" if r["enabled"] is None else ("ON " if r["enabled"] else "off")
             extra = ("found" if r.get("found") else "not found") if "found" in r else \
-                ("key: %s" % r["key"] if "key" in r else "")
+                ("key: %s" % r["key"] if "key" in r else r.get("login", ""))
             print("  %-24s %-3s %-9s %-10s %s" % (r["name"][:24], on, _status_word(r["status"]),
                                                   extra, r["shows"][:60]))
     print("\nEnable one:   omnimonitor providers enable <id>   (ids: --json, or docs/providers.md)")

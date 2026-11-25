@@ -330,6 +330,12 @@ def enabled_web_providers(cfg: Dict[str, Any]) -> list:
     return [p for p in catalog.enabled_ids(cfg) if p in catalog.WEB_SESSION_IDS]
 
 
+def enabled_cli_providers(cfg: Dict[str, Any]) -> list:
+    """Plan-limit sources that reuse an official CLI's login (read-only)."""
+    from omnimonitor import catalog
+    return [p for p in catalog.enabled_ids(cfg) if p in catalog.CLI_LOGIN_IDS]
+
+
 def enabled_api_providers(cfg: Dict[str, Any]) -> list:
     from omnimonitor import catalog
     return [p for p in catalog.enabled_ids(cfg) if p in catalog.API_IDS]

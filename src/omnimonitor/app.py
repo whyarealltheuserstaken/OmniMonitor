@@ -203,7 +203,8 @@ class Controller:
             return
         self._refresh_status()
         ids = list(dict.fromkeys(
-            config_mod.enabled_api_providers(self.cfg) + config_mod.enabled_web_providers(self.cfg)))
+            config_mod.enabled_api_providers(self.cfg) + config_mod.enabled_web_providers(self.cfg)
+            + config_mod.enabled_cli_providers(self.cfg)))
         if not ids:
             self.readings = {}
             return

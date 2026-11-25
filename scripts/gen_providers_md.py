@@ -43,7 +43,8 @@ only. Please report a mismatch with a redacted sample.
 """
 
 KIND = {"billing": "Grok billing", "local_logs": "local logs", "api": "official API",
-        "web_session": "web session (opt-in)", "none": "–"}
+        "web_session": "web session (opt-in)",
+        "cli_login": "CLI login (read-only)", "none": "–"}
 STATUS = {"supported": "✅ supported", "partial": "🟡 partial", "experimental": "🧪 experimental",
           "not_supported": "❌ not supported"}
 

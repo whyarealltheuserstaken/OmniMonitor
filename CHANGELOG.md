@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Suites.** Every provider belongs to a suite (Anthropic, OpenAI, Google, Grok & Cursor, DeepSeek,
+  Qwen, Kimi, GitHub Copilot, API gateways, Coding agents). The tray follows `tray_suite`
+  (a suite, `tightest` = default, or `budget`), replacing `primary_provider` (migrated). Grok is no
+  longer a hidden fallback; `omnimonitor tray <choice>` sets it.
+- **Encrypted vault** for web sessions and API keys (AES-GCM; the key lives in the OS keychain).
+  Older plaintext sessions and `secrets.json` are moved in on first start. Without a keychain,
+  website sign-in is refused instead of storing cookies in plaintext.
+- **Sign-in runs in its own process** (`omnimonitor login <provider>`), with strict cookie filtering.
+- **`omnimonitor verify`**: checks each enabled account / sign-in source and saves scrubbed responses.
+- **Plan limits from the CLI logins you already have** (read-only, no extra sign-in, off by default):
+  Claude plan (Claude Code), ChatGPT plan (Codex) and Gemini CLI quota. Claude and Codex were read
+  successfully with real logins on 2026-11-25; the numbers have not been compared with the vendors'
+  usage pages yet. Gemini is fixture-only (the Gemini CLI was not installed on the test machine).
+- `omnimonitor providers` now lists the CLI-login and website sign-in sources too.
+
+### Fixed
+- Cursor sign-in could never finish (it required all three alternative cookie names at once).
+- Release builds did not bundle `keyring` / `cryptography`, so saved sessions were plaintext files.
+- A limit whose reset time has passed no longer drives the tray icon.
+
 ## [0.5.3-beta] - 2026-11-16
 
 Beta / prerelease. GitHub marks this release as a prerelease; `/releases/latest` stays on the last stable (0.4.2) until a final 0.5.0.

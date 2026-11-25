@@ -54,6 +54,8 @@ class Reading:
     error: str = ""
     demo: bool = False
     attempted_at: float = 0.0  # last try, successful or not (rate limiting)
+    # Plan windows [{name, used_percent, resets_at}] (5-hour, weekly, per model...).
+    limits: List[Dict[str, Any]] = field(default_factory=list)
     # Non-secret aggregates (model names, dollar/token totals). Never cookies or tokens.
     detail: Dict[str, Any] = field(default_factory=dict)
 
@@ -535,15 +537,19 @@ def refresh(cfg: Dict[str, Any], history, ids: List[str], force: bool = False,
     every = max(300, int(cfg.get("provider_poll_seconds") or 900))
     out: Dict[str, Reading] = {}
     web_ids = set(getattr(catalog, "WEB_SESSION_IDS", ()))
+    cli_ids = set(getattr(catalog, "CLI_LOGIN_IDS", ()))
     for pid in ids:
         is_web = pid in web_ids
-        if pid not in FETCHERS and not is_web:
+        if pid not in FETCHERS and not is_web and pid not in cli_ids:
             continue
         last = load(history, pid)
         if last and not force and now - max(last.fetched_at, last.attempted_at) < every:
             out[pid] = last
             continue
-        if is_web:
+        if pid in cli_ids:
+            from omnimonitor import cli_accounts
+            r = cli_accounts.fetch(pid, cfg, http=http, now=now)
+        elif is_web:
             from omnimonitor import web_accounts
             # Ensure browser import happens when auth=browser and no stored session yet
             _maybe_import_browser(cfg, pid)
