@@ -343,7 +343,7 @@ def public_view(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _session_presence() -> Dict[str, str]:
-    """Where a web session is stored ('keyring' / 'file' / '') — never cookie values."""
+    """Where a web session is stored ('vault' / '') — never cookie values."""
     try:
         from omnimonitor import sessions
         return sessions.status()
@@ -352,7 +352,7 @@ def _session_presence() -> Dict[str, str]:
 
 
 def _key_presence() -> Dict[str, str]:
-    """Which API keys are set and where ('env' / 'file' / '') - never any characters."""
+    """Which API keys are set and where ('env' / 'vault' / 'file' / '') - never any characters."""
     try:
         from omnimonitor import apikeys
         return apikeys.status()

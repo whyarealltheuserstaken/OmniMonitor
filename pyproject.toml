@@ -30,12 +30,15 @@ dependencies = [
   "zstandard>=0.22; python_version < '3.14'",
   # native app window; uses the system WebView (WKWebView / WebView2)
   "pywebview>=5; sys_platform == 'darwin' or sys_platform == 'win32'",
+  # encrypted vault for web sessions and API keys (key in the OS keychain)
+  "keyring>=24",
+  "cryptography>=41",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "ruff>=0.4"]
-# Chromium cookie decrypt + OS keyring for web-session storage
-cookies = ["cryptography>=41", "keyring>=24"]
+# kept so old `pip install .[cookies]` commands still work (now core dependencies)
+cookies = []
 # Linux app window: needs a GUI backend; or use the system python3-gi + WebKit2GTK packages
 window-qt = ["pywebview[qt]>=5"]
 window-gtk = ["pywebview[gtk]>=5"]

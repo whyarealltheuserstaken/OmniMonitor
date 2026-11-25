@@ -20,6 +20,7 @@ def test_names():
 def linux_home(tmp_path, monkeypatch):
     if sys.platform in ("darwin", "win32"):
         pytest.skip("XDG layout only")
+    monkeypatch.delenv("OMNIMONITOR_HOME", raising=False)  # conftest sets one per test
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     return tmp_path
 
@@ -71,6 +72,7 @@ def test_failed_copy_falls_back_to_legacy(tmp_path, monkeypatch):
 
 
 def test_env_vars_new_and_legacy(tmp_path, monkeypatch):
+    monkeypatch.delenv("OMNIMONITOR_HOME", raising=False)  # conftest sets one per test
     monkeypatch.setenv("GROK_USAGE_TRAY_HOME", str(tmp_path / "legacy"))
     assert config_mod.config_dir() == tmp_path / "legacy"
     monkeypatch.setenv("OMNIMONITOR_HOME", str(tmp_path / "new"))

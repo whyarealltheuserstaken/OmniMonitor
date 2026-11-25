@@ -46,6 +46,7 @@ jobs:
             --hidden-import AppKit --hidden-import Foundation --hidden-import objc \
             --hidden-import PyObjCTools.AppHelper --hidden-import PyObjCTools.MachSignals \
             --collect-submodules webview --collect-data webview --hidden-import WebKit \
+            --collect-all keyring --collect-submodules cryptography \
             scripts/pyinstaller_entry.py
           # menu-bar-only app: no Dock icon
           P=dist/omnimonitor.app/Contents/Info.plist
@@ -73,6 +74,7 @@ jobs:
           pyinstaller --noconfirm --onefile --windowed --name omnimonitor `
             --collect-data omnimonitor --collect-data certifi --hidden-import pystray._win32 `
             --collect-all webview --collect-all clr_loader --collect-all pythonnet `
+            --collect-all keyring --collect-all win32ctypes --collect-submodules cryptography `
             scripts/pyinstaller_entry.py
           Compress-Archive -Path dist/omnimonitor.exe -DestinationPath ${{ matrix.asset }}.zip
       - name: Build (Linux)
@@ -81,6 +83,8 @@ jobs:
           pyinstaller --noconfirm --onefile --name omnimonitor \
             --collect-data omnimonitor --collect-data certifi \
             --hidden-import pystray._xorg --hidden-import pystray._appindicator \
+            --collect-all keyring --collect-all secretstorage --collect-all jeepney \
+            --collect-submodules cryptography \
             scripts/pyinstaller_entry.py
           tar -C dist -czf ${{ matrix.asset }}.tar.gz omnimonitor
           # AppImage: same onefile binary in an AppDir, built with the official appimagetool

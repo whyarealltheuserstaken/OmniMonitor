@@ -35,6 +35,8 @@ class FakeHttp:
 
 # ----------------------------------------------------------------------- apikeys
 def test_apikeys_env_wins_file_is_private_and_values_never_listed(monkeypatch):
+    from omnimonitor import vault
+    vault.set_backend(False)  # no keychain: keys fall back to the owner-only file
     path = apikeys.secrets_path()
     apikeys.set_secret("DEEPSEEK_API_KEY", FAKE + "\n")
     if os.name == "posix":  # chmod is a no-op on Windows (per-user %APPDATA% ACLs)
@@ -348,7 +350,7 @@ def test_public_view_reports_key_presence_only(monkeypatch):
     text = json.dumps(view)
     assert FAKE not in text and "LEAK" not in text
     keys = view["_readonly"]["keys"]
-    assert keys["OPENROUTER_API_KEY"] == "env" and keys["DEEPSEEK_API_KEY"] == "file"
+    assert keys["OPENROUTER_API_KEY"] == "env" and keys["DEEPSEEK_API_KEY"] == "vault"
     ids = {p["id"] for p in view["_readonly"]["catalog"]}
     assert ids == set(catalog.SWITCHABLE)
     assert not any("KEY" in k or "TOKEN" in k for k in settings_mod.web_keys())
@@ -382,7 +384,7 @@ def test_every_catalog_id_is_documented():
 def test_cookie_access_only_in_web_session_modules():
     """Cookie/Keychain access is confined to the opt-in web-session modules."""
     allowed = {"browser_cookies.py", "sessions.py", "session_login.py", "web_accounts.py", "accounts.py",
-               "appactions.py", "settings.py", "catalog.py",
+               "appactions.py", "settings.py", "catalog.py", "vault.py", "login_specs.py", "verify.py",
                "cursor_app_auth.py"}  # settings/catalog mention auth UI; cursor app auth is opt-in
     pat = re.compile(r"keyring|keychain|Cookies|browser_cookie|secretstorage|SecKeychain|"
                      r"get_cookies|Safe Storage", re.I)
@@ -448,7 +450,7 @@ def test_cli_secrets_via_stdin_never_echoes(home, capsys, monkeypatch):
     assert cli.main(["secrets", "set", "OPENROUTER_API_KEY"]) == 0
     assert cli.main(["secrets", "list"]) == 0
     out = capsys.readouterr().out
-    assert FAKE not in out and "set (secrets file)" in out
+    assert FAKE not in out and "set (encrypted vault)" in out
     monkeypatch.setattr("sys.stdin", io.StringIO(""))
     assert cli.main(["secrets", "set", "OPENROUTER_API_KEY"]) == 2
     assert cli.main(["secrets", "set", "BOGUS"]) == 2

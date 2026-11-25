@@ -29,7 +29,7 @@
       var k = el("td", "s");
       if (p.kind === "api") {
         k.textContent = (p.env || []).filter(function (n) { return /KEY|TOKEN/.test(n); }).map(function (n) {
-          return n + ": " + (keys[n] === "env" ? "set (env)" : keys[n] === "file" ? "set (secrets file)" : "not set");
+          return n + ": " + (keys[n] === "env" ? "set (env)" : keys[n] === "vault" ? "set (encrypted vault)" : keys[n] === "file" ? "set (secrets file)" : "not set");
         }).join(" · ");
       } else if (p.kind === "web_session") {
         k.appendChild(document.createTextNode(

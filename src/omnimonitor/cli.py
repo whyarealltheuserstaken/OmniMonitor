@@ -214,6 +214,29 @@ def _set_tray(cfg, choice: str) -> int:
     return 0
 
 
+def cmd_login(args) -> int:
+    from omnimonitor import login_specs, session_login
+    if args.provider not in login_specs.SPECS:
+        print("sign-in is available for: %s" % ", ".join(login_specs.ids()), file=sys.stderr)
+        return 2
+    return session_login.run_login(args.provider)
+
+
+def cmd_verify(args) -> int:
+    from omnimonitor import verify
+    cfg = _load(args)
+    res = verify.run(cfg, list(args.ids) or None)
+    if args.json:
+        print(json.dumps(res, indent=2))
+    else:
+        if not res:
+            print("No account or sign-in sources are enabled. Enable one: omnimonitor providers enable <id>")
+        for r in res:
+            print("%s %-18s %s" % ("✔" if r["ok"] else "✘", r["pid"], r["error"] or "read OK"))
+        print("Scrubbed responses: %s" % verify.default_dir())
+    return 0 if all(r["ok"] for r in res) else 1
+
+
 def cmd_tray(args) -> int:
     return _set_tray(_load(args), args.choice)
 
@@ -288,7 +311,8 @@ def cmd_secrets(args) -> int:
     if args.action == "list":
         print("API keys (values are never shown):")
         for n, src in apikeys.status().items():
-            print("  %-22s %s" % (n, {"env": "set (environment)", "file": "set (secrets file)"}
+            print("  %-22s %s" % (n, {"env": "set (environment)", "vault": "set (encrypted vault)",
+                                  "file": "set (secrets file)"}
                                   .get(src, "not set")))
         prob = apikeys.file_problem()
         print("Secrets file: %s%s" % (apikeys.secrets_path(), " - " + prob if prob else ""))
@@ -298,8 +322,7 @@ def cmd_secrets(args) -> int:
         return 2
     if args.action == "unset":
         ok = apikeys.unset_secret(args.name)
-        print("Removed %s from the secrets file." % args.name if ok else
-              "%s was not in the secrets file." % args.name)
+        print("Removed %s." % args.name if ok else "%s was not set." % args.name)
         return 0
     import getpass
     try:
@@ -525,6 +548,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("action", nargs="?", choices=("list", "enable", "disable", "primary", "check"))
     s.add_argument("id", nargs="?")
     s.add_argument("--json", action="store_true")
+    s = sub.add_parser("login", help="in-app sign-in window for a web-session provider")
+    s.add_argument("provider")
+    s = sub.add_parser("verify", help="check each enabled account/sign-in source; save scrubbed responses")
+    s.add_argument("ids", nargs="*")
+    s.add_argument("--json", action="store_true")
     s = sub.add_parser("tray", help="which suite the tray icon follows (or tightest / budget)")
     s.add_argument("choice")
     s = sub.add_parser("secrets", help="API keys for account providers (chmod-600 file)")
@@ -692,7 +720,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         from omnimonitor.applog import log_path
         print(log_path())
         return 0
-    handlers = {"export": cmd_export, "providers": cmd_providers, "tray": cmd_tray, "breakdown": cmd_breakdown, "blocks": cmd_blocks, "statusline": cmd_statusline,
+    handlers = {"export": cmd_export, "providers": cmd_providers, "tray": cmd_tray, "verify": cmd_verify, "login": cmd_login, "breakdown": cmd_breakdown, "blocks": cmd_blocks, "statusline": cmd_statusline,
                 "config": cmd_config, "notify-test": cmd_notify_test, "secrets": cmd_secrets, "deps": cmd_deps}
     if cmd in handlers:
         return handlers[cmd](args)

@@ -9,8 +9,6 @@ from omnimonitor import appactions, browser_cookies, catalog, sessions, web_acco
 @pytest.fixture
 def sess_home(tmp_path, monkeypatch):
     monkeypatch.setenv("OMNIMONITOR_HOME", str(tmp_path))
-    # force file backend (no keyring in CI)
-    monkeypatch.setattr(sessions, "_keyring", lambda: None)
     return tmp_path
 
 
@@ -22,11 +20,11 @@ def test_catalog_web_session_ids():
         assert p.has_limit and pid in catalog.SWITCHABLE
 
 
-def test_session_save_load_forget_file(sess_home):
+def test_session_save_load_forget_vault(sess_home):
     where = sessions.save("claude_plan", "sessionKey=sk-ant-testVALUE")
-    assert where == "file"
+    assert where == "vault"
     assert sessions.load("claude_plan") == "sessionKey=sk-ant-testVALUE"
-    assert sessions.status()["claude_plan"] == "file"
+    assert sessions.status()["claude_plan"] == "vault"
     assert sessions.forget("claude_plan") is True
     assert sessions.load("claude_plan") is None
 

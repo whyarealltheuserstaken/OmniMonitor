@@ -524,17 +524,26 @@ app keeps reading the old dir instead. Uninstall the old package with
   names, timestamps, session ids and the project **folder name** are stored.
 - Network requests go to the Grok billing endpoint and, **only for account providers you
   enable and give a key**, to their official API hosts (HTTPS, fixed allow-list, no
-  redirects, at most every 5 minutes). Keys come from env vars or the chmod-600
-  `secrets.json` and are never sent to the web page or written to logs or exports. There is
-  no telemetry and no update check.
-- **Web-session providers** (`claude_plan`, `chatgpt_web`, `cursor`) are off by default.
-  When enabled, you pick **in-app sign-in** (a pywebview window on the provider's real login
-  page; OmniMonitor keeps its own cookies) or **import from a browser you choose**. Only
-  that provider's domains/cookie names are read. Chromium imports may prompt for Safe
-  Storage; Safari needs Full Disk Access. Sessions are stored in the OS keyring when
-  available, else a chmod-600 file; they are never logged, exported, shown in the UI, or
-  included in Report a problem. Use **Sign out / forget** per provider. See
-  [docs/cookies/](docs/cookies/).
+  redirects, at most every 5 minutes). Keys come from env vars or the **encrypted vault**
+  (below); without a system keychain they stay in the owner-only `secrets.json`. They are
+  never sent to the web page or written to logs or exports. There is no telemetry and no
+  update check.
+- **Encrypted vault.** Web sessions and API keys are stored as AES-GCM encrypted files in
+  `<config dir>/vault/`. The 256-bit key lives in the OS keychain (Windows Credential
+  Manager, macOS Keychain, Secret Service on Linux). Without a keychain, sign-in is refused
+  instead of writing cookies in plaintext. Sessions and `secrets.json` from older versions
+  are moved into the vault on first start (or deleted if there is no keychain, in which case
+  the provider asks you to sign in again).
+- **Sign-in** (`claude_plan`, `chatgpt_web`, `cursor`) opens the provider's real login page
+  in a separate OmniMonitor window (its own process, private in-memory cookie jar). Your
+  password goes only to the provider. When the page reaches a signed-in address, only that
+  provider's allow-listed session cookies from its own domains are kept. You can also
+  **import from a browser you choose** (Chromium may prompt for Safe Storage; Safari needs
+  Full Disk Access). Sessions are never logged, exported, shown in the UI, or included in
+  Report a problem. Use **Sign out / forget** per provider. See [docs/cookies/](docs/cookies/).
+- **`omnimonitor verify`** calls each enabled account / sign-in source once, prints pass or
+  fail, and saves the responses to `<config dir>/verify/` with keys, cookies, tokens,
+  emails and account ids replaced by placeholders, so they are safe to share for debugging.
 - The stats page binds to **127.0.0.1 only**, on a random port, under a random per-run URL
   secret. It also checks the `Host` header (DNS-rebinding guard) and sends a strict CSP. The
   only write is `POST …/api/settings`, which also requires a matching `Origin`, a per-run CSRF

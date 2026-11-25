@@ -28,3 +28,46 @@ def _hermetic_env(monkeypatch, tmp_path_factory):
             monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("OMNIMONITOR_SECRETS_FILE",
                        str(tmp_path_factory.mktemp("secrets") / "secrets.json"))
+
+
+class FakeKeyring:
+    """In-memory stand-in for the ``keyring`` module. Tests never touch the real OS store."""
+
+    def __init__(self, fail: bool = False):
+        self.store, self.fail = {}, fail
+
+    def get_password(self, service, user):
+        if self.fail:
+            raise RuntimeError("keyring locked")
+        return self.store.get((service, user))
+
+    def set_password(self, service, user, value):
+        if self.fail:
+            raise RuntimeError("keyring locked")
+        self.store[(service, user)] = value
+
+    def delete_password(self, service, user):
+        if self.fail:
+            raise RuntimeError("keyring locked")
+        if (service, user) not in self.store:
+            raise KeyError(user)
+        del self.store[(service, user)]
+
+
+@pytest.fixture(autouse=True)
+def _fake_keyring(_hermetic_env, monkeypatch, tmp_path_factory):
+    """Every test gets a fresh in-memory keyring and its own config dir (after the env is
+    cleaned), so nothing ever lands in the developer's real config folder."""
+    kr = FakeKeyring()
+    monkeypatch.setenv("OMNIMONITOR_HOME", str(tmp_path_factory.mktemp("home")))
+    try:
+        from omnimonitor import vault
+    except ImportError:  # vault not built yet
+        yield kr
+        return
+    vault.set_backend(kr)
+    from omnimonitor import apikeys, sessions
+    sessions._MIGRATED.clear()
+    apikeys._MIGRATED.clear()
+    yield kr
+    vault.set_backend(None)
