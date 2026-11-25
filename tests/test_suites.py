@@ -150,3 +150,30 @@ def test_settings_accepts_tray_suite():
     import pytest
     with pytest.raises(settings_mod.SettingError):
         v("tray_suite", "grok")
+
+
+# ----------------------------------------------------- tray menu + CLI (Task 4)
+def test_suite_menu_lines():
+    sv = overview.suite_view([
+        _c("grok", _lim(27.0), today=1_200_000),
+        _c("claude_code", today=5000, usd=1.25),
+    ] + [_c(p, today=10) for p in ("deepseek", "qwen_code", "kimi", "github_copilot", "openrouter",
+                         "cline", "gemini_cli", "codex", "bedrock")])
+    lines = overview.suite_menu_lines({"suites": sv}, now=T)
+    assert lines[0] == "Anthropic: today 5k tok · $1.25"
+    xai = next(x for x in lines if x.startswith("Grok & Cursor"))
+    assert xai == "Grok & Cursor: 27% used · resets in 0h 1m · today 1.2M tok"
+    assert len(overview.suite_menu_lines({"suites": sv}, now=T, limit=3)) == 3
+    assert all(len(x) <= 80 for x in lines)
+
+
+def test_cli_tray_maps_provider_id(tmp_path, monkeypatch, capsys):
+    from omnimonitor import cli
+    monkeypatch.setenv("OMNIMONITOR_HOME", str(tmp_path))
+    assert cli.main(["providers", "primary", "codex"]) == 0
+    assert "openai" in capsys.readouterr().out
+    cfg = json.loads(next(tmp_path.rglob("config.json")).read_text())
+    assert cfg["tray_suite"] == "openai" and "primary_provider" not in cfg
+    assert cli.main(["tray", "tightest"]) == 0
+    assert json.loads(next(tmp_path.rglob("config.json")).read_text())["tray_suite"] == "tightest"
+    assert cli.main(["tray", "nonsense"]) == 2

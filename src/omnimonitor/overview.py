@@ -394,6 +394,43 @@ def menu_lines(ov: Dict[str, Any], limit: int = 8) -> List[str]:
     return out
 
 
+def _until(ts: Optional[float], now: float) -> str:
+    if not ts:
+        return ""
+    secs = ts - now
+    if secs <= 0:
+        return "now"
+    d, rem = divmod(int(secs), 86400)
+    h, m = rem // 3600, (rem % 3600) // 60
+    return ("in %dd %dh" % (d, h)) if d else ("in %dh %dm" % (h, m))
+
+
+def suite_menu_lines(ov: Dict[str, Any], now: Optional[float] = None,
+                     limit: int = 10) -> List[str]:
+    """One short tray-menu line per suite: headline % used, reset countdown, today."""
+    import time
+    now = time.time() if now is None else now
+    out = []
+    for s in (ov or {}).get("suites") or []:
+        bits = []
+        h = s.get("headline")
+        if h:
+            bits.append("%.0f%% used" % h["used_percent"])
+            if h.get("resets_at"):
+                bits.append("resets " + _until(h["resets_at"], now))
+        if s.get("today_tokens"):
+            bits.append("today %s tok" % _short(s["today_tokens"]))
+            if s.get("today_usd") is not None:
+                bits.append("$%.2f" % s["today_usd"])
+        if not bits:
+            continue
+        out.append(("%s%s: %s" % ("DEMO " if s.get("demo") else "", s["name"],
+                                  " · ".join(bits)))[:80])
+        if len(out) >= limit:
+            break
+    return out
+
+
 def _money(v: Any, unit: Optional[str]) -> str:
     if unit == "USD":
         return "$%.2f" % v

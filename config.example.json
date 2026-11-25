@@ -35,7 +35,7 @@
       "enabled": false
     }
   },
-  "primary_provider": "grok",
+  "tray_suite": "tightest",
   "provider_thresholds": {},
   "budgets": {
     "daily": 0,

@@ -7,14 +7,15 @@ import subprocess
 import sys
 import threading
 import webbrowser
+from datetime import datetime, timezone
 from typing import Optional
 
 from omnimonitor import appactions
 from omnimonitor import config as config_mod
 from omnimonitor import overview as overview_mod
+from omnimonitor import suites as suites_mod
 from omnimonitor.app import Controller
 from omnimonitor.applog import log
-from omnimonitor.grok_suite import menu_lines as grok_suite_lines
 from omnimonitor.icon import render_icon, render_menubar, tray_size
 from omnimonitor.timeutil import fmt_local, fmt_until
 from omnimonitor.webui import StatsServer, for_controller
@@ -101,52 +102,22 @@ class TrayApp:
 
     # ------------------------------------------------------------- text helpers
     def _title(self) -> str:
-        u, err = self.ctrl.usage, self.ctrl.error
-        if u is None:
-            return "Grok usage: %s" % (err or "loading…")
-        t = "%s%d%% left" % ("DEMO · " if u.is_demo else "", round(u.remaining_percent))
+        ov, u, err = self._ov(), self.ctrl.usage, self.ctrl.error
+        value, label = overview_mod.tray_value(ov, None)
+        if value is None:
+            if not ov:
+                return "OmniMonitor: %s" % (err or "loading…")
+            return "OmniMonitor: no limit readings yet" + (" (%s)" % err if err else "")
+        demo = bool(ov.get("is_demo") or (u and u.is_demo))
+        t = "%s%s: %d%% left" % ("DEMO · " if demo else "", label, round(value))
         return t + (" (stale: %s)" % err if err else "")
 
     def _reset_line(self) -> str:
-        u = self.ctrl.usage
-        if u is None or u.resets_at is None:
+        ts = (self._ov().get("primary") or {}).get("resets_at")
+        if not ts:
             return "Resets: unknown"
-        return "Resets %s (%s)" % (fmt_local(u.resets_at), fmt_until(u.resets_at))
-
-    def _tokens_line(self) -> str:
-        st = self.ctrl.stats()
-        wk = (st.get("week_tokens") or {}).get("value")
-        if wk is None:
-            return "Tokens this week: not available"
-        lim = st.get("weekly_limit") or {}
-        if lim.get("value"):
-            return "Tokens: %s of %s" % (fmt_tokens(wk), fmt_tokens(lim["value"]))
-        if lim.get("estimate"):
-            return "Tokens: %s of ≈%s (estimate)" % (fmt_tokens(wk),
-                                                    fmt_tokens(lim["estimate"]["value"]))
-        return "Tokens this week: %s (limit not exposed)" % fmt_tokens(wk)
-
-    def _suite_line(self, i: int) -> str:
-        lines = grok_suite_lines((self.ctrl.stats().get("grok_suite") or {}))
-        return lines[i] if i < len(lines) else ""
-
-    def _suite_item(self, i: int):
-        def text(_):
-            return self._suite_line(i)
-
-        def shown(_):
-            return bool(self._suite_line(i))
-        return self.pystray.MenuItem(text, None, enabled=False, visible=shown)
-
-    def _pace_line(self) -> str:
-        avg = (self.ctrl.stats().get("forecast") or {}).get("average") or {}
-        if avg.get("value", 0) is None or "percent_at_reset" not in avg:
-            return "Pace: not available"
-        p = avg["percent_at_reset"]
-        if avg.get("runs_out_at"):
-            from omnimonitor.timeutil import parse_time
-            return "Pace: runs out %s (estimate)" % fmt_local(parse_time(avg["runs_out_at"]))
-        return "Pace: ≈%.0f%% used at reset (estimate)" % min(p, 999)
+        dt = datetime.fromtimestamp(ts, timezone.utc)
+        return "Resets %s (%s)" % (fmt_local(dt), fmt_until(dt))
 
     def _today_line(self) -> str:
         br = (self.ctrl.stats().get("breakdowns") or {}).get("today")
@@ -172,13 +143,25 @@ class TrayApp:
             return bool(self._provider_line(i))
         return self.pystray.MenuItem(text, None, enabled=False, visible=shown)
 
-    def _primary_line(self) -> str:
-        p = self._ov().get("primary") or {}
-        if not p or p.get("id") == "grok":
-            return ""
-        if p.get("available"):
-            return "Tray: %s %.0f%% used" % (p["label"], p["used_percent"])
-        return "Tray: %s not available (%s)" % (p.get("name"), (p.get("reason") or "")[:50])
+    def _suite_line(self, i: int) -> str:
+        lines = overview_mod.suite_menu_lines(self._ov())
+        return lines[i] if i < len(lines) else ""
+
+    def _suite_item(self, i: int):
+        def text(_):
+            return self._suite_line(i)
+
+        def shown(_):
+            return bool(self._suite_line(i))
+        return self.pystray.MenuItem(text, None, enabled=False, visible=shown)
+
+    def _usage_item(self, suite):
+        def go(*_):
+            webbrowser.open(suite.usage_url)
+
+        def shown(_):
+            return any(s.get("id") == suite.id for s in self._ov().get("suites") or [])
+        return self.pystray.MenuItem(suite.name, go, visible=shown)
 
     def _error_line(self) -> str:
         return "⚠ %s" % (self.ctrl.error or "")[:90]
@@ -189,16 +172,12 @@ class TrayApp:
         return Menu(
             Item(lambda _: self._title(), None, enabled=False),
             Item(lambda _: self._reset_line(), None, enabled=False),
-            Item(lambda _: self._tokens_line(), None, enabled=False),
             Item(lambda _: self._today_line(), None, enabled=False),
-            Item(lambda _: self._pace_line(), None, enabled=False),
-            *[self._suite_item(i) for i in range(8)],
+            *[self._suite_item(i) for i in range(10)],
             Item(lambda _: self._error_line(), None, enabled=False,
                  visible=lambda _: bool(self.ctrl.error)),
-            Item(lambda _: self._primary_line(), None, enabled=False,
-                 visible=lambda _: bool(self._primary_line())),
             Menu.SEPARATOR,
-            *[self._provider_item(i) for i in range(8)],
+            Item("Providers", Menu(*[self._provider_item(i) for i in range(16)])),
             Menu.SEPARATOR,
             Item("Refresh Now", self._on_refresh),
             Item("Open OmniMonitor", self._on_stats, default=True,
@@ -215,7 +194,8 @@ class TrayApp:
                 Item("Tool / model / project CSV", self._export("csv", "breakdown")),
                 Item("Providers CSV", self._export("csv", "providers")),
                 Item("Everything (JSON)", self._export("json", "daily")))),
-            Item("Open Grok Usage Page", self._on_usage_page),
+            Item("Usage pages", Menu(*[self._usage_item(x) for x in suites_mod.SUITES
+                                       if x.usage_url])),
             Item("Edit Config", self._on_config),
             Menu.SEPARATOR,
             Item("Quit", self._on_quit),
@@ -259,9 +239,6 @@ class TrayApp:
             except Exception as e:  # noqa: BLE001
                 self.ctrl.token_note = "export failed: %s" % e
         return go
-
-    def _on_usage_page(self, *_):
-        webbrowser.open(self.ctrl.cfg.get("usage_page_url") or config_mod.DEFAULT_USAGE_PAGE)
 
     def _on_config(self, *_):
         path = config_mod.ensure_config_file()

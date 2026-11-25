@@ -428,12 +428,12 @@ def test_cli_providers_enable_disable_primary(home, capsys):
     assert "DEEPSEEK_API_KEY" in capsys.readouterr().out  # key hint
     assert cli.main(["providers", "disable", "gemini_cli"]) == 0
     assert cli.main(["providers", "enable", "chatgpt"]) == 2  # not switchable
-    assert cli.main(["providers", "primary", "deepseek"]) == 2  # no % limit to show
+    assert cli.main(["providers", "primary", "deepseek"]) == 0  # maps to the deepseek suite
     assert cli.main(["providers", "primary", "openrouter"]) == 0
     assert cli.main(["providers", "primary", "nope"]) == 2
     c = cfgfile(home)
     assert c["providers"] == {"gemini_cli": {"enabled": False}, "deepseek": {"enabled": True}}
-    assert c["primary_provider"] == "openrouter"
+    assert c["tray_suite"] == "gateways" and "primary_provider" not in c
     capsys.readouterr()
     assert cli.main(["providers", "--json"]) == 0
     rows = {r["id"]: r for r in json.loads(capsys.readouterr().out)}

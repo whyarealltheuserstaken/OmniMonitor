@@ -270,7 +270,7 @@ def update_config_file(changes: Dict[str, Any], path: Optional[Path] = None) -> 
             loaded = json.load(f)
         if not isinstance(loaded, dict):
             raise ValueError("config.json is not a JSON object")
-        data = loaded
+        data = migrate_tray_suite(loaded)
     data.update(changes)
     return save_config(data, path)
 

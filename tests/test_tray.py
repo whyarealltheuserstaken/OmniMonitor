@@ -33,11 +33,12 @@ def labels(app):
     return out
 
 
-def test_menu_before_first_refresh(tray):
+def test_menu_before_first_refresh(tray, monkeypatch):
+    monkeypatch.setattr(tray, "_ov", lambda: {})  # nothing computed yet
     items = labels(tray)
-    assert items[0].startswith("Grok usage:")
+    assert items[0] == "OmniMonitor: loading…"
     assert "Resets: unknown" in items
-    for want in ("Refresh Now", "Open OmniMonitor", "Open in Browser", "Open Grok Usage Page", "Edit Config", "Quit"):
+    for want in ("Refresh Now", "Open OmniMonitor", "Open in Browser", "Edit Config", "Quit"):
         assert want in items
 
 
@@ -47,11 +48,9 @@ def test_menu_after_demo_refresh_is_labeled(tray):
     items = labels(tray)
     assert items[0].startswith("DEMO · ") and items[0].endswith("% left")
     assert items[1].startswith("Resets ")
-    assert "Tokens" in items[2]
-    assert any(t.startswith("Grok suite:") for t in items)
-    assert any(t.startswith("Grok CLI:") for t in items)
-    assert any("Grok Bot:" in t and "not available" in t for t in items)
-    assert any(t.startswith("Cursor (Grok):") and "not available" in t for t in items)
+    assert any(t.startswith("DEMO Grok & Cursor:") for t in items)  # one line per suite
+    assert not any(t.startswith("Grok suite:") for t in items)  # no Grok-only block
+    assert "Usage pages" in items and "Providers" in items
     assert tray.icon.title.startswith("DEMO")
 
 
