@@ -11,7 +11,7 @@ import json
 import re
 from typing import Any, Callable, Dict, List, Tuple
 
-from omnimonitor import catalog
+from omnimonitor import catalog, suites
 from omnimonitor.pricing import clean_prices
 
 HIDEABLE_CARDS = ("providers", "budgets", "grok-suite", "forecast", "burn", "limit",
@@ -222,8 +222,8 @@ SCHEMA: Dict[str, Tuple[Callable[[Any], Any], bool, str]] = {
                                            if i != "grok_sessions")), True,
                             "legacy list of local-log adapters (prefer `providers`)"),
     "providers": (_providers, True, 'per-provider switches; web_session also auth/browser'),
-    "primary_provider": (_choice(*catalog.PRIMARY_CHOICES), True,
-                         "provider whose % drives the tray icon"),
+    "tray_suite": (_choice(*suites.TRAY_CHOICES), True,
+                   "suite whose % drives the tray icon (or tightest / budget)"),
     "provider_thresholds": (_provider_thresholds, True,
                             "per-provider alert thresholds (USED %)"),
     "budgets": (_budgets, True, "USD budgets for local-log spend (0 = off)"),
@@ -290,6 +290,14 @@ def web_keys() -> List[str]:
     return [k for k, (_f, web, _h) in SCHEMA.items() if web]
 
 
+def _tray_choice_name(choice: str) -> str:
+    if choice == "tightest":
+        return "Tightest limit (any suite)"
+    if choice == "budget":
+        return "Budget"
+    return suites.get(choice).name
+
+
 def validate(key: str, value: Any, web: bool = False) -> Any:
     if key not in SCHEMA:
         raise SettingError("not a settable key: %s" % key)
@@ -327,9 +335,8 @@ def public_view(cfg: Dict[str, Any]) -> Dict[str, Any]:
                                      "env": list(p.env), "has_limit": p.has_limit,
                                      "note": p.extra.get("note", "")}
                                     for p in catalog.CATALOG if p.id in catalog.SWITCHABLE],
-                        "primary_choices": [{"id": i, "name": "Budget" if i == "budget"
-                                             else catalog.name(i)}
-                                            for i in catalog.PRIMARY_CHOICES],
+                        "tray_choices": [{"id": i, "name": _tray_choice_name(i)}
+                                         for i in suites.TRAY_CHOICES],
                         "keys": _key_presence(),
                         "sessions": _session_presence()}
     return out

@@ -463,3 +463,14 @@ def counts() -> Dict[str, int]:
     for p in CATALOG:
         out[p.status] += 1
     return out
+
+#: Sources checked against real files or a real account (not only recorded fixtures).
+LIVE_VERIFIED = frozenset({"grok_sessions", "claude_code", "codex"})
+
+
+def verified(pid: str) -> str:
+    """'live' (checked on real data), 'fixtures' (recorded/mocked only) or 'none'."""
+    info = get(pid)
+    if info is None or info.kind == "none":
+        return "none"
+    return "live" if pid in LIVE_VERIFIED else "fixtures"

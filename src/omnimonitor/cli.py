@@ -200,6 +200,24 @@ def _status_word(st: str) -> str:
             "not_supported": "no"}.get(st, st)
 
 
+def _set_tray(cfg, choice: str) -> int:
+    """Save ``tray_suite``. A provider id (the old `providers primary`) maps to its suite."""
+    from omnimonitor import catalog, suites
+    target = suites.map_legacy_primary(choice or "")
+    if choice not in suites.TRAY_CHOICES and not catalog.get(choice or ""):
+        print("tray must be one of: %s (or a provider id)" % ", ".join(suites.TRAY_CHOICES),
+              file=sys.stderr)
+        return 2
+    path = config_mod.update_config_file({"tray_suite": target}, Path(cfg["_config_path"]))
+    via = "" if target == choice else " (%s belongs to the %s suite)" % (choice, target)
+    print("Tray icon now follows %s%s (saved in %s)" % (target, via, path))
+    return 0
+
+
+def cmd_tray(args) -> int:
+    return _set_tray(_load(args), args.choice)
+
+
 def cmd_providers(args) -> int:
     from omnimonitor import accounts, apikeys, catalog
     from omnimonitor.adapters import describe
@@ -223,14 +241,7 @@ def cmd_providers(args) -> int:
                       % (name, name))
         return 0
     if action == "primary":
-        if args.id not in catalog.PRIMARY_CHOICES:
-            print("primary must be one of: %s" % ", ".join(catalog.PRIMARY_CHOICES),
-                  file=sys.stderr)
-            return 2
-        path = config_mod.update_config_file({"primary_provider": args.id},
-                                             Path(cfg["_config_path"]))
-        print("Tray icon now follows %s (saved in %s)" % (args.id, path))
-        return 0
+        return _set_tray(cfg, args.id)
     if action == "check":
         from omnimonitor import doctor
         return doctor.print_checks(doctor.provider_checks(cfg, online=True))
@@ -266,7 +277,8 @@ def cmd_providers(args) -> int:
             print("  %-24s %-3s %-9s %-10s %s" % (r["name"][:24], on, _status_word(r["status"]),
                                                   extra, r["shows"][:60]))
     print("\nEnable one:   omnimonitor providers enable <id>   (ids: --json, or docs/providers.md)")
-    print("Tray follows: omnimonitor providers primary <%s>" % "|".join(catalog.PRIMARY_CHOICES))
+    from omnimonitor import suites
+    print("Tray follows: omnimonitor tray <%s>" % "|".join(suites.TRAY_CHOICES))
     print("Live check:   omnimonitor providers check")
     return 0
 
@@ -513,6 +525,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("action", nargs="?", choices=("list", "enable", "disable", "primary", "check"))
     s.add_argument("id", nargs="?")
     s.add_argument("--json", action="store_true")
+    s = sub.add_parser("tray", help="which suite the tray icon follows (or tightest / budget)")
+    s.add_argument("choice")
     s = sub.add_parser("secrets", help="API keys for account providers (chmod-600 file)")
     s.add_argument("action", choices=("list", "set", "unset"))
     s.add_argument("name", nargs="?")
@@ -678,7 +692,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         from omnimonitor.applog import log_path
         print(log_path())
         return 0
-    handlers = {"export": cmd_export, "providers": cmd_providers, "breakdown": cmd_breakdown, "blocks": cmd_blocks, "statusline": cmd_statusline,
+    handlers = {"export": cmd_export, "providers": cmd_providers, "tray": cmd_tray, "breakdown": cmd_breakdown, "blocks": cmd_blocks, "statusline": cmd_statusline,
                 "config": cmd_config, "notify-test": cmd_notify_test, "secrets": cmd_secrets, "deps": cmd_deps}
     if cmd in handlers:
         return handlers[cmd](args)

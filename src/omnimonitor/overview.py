@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-from omnimonitor import catalog
+from omnimonitor import catalog, suites
 from omnimonitor.pricing import DEMO_PRICES, clean_prices, estimate_event_cost
 
 DEMO_BUDGETS = {"daily": 1.0, "weekly": 5.0, "monthly": 20.0}  # DEMO ONLY
@@ -92,14 +92,6 @@ def codex_windows(snap: Optional[Dict[str, Any]], now: float) -> List[Dict[str, 
                     "resets_at": reset, "window_minutes": mins, "stale": stale,
                     "pace": None if stale else pace(w["used_percent"], start, reset, now)})
     return out
-
-
-def _codex_primary(snap, now) -> Optional[Tuple[float, Optional[float], str]]:
-    wins = [w for w in codex_windows(snap, now) if not w["stale"]]
-    if not wins:
-        return None
-    w = next((x for x in wins if x["key"] == "secondary"), wins[0])
-    return w["used_percent"], w["resets_at"], "Codex " + w["name"]
 
 
 def budgets(events: List[Dict[str, Any]], cfg: Dict[str, Any], now: datetime, tz=None
@@ -213,8 +205,47 @@ def build(events: List[Dict[str, Any]], cfg: Dict[str, Any], now: datetime, *,
            "budgets": budgets(events, cfg, now, tz),
            "catalog_counts": catalog.counts(), "is_demo": is_demo,
            "demo_prices": demo_prices}
-    out["primary"] = primary(cfg, billing, readings, codex_limits, out["budgets"], nowts)
+    out["suites"] = suite_view(cards, nowts)
+    out["primary"] = primary(cfg, out["suites"], out["budgets"], nowts)
     out["thresholds"] = {c["id"]: provider_thresholds(cfg, c["id"]) for c in cards}
+    return out
+
+
+def suite_view(cards: List[Dict[str, Any]], now: Optional[float] = None
+               ) -> List[Dict[str, Any]]:
+    """Group provider cards into suites (SUITES order, only suites that have a card).
+
+    The headline is the non-stale limit with the highest % used across the suite's cards;
+    without one it is None with a reason. Nothing is filled in."""
+    by_suite: Dict[str, List[Dict[str, Any]]] = {}
+    for c in cards:
+        by_suite.setdefault(suites.suite_of(c["id"]), []).append(c)
+    out = []
+    for s in suites.SUITES:
+        cs = by_suite.get(s.id)
+        if not cs:
+            continue
+        best = None
+        for c in cs:
+            for w in c.get("limits") or []:
+                if w.get("stale") or w.get("used_percent") is None:
+                    continue
+                reset = _ts(w.get("resets_at"))
+                if now is not None and reset is not None and reset < now:
+                    continue  # the window already reset: this % is no longer true
+                if best is None or w["used_percent"] > best["used_percent"]:
+                    best = {"used_percent": float(w["used_percent"]),
+                            "resets_at": w.get("resets_at"),
+                            "label": "%s %s" % (c["name"], w.get("name") or "limit"),
+                            "source": c["id"]}
+        today = [((c.get("ranges") or {}).get("today") or {}) for c in cs]
+        usd = [t["usd"] for t in today if t.get("usd") is not None]
+        out.append({"id": s.id, "name": s.name, "usage_url": s.usage_url,
+                    "card_ids": [c["id"] for c in cs], "headline": best,
+                    "reason": "" if best else "no limit reading yet",
+                    "today_tokens": sum(int(t.get("tokens") or 0) for t in today),
+                    "today_usd": sum(usd) if usd else None,
+                    "demo": any(c.get("demo") for c in cs)})
     return out
 
 
@@ -238,29 +269,32 @@ def _card(pid: str, enabled: bool, demo: bool = False, limits=None) -> Dict[str,
             "limits": limits or [], "ranges": None, "metrics": []}
 
 
-def primary(cfg: Dict[str, Any], billing, readings, codex_snap, budget_view, now: float
-            ) -> Dict[str, Any]:
-    """The provider whose % drives the tray icon. ``available`` False -> the tray falls back
-    to the Grok pool and says so; it never invents a value."""
-    pid = cfg.get("primary_provider") or "grok"
-    if pid not in catalog.PRIMARY_CHOICES:
-        pid = "grok"
-    out: Dict[str, Any] = {"id": pid, "name": "Budget" if pid == "budget" else catalog.name(pid),
-                           "available": False, "used_percent": None, "resets_at": None,
-                           "label": "", "reason": ""}
+def _tray_name(choice: str) -> str:
+    if choice == "tightest":
+        return "Tightest limit"
+    if choice == "budget":
+        return "Budget"
+    s = suites.get(choice)
+    return s.name if s else choice
+
+
+def primary(cfg: Dict[str, Any], suite_list: List[Dict[str, Any]],
+            budget_view: Dict[str, Any], now: float) -> Dict[str, Any]:
+    """What drives the tray icon: ``tray_suite`` (a suite, ``tightest`` or ``budget``).
+
+    A chosen suite without a reading falls back to the tightest suite, labelled so; with
+    nothing anywhere ``available`` stays False. No value is ever invented."""
+    choice = cfg.get("tray_suite") or "tightest"
+    if choice not in suites.TRAY_CHOICES:
+        choice = "tightest"
+    out: Dict[str, Any] = {"id": choice, "name": _tray_name(choice), "available": False,
+                           "used_percent": None, "resets_at": None, "label": "",
+                           "reason": "", "detail": ""}
     used = reset = None
     label = out["name"]
-    if pid == "grok":
-        if billing and billing.get("used_percent") is not None:
-            used, reset = billing["used_percent"], _ts(billing.get("resets_at"))
-            label = "Grok weekly"
-    elif pid == "codex":
-        got = _codex_primary(codex_snap, now)
-        if got:
-            used, reset, label = got
-        else:
-            out["reason"] = "no current Codex plan-limit reading in the logs yet"
-    elif pid == "budget":
+    with_data = [s for s in suite_list if s.get("headline")]
+    tightest = max(with_data, key=lambda s: s["headline"]["used_percent"], default=None)
+    if choice == "budget":
         rows = [(p, r) for p, r in (budget_view.get("periods") or {}).items()
                 if r.get("percent") is not None]
         if rows:
@@ -269,12 +303,20 @@ def primary(cfg: Dict[str, Any], billing, readings, codex_snap, budget_view, now
         else:
             out["reason"] = "no budget set, or spend not available"
     else:
-        r = readings.get(pid) or {}
-        if r.get("limit_percent") is not None:
-            used, reset, label = r["limit_percent"], r.get("resets_at"), out["name"]
-        else:
-            out["reason"] = r.get("error") or ("enable %s and set its key" % out["name"]
-                                               if not r else "this account has no % limit")
+        pick = tightest if choice == "tightest" else next(
+            (s for s in with_data if s["id"] == choice), None)
+        if pick is None and choice != "tightest":
+            out["reason"] = "no limit reading for %s yet" % out["name"]
+            pick = tightest
+            if pick is not None:
+                label = "%s (%s not available)" % (pick["name"], out["name"])
+        elif pick is not None:
+            label = pick["name"]
+        if pick is not None:
+            h = pick["headline"]
+            used, reset, out["detail"] = h["used_percent"], h.get("resets_at"), h["label"]
+        elif not out["reason"]:
+            out["reason"] = "no limit readings yet"
     if used is not None:
         out.update(available=True, used_percent=float(used),
                    remaining_percent=max(0.0, 100.0 - float(used)), resets_at=reset,
@@ -319,16 +361,12 @@ def _short(n: int) -> str:
 
 def tray_value(ov: Dict[str, Any], billing: Optional[Dict[str, Any]]
                ) -> Tuple[Optional[float], str]:
-    """(remaining % for the icon or None, label). Primary provider first, else the Grok
-    pool (labelled as a fallback), else None (the icon shows '?')."""
+    """(remaining % for the icon or None, label) from ``tray_suite``; None -> the icon
+    shows '?'. ``billing`` is accepted for compatibility and not used: no provider is a
+    special fallback."""
     p = (ov or {}).get("primary") or {}
     if p.get("available"):
         return p["remaining_percent"], p["label"]
-    if billing and billing.get("remaining_percent") is not None:
-        lab = "Grok weekly"
-        if p.get("id") not in (None, "grok"):
-            lab += " (primary %s not available)" % p.get("name")
-        return float(billing["remaining_percent"]), lab
     return None, p.get("label") or "no data"
 
 
@@ -355,6 +393,43 @@ def menu_lines(ov: Dict[str, Any], limit: int = 8) -> List[str]:
         if bits:
             out.append(("%s%s: %s" % ("DEMO " if c.get("demo") else "", c["name"],
                                       " · ".join(bits)))[:80])
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _until(ts: Optional[float], now: float) -> str:
+    if not ts:
+        return ""
+    secs = ts - now
+    if secs <= 0:
+        return "now"
+    d, rem = divmod(int(secs), 86400)
+    h, m = rem // 3600, (rem % 3600) // 60
+    return ("in %dd %dh" % (d, h)) if d else ("in %dh %dm" % (h, m))
+
+
+def suite_menu_lines(ov: Dict[str, Any], now: Optional[float] = None,
+                     limit: int = 10) -> List[str]:
+    """One short tray-menu line per suite: headline % used, reset countdown, today."""
+    import time
+    now = time.time() if now is None else now
+    out = []
+    for s in (ov or {}).get("suites") or []:
+        bits = []
+        h = s.get("headline")
+        if h:
+            bits.append("%.0f%% used" % h["used_percent"])
+            if h.get("resets_at"):
+                bits.append("resets " + _until(h["resets_at"], now))
+        if s.get("today_tokens"):
+            bits.append("today %s tok" % _short(s["today_tokens"]))
+            if s.get("today_usd") is not None:
+                bits.append("$%.2f" % s["today_usd"])
+        if not bits:
+            continue
+        out.append(("%s%s: %s" % ("DEMO " if s.get("demo") else "", s["name"],
+                                  " · ".join(bits)))[:80])
         if len(out) >= limit:
             break
     return out

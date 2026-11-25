@@ -5,7 +5,7 @@
   var csrf = "", initial = null;
   if (window.OMApp) OMApp.shell("settings");
   var BOOLS = ["notifications", "notify_on_reset", "notify_on_pace", "estimate_weekly_limit", "status_badges", "icon_text", "mini_on_top"];
-  var TEXTS = ["display_name", "theme", "accent_color", "icon_style", "icon_value", "primary_provider"];
+  var TEXTS = ["display_name", "theme", "accent_color", "icon_style", "icon_value", "tray_suite"];
   var NUMS = ["heatmap_weeks", "poll_interval_seconds", "estimate_min_used_percent",
               "provider_poll_seconds", "budget_alert_percent"];
   var CARD_LABELS = { "grok-suite": "Grok suite breakdown", forecast: "Pace & forecast", burn: "Burn rate", limit: "Tokens this week / limit",
@@ -71,8 +71,8 @@
       if (p.note) k.textContent += " " + p.note;
       tr.appendChild(a); tr.appendChild(b); tr.appendChild(k); t.appendChild(tr);
     });
-    var sel = $("primary_provider"); sel.textContent = "";
-    (ro.primary_choices || []).forEach(function (o) {
+    var sel = $("tray_suite"); sel.textContent = "";
+    (ro.tray_choices || []).forEach(function (o) {
       var op = el("option", "", o.name); op.value = o.id; sel.appendChild(op);
     });
   }
@@ -100,7 +100,7 @@
     checks("hidden_cards", cards, s.hidden_cards || []);
     var ro = s._readonly || {};
     providersTable(ro, s);
-    if (s.primary_provider) $("primary_provider").value = s.primary_provider;
+    if (s.tray_suite) $("tray_suite").value = s.tray_suite;
     var bu = s.budgets || {};
     ["daily", "weekly", "monthly"].forEach(function (k) { $("budget_" + k).value = bu[k] || 0; });
     $("provider_thresholds").value = s.provider_thresholds && Object.keys(s.provider_thresholds).length ? JSON.stringify(s.provider_thresholds) : "";

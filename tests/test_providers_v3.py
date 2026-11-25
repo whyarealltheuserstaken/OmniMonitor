@@ -258,7 +258,7 @@ def test_overview_cards_ranges_and_unpriced_is_not_available():
     assert cards["gemini_cli"]["ranges"]["today"]["tokens"] == 0
     assert cards["gemini_cli"]["ranges"]["7d"]["usd"] is None  # no price -> not available
     assert ov["all_tools"]["30d"]["tokens"] == 2200 and ov["today"]["top_tool"] == "Claude Code"
-    assert ov["primary"]["id"] == "grok" and not ov["primary"]["available"]
+    assert ov["primary"]["id"] == "tightest" and not ov["primary"]["available"]
 
 
 def test_budgets_and_pace():
@@ -277,19 +277,17 @@ def test_budgets_and_pace():
 def test_primary_choices_and_tray_value():
     readings = {"openrouter": {"provider": "openrouter", "ok": True, "limit_percent": 40.0,
                                "resets_at": NOW + 3600, "metrics": []}}
-    ov = build(readings=readings, cfg={"primary_provider": "openrouter"})
+    ov = build(readings=readings, cfg={"tray_suite": "gateways"})
     assert ov["primary"]["available"] and ov["primary"]["remaining_percent"] == 60.0
-    assert overview.tray_value(ov, None) == (60.0, "OpenRouter")
-    ov = build(cfg={"primary_provider": "openrouter"})  # no reading yet
-    val, lab = overview.tray_value(ov, {"remaining_percent": 70.0})
-    assert val == 70.0 and "not available" in lab  # falls back to the Grok pool, says so
-    assert overview.tray_value(ov, None)[0] is None  # nothing invented
+    assert overview.tray_value(ov, None) == (60.0, "API gateways")
+    ov = build(cfg={"tray_suite": "gateways"})  # no reading yet
+    assert overview.tray_value(ov, {"remaining_percent": 70.0})[0] is None  # nothing invented
     snap = {"observed_at": NOW, "windows": {"secondary": {"used_percent": 30.0,
                                                           "window_minutes": 10080,
                                                           "resets_at": NOW + 86400}}}
-    ov = build(cfg={"primary_provider": "codex"}, tools=["codex"], codex_limits=snap)
+    ov = build(cfg={"tray_suite": "openai"}, tools=["codex"], codex_limits=snap)
     assert ov["primary"]["used_percent"] == 30.0
-    ov = build([ev(NOW - 60, "claude_code", cost=3)], cfg={"primary_provider": "budget",
+    ov = build([ev(NOW - 60, "claude_code", cost=3)], cfg={"tray_suite": "budget",
                                                          "budgets": {"daily": 2}})
     assert ov["primary"]["used_percent"] == 100.0  # capped for the icon
 
@@ -430,12 +428,12 @@ def test_cli_providers_enable_disable_primary(home, capsys):
     assert "DEEPSEEK_API_KEY" in capsys.readouterr().out  # key hint
     assert cli.main(["providers", "disable", "gemini_cli"]) == 0
     assert cli.main(["providers", "enable", "chatgpt"]) == 2  # not switchable
-    assert cli.main(["providers", "primary", "deepseek"]) == 2  # no % limit to show
+    assert cli.main(["providers", "primary", "deepseek"]) == 0  # maps to the deepseek suite
     assert cli.main(["providers", "primary", "openrouter"]) == 0
     assert cli.main(["providers", "primary", "nope"]) == 2
     c = cfgfile(home)
     assert c["providers"] == {"gemini_cli": {"enabled": False}, "deepseek": {"enabled": True}}
-    assert c["primary_provider"] == "openrouter"
+    assert c["tray_suite"] == "gateways" and "primary_provider" not in c
     capsys.readouterr()
     assert cli.main(["providers", "--json"]) == 0
     rows = {r["id"]: r for r in json.loads(capsys.readouterr().out)}
@@ -485,10 +483,10 @@ def test_cli_config_export_import_round_trip(home, capsys, monkeypatch):
 
 def test_doctor_provider_checks(monkeypatch):
     cfg = {"providers": {"deepseek": {"enabled": True}, "openrouter": {"enabled": True}},
-           "primary_provider": "moonshot"}
+           "tray_suite": "kimi"}
     res = {name: (lvl, msg) for lvl, name, msg in doctor.provider_checks(cfg, online=False)}
     assert res["deepseek"][0] == "fail" and "DEEPSEEK_API_KEY" in res["deepseek"][1]
-    assert res["primary"][0] == "warn"
+    assert res["tray"][0] == "warn"
     monkeypatch.setenv("DEEPSEEK_API_KEY", FAKE)
     monkeypatch.setenv("OPENROUTER_API_KEY", FAKE)
     http = FakeHttp({"https://api.deepseek.com/": (200, {"balance_infos": [

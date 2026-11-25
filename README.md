@@ -176,18 +176,24 @@ log file (`~/Library/Logs/OmniMonitor/omnimonitor.log` on macOS). See CHANGELOG.
 
 **Tray menu**
 
-- `72% left`: remaining share of the **Grok suite** weekly pool (one number). In demo mode this reads `DEMO · 72% left`.
-- `Grok suite: 73% left · 27% used`, then one line each for **Grok CLI**, **Grok Bot**, and **Cursor (Grok)**. A percent is shown only when billing `productUsage` names that product. Otherwise the line says not available. CLI tokens, when the local logs have them, are on the Grok CLI line. Other products returned by the API (Grok Chat, …) get an "Also in pool" line.
-- `Resets Sun Nov 8, 4:00 PM (in 4d 3h)`, in your local time.
-- `Tokens: 1.9M of ≈8.7M (estimate)`, `Tokens this week: 1.9M (limit not exposed)` or
-  `Tokens this week: not available`.
-- `Today: 112K tokens (Grok CLI 80K, Claude Code 32K)` and `Pace: ≈84% used at reset
-  (estimate)`, or `not available`.
-- `⚠ <error>`, shown only when the last refresh failed. The last good value stays in the
-  menu and is marked *stale*.
-- **Refresh Now**, **Open Stats Page** (also the default action when you click the icon),
-  **Open Mini View**, **Settings…**, **Export** (daily CSV, per-model CSV, tool/model/project
-  CSV, everything as JSON), **Open Grok Usage Page**, **Edit Config**, **Quit**.
+- `Anthropic: 30% left`: the suite the icon follows (`tray_suite`; default **tightest** =
+  the highest % used across every suite with a reading). A chosen suite without a reading
+  falls back to the tightest one and says so, e.g. `Grok & Cursor: 72% left (Anthropic not
+  available)`. With no reading anywhere: `OmniMonitor: no limit readings yet`. Demo mode
+  prefixes `DEMO · `.
+- `Resets Sun Nov 8, 4:00 PM (in 4d 3h)`, in your local time, for that limit.
+- `Today: 112K tokens (Grok CLI 80K, Claude Code 32K)` across all tools.
+- One line per suite with data, e.g. `Grok & Cursor: 27% used · resets in 4d 3h · today
+  1.2M tok` or `Anthropic: today 5k tok · $1.25`.
+- `⚠ <error>`, shown only when the last refresh failed. The last good value stays and is
+  marked *stale*.
+- **Providers** (one line per enabled provider), **Refresh Now**, **Open OmniMonitor**
+  (also the default action when you click the icon), **Open Mini View**, **Settings…**,
+  **Export** (daily CSV, per-model CSV, tool/model/project CSV, providers CSV, everything as
+  JSON), **Usage pages** (each suite's official usage page), **Edit Config**, **Quit**.
+
+The Grok suite details (shared weekly pool, CLI / Bot / Cursor shares, tokens, pace) are on
+the stats page's Grok & Cursor card.
 
 **Stats page** (`http://127.0.0.1:<random port>/s/<random secret>/`, opened from the menu)
 
@@ -453,7 +459,7 @@ to defaults and shows the error in the menu. See [`config.example.json`](config.
 | `display_name` | `""` | title of the stats page |
 | `hidden_cards` | `[]` | any of `grok-suite`, `forecast`, `burn`, `limit`, `heatmap`, `breakdown`, `tools`, `models`, `projects`, `cost`, `insights`, `providers`, `budgets` |
 | `providers` | `{}` | per-provider switches, e.g. `{"gemini_cli": {"enabled": true}, "deepseek": {"enabled": true}}`. Ids: `omnimonitor providers`. Entries here override `extra_token_sources` |
-| `primary_provider` | `"grok"` | what the tray icon shows: `grok`, `codex`, `github_copilot`, `cursor_team`, `openrouter`, `ollama_cloud` or `budget` |
+| `tray_suite` | `"tightest"` | what the tray icon shows: a suite (`anthropic`, `openai`, `google`, `xai`, `deepseek`, `qwen`, `kimi`, `github`, `gateways`, `agents`, `other`), `tightest` (highest % used across all suites) or `budget`. Set with `omnimonitor tray <choice>`. Replaces `primary_provider`, which is migrated automatically |
 | `provider_thresholds` | `{}` | per-provider USED % alerts, e.g. `{"codex": [75, 90]}`; missing = `notify_thresholds` |
 | `budgets` | `{"daily": 0, "weekly": 0, "monthly": 0}` | USD caps on the ≈ cost of local tool usage (recorded cost, else your `prices`); 0 = off |
 | `budget_alert_percent` | `80` | warn at this % of each budget (and again at 100 %) |
