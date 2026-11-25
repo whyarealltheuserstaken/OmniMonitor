@@ -62,11 +62,20 @@ def run(cfg: Dict[str, Any], pids: Optional[List[str]] = None, http: Optional[Ht
     results = []
     for pid in pids or targets(cfg):
         rec = RecordingHttp(http or accounts.default_http)
-        r = accounts.fetch(pid, cfg, http=rec)
-        secrets = list(rec.secrets)
-        key, _ = accounts.key_for(pid) if pid in catalog.API_IDS else ("", "")
-        if key:
-            secrets.append(key)
+        secrets = []
+        if pid in catalog.WEB_SESSION_IDS:
+            from omnimonitor import sessions, web_accounts
+            secrets += [sessions.load(pid) or ""] + list(sessions.meta(pid).values())
+            cookie = sessions.load(pid) or ""
+            secrets += [p.split("=", 1)[-1] for p in cookie.split(";") if "=" in p]
+            r = web_accounts.fetch(pid, cfg, http=rec)
+        else:
+            r = accounts.fetch(pid, cfg, http=rec)
+        info = catalog.BY_ID.get(pid)
+        for n in (info.env if info else ()):  # keys and account / team ids
+            from omnimonitor import apikeys
+            secrets.append(apikeys.get(n))
+        secrets += rec.secrets
         doc = redact.scrub({"pid": pid, "ok": r.ok, "error": r.error,
                             "reading": r.to_dict(), "calls": rec.calls}, secrets)
         name = "%s-%s.json" % (pid, stamp)

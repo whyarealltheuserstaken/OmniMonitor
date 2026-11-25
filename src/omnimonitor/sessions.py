@@ -60,26 +60,38 @@ def _migrate(pid: str) -> None:
     if pid in _MIGRATED:
         return
     _MIGRATED.add(pid)
-    found = None
     path = _legacy_file(pid)
+    from_file = from_kr = None
     if path.is_file():
         try:
-            found = _parse(path.read_text("utf-8"))
+            from_file = _parse(path.read_text("utf-8"))
         except OSError:
-            found = None
+            from_file = None
     kr = vault._kr()
     if kr is not None:
         try:
-            raw = kr.get_password(_LEGACY_SERVICE, pid)
-            if raw:
-                found = found or _parse(raw)
-                kr.delete_password(_LEGACY_SERVICE, pid)
+            from_kr = _parse(kr.get_password(_LEGACY_SERVICE, pid))
         except Exception:  # noqa: BLE001
-            pass
-    if found and found["cookie"].strip() and vault.available():
+            from_kr = None
+    found = from_kr or from_file  # the keyring copy was the preferred store
+    if not found and not path.is_file():
+        return
+    if vault.available():
+        if found and found["cookie"].strip() and vault.get(_name(pid)) is None:
+            blob = json.dumps(found, separators=(",", ":")).encode("utf-8")
+            try:
+                vault.put(_name(pid), blob)
+            except Exception:  # noqa: BLE001 - keep the old copy; try again next start
+                _MIGRATED.discard(pid)
+                return
+            if vault.get(_name(pid)) != blob:
+                _MIGRATED.discard(pid)
+                return
+    # stored safely (or no vault: plaintext sessions are not kept) -> drop old copies
+    if kr is not None and from_kr is not None:
         try:
-            vault.put(_name(pid), json.dumps(found, separators=(",", ":")).encode("utf-8"))
-        except (vault.VaultUnavailable, OSError):
+            kr.delete_password(_LEGACY_SERVICE, pid)
+        except Exception:  # noqa: BLE001
             pass
     if path.is_file():
         try:

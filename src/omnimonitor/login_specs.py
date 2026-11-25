@@ -58,7 +58,9 @@ SPECS: Dict[str, LoginSpec] = {
          "oai-did", "_account", "cf_clearance", "__cf_bm",
          "__Secure-next-auth.callback-url", "__Host-next-auth.csrf-token",
          "session-token"),
-        (), _signed_in(("chatgpt.com",))),
+        ("__Secure-next-auth.session-token", "next-auth.session-token",
+         "__Secure-authjs.session-token", "authjs.session-token", "session-token"),
+        _signed_in(("chatgpt.com",))),
     # WorkosCursorSessionToken and next-auth variants
     "cursor": LoginSpec(
         "cursor", "https://authenticator.cursor.sh/",

@@ -62,3 +62,38 @@ def test_verify_cli_lists_results(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "✔ openrouter" in out and "✘ deepseek" in out and "no key" in out
     assert str(config_mod.config_dir() / "verify") in out
+
+
+def test_scrub_dict_keys_and_more_fields():
+    out = redact.scrub({"accounts": {"a.b@example.com": {"phone_number": "5551234",
+                                                        "avatar_url": "https://x/u/99",
+                                                        "address": "1 Main St",
+                                                        "workspace": "Acme",
+                                                        "used": 3}}})
+    (k, v), = out["accounts"].items()
+    assert k == "<email>" and v["used"] == 3
+    assert v["phone_number"] == v["avatar_url"] == v["address"] == v["workspace"] == "<redacted>"
+
+
+def test_verify_web_session_uses_web_fetch_and_scrubs_cookie(monkeypatch, tmp_path):
+    from omnimonitor import sessions
+    sessions.save("claude_plan", "sessionKey=sk-ant-SESSIONVALUE1")
+    seen = []
+
+    def http(method, url, headers, body):
+        seen.append(url)
+        return 200, [{"uuid": "org-1", "echo": "sk-ant-SESSIONVALUE1"}] if "organizations" in url \
+            and url.endswith("organizations") else {"five_hour": {"utilization": 10}}
+    res = verify.run({"providers": {"claude_plan": {"enabled": True}}}, http=http,
+                     out_dir=tmp_path)
+    assert res[0]["error"] != "no API reader for this provider"
+    assert any("claude.ai" in u for u in seen)
+    assert "SESSIONVALUE1" not in (tmp_path / res[0]["saved"]).read_text("utf-8")
+
+
+def test_verify_scrubs_team_ids(monkeypatch, tmp_path):
+    monkeypatch.setenv("XAI_MANAGEMENT_KEY", "xai-mgmt-key-123456")
+    monkeypatch.setenv("XAI_TEAM_ID", "team42")
+    res = verify.run({"providers": {"xai_api": {"enabled": True}}},
+                     http=lambda m, u, h, b: (200, {"team": "team42", "url": u}), out_dir=tmp_path)
+    assert "team42" not in (tmp_path / res[0]["saved"]).read_text("utf-8")

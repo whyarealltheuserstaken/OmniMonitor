@@ -15,8 +15,11 @@ _KEY = re.compile(r"\b(?:sk-[A-Za-z0-9_-]{8,}|sk-ant-[A-Za-z0-9_-]+|xai-[A-Za-z0
                   r"gh[pousr]_[A-Za-z0-9]{16,}|github_pat_[A-Za-z0-9_]{16,})")
 _LONG = re.compile(r"[A-Za-z0-9_\-+/=]{32,}")
 _ID_KEY = re.compile(r"(?i)(^|_)(id|uuid|email|org|organization|account|user|team|name|"
-                     r"login|username|owner|customer|member|phone)s?$")
-_ID_CAMEL = re.compile(r"[a-z](Id|Uuid|Email|Org|Account|User|Team|Name|Login)s?$")
+                     r"login|username|owner|customer|member|phone|phone_number|address|ip|"
+                     r"ip_address|avatar|avatar_url|picture|image|slug|workspace|title|"
+                     r"company|domain|handle|display_name)s?$|^billing_")
+_ID_CAMEL = re.compile(r"[a-z](Id|Uuid|Email|Org|Account|User|Team|Name|Login|Phone|"
+                       r"Address|Avatar|Picture|Slug|Workspace)s?$")
 
 
 def _key_is_identifying(k: str) -> bool:
@@ -43,7 +46,8 @@ def scrub(obj: Any, secrets: Iterable[str] = ()) -> Any:
 
 def _walk(obj: Any, secrets: List[str], key: Any) -> Any:
     if isinstance(obj, dict):
-        return {k: _walk(v, secrets, k) for k, v in obj.items()}
+        return {(_text(k, secrets) if isinstance(k, str) else k): _walk(v, secrets, k)
+                for k, v in obj.items()}
     if isinstance(obj, (list, tuple)):
         return [_walk(v, secrets, key) for v in obj]
     if isinstance(key, str) and _key_is_identifying(key) and obj is not None \

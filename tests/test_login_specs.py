@@ -39,7 +39,7 @@ def test_one_required_cookie_is_enough():
     spec = login_specs.SPECS["cursor"]
     assert login_specs.enough(spec, [("WorkosCursorSessionToken", "a")])  # was: needed all 3
     assert not login_specs.enough(spec, [("wos-session", "b")])
-    assert login_specs.enough(login_specs.SPECS["chatgpt_web"], [("oai-did", "x")])
+    assert not login_specs.enough(login_specs.SPECS["chatgpt_web"], [("oai-did", "x")])
 
 
 # ------------------------------------------------ sign-in in a child process (Task 4)

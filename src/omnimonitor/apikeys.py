@@ -78,10 +78,21 @@ def migrate_file(path: Optional[Path] = None) -> int:
     try:
         for n, v in data.items():
             vault.put(_vname(n), v.encode("utf-8"))
+            if _from_vault(n) != v.strip():
+                raise OSError("vault read-back mismatch")
     except (vault.VaultUnavailable, OSError):
+        _MIGRATED.discard(key)
         return 0
+    try:  # drop only what moved; keep anything else the user keeps in that file
+        raw = json.loads(path.read_text("utf-8"))
+        rest = {k: v for k, v in raw.items() if k not in data} if isinstance(raw, dict) else {}
+    except (OSError, ValueError):
+        rest = {}
     try:
-        path.unlink()
+        if rest or config_mod.env("SECRETS_FILE").strip():
+            _write(rest, path)  # a file you pointed us at is never deleted
+        else:
+            path.unlink()
     except OSError:
         pass
     return len(data)

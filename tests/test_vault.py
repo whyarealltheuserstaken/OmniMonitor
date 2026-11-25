@@ -118,7 +118,8 @@ def test_legacy_keyring_entry_moved(_fake_keyring):
     assert ("omnimonitor.web-session", "claude_plan") not in _fake_keyring.store
 
 
-def test_apikey_file_migrated_then_deleted():
+def test_apikey_file_migrated_then_deleted(monkeypatch):
+    monkeypatch.delenv("OMNIMONITOR_SECRETS_FILE")  # the default file next to the config
     path = apikeys.secrets_path()
     path.write_text(json.dumps({"DEEPSEEK_API_KEY": "sk-file-123"}))
     apikeys._MIGRATED.clear()
@@ -143,3 +144,54 @@ def test_apikey_set_goes_to_vault_and_env_wins(monkeypatch):
     monkeypatch.delenv("OPENROUTER_API_KEY")
     assert apikeys.unset_secret("OPENROUTER_API_KEY") and apikeys.where("OPENROUTER_API_KEY") == ""
     assert os.environ.get("OPENROUTER_API_KEY") is None
+
+
+# ------------------------------------------------------- security review fixes
+def test_chatgpt_needs_a_session_cookie():
+    from omnimonitor import login_specs
+    spec = login_specs.SPECS["chatgpt_web"]
+    assert not login_specs.enough(spec, [("oai-did", "x"), ("__cf_bm", "y")])  # logged out
+    assert login_specs.enough(spec, [("__Secure-next-auth.session-token", "z")])
+
+
+def test_missing_key_never_deletes_blobs(_fake_keyring):
+    vault.put("session.cursor", SECRET)
+    _fake_keyring.store.clear()  # keychain returned nothing (transient or wiped)
+    vault.put("session.claude_plan", b"new")
+    assert vault.get("session.claude_plan") == b"new"
+    orphans = list((config_mod.config_dir() / "vault" / "orphaned").glob("*.bin"))
+    assert [p.name for p in orphans] == ["session.cursor.bin"]  # kept, not destroyed
+
+
+def test_key_created_once_under_race(_fake_keyring, monkeypatch):
+    real_set = _fake_keyring.set_password
+
+    def racing_set(service, user, value):  # another process writes its key right after us
+        real_set(service, user, value)
+        real_set(service, user, "Zm9yZWlnbi1rZXktZnJvbS1vdGhlci1wcm9jZXNzISE=")
+    monkeypatch.setattr(_fake_keyring, "set_password", racing_set)
+    vault.put("session.cursor", SECRET)
+    assert vault.get("session.cursor") == SECRET  # used the key that is actually stored
+
+
+def test_colon_names_rejected():
+    with pytest.raises(ValueError):
+        vault.put("a:b", b"x")
+
+
+def test_failed_vault_put_keeps_legacy_session(monkeypatch):
+    p = _legacy_dir() / "cursor.cookie"
+    p.write_text(json.dumps({"cookie": "WorkosCursorSessionToken=old", "meta": {}}))
+    monkeypatch.setattr(vault, "put", lambda *a: (_ for _ in ()).throw(OSError("disk full")))
+    sessions._MIGRATED.clear()
+    sessions.load("cursor")
+    assert p.exists()  # not deleted: nothing was stored yet
+
+
+def test_env_secrets_file_keeps_unmigrated_entries():
+    path = apikeys.secrets_path()  # conftest points this at an env-provided path
+    path.write_text(json.dumps({"DEEPSEEK_API_KEY": "sk-file-123", "NOT_OURS": "keep"}))
+    apikeys._MIGRATED.clear()
+    assert apikeys.get("DEEPSEEK_API_KEY") == "sk-file-123"
+    left = json.loads(path.read_text())
+    assert "DEEPSEEK_API_KEY" not in left and left.get("NOT_OURS") == "keep"

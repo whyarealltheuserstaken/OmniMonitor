@@ -55,11 +55,11 @@ class FakeKeyring:
 
 
 @pytest.fixture(autouse=True)
-def _fake_keyring(monkeypatch, tmp_path_factory):
-    """Every test gets a fresh in-memory keyring and its own config dir for vault blobs."""
+def _fake_keyring(_hermetic_env, monkeypatch, tmp_path_factory):
+    """Every test gets a fresh in-memory keyring and its own config dir (after the env is
+    cleaned), so nothing ever lands in the developer's real config folder."""
     kr = FakeKeyring()
-    if not os.environ.get("OMNIMONITOR_HOME"):
-        monkeypatch.setenv("OMNIMONITOR_HOME", str(tmp_path_factory.mktemp("home")))
+    monkeypatch.setenv("OMNIMONITOR_HOME", str(tmp_path_factory.mktemp("home")))
     try:
         from omnimonitor import vault
     except ImportError:  # vault not built yet
