@@ -32,14 +32,13 @@
       node.textContent = fmt(metric.value);
     }
   }
-  function color(pct) { return pct >= 50 ? "var(--ok)" : pct >= 20 ? "var(--warn)" : "var(--bad)"; }
 
   function render() {
     var d = data, st = d.status || {}, u = (st.usage) || null;
     var b = $("banners"); b.textContent = "";
     if (d.is_demo || (u && u.is_demo)) {
       b.appendChild(el("div", "banner demo",
-        "DEMO MODE - every number on this page is fake sample data (including tools, projects and prices). Open Setup and click \"Use my real Grok usage\" (or run `omnimonitor setup`) to use your Grok account."));
+        "DEMO MODE - every number on this page is fake sample data (including tools, projects and prices). Open Setup to connect your accounts and tools (or run `omnimonitor setup`)."));
     }
     if (st.error) b.appendChild(el("div", "banner err", "Last refresh failed" +
       (st.last_attempt ? " (" + fmtDate(st.last_attempt) + ")" : "") + ": " + st.error +
@@ -55,20 +54,10 @@
       " · source: " + (st.source || "?") + " · tokens: " + (d.provider || "?") +
       (d.data_since ? " · token data since " + fmtDate(d.data_since) : "");
 
-    if (u) {
-      var rem = Math.round(u.remaining_percent);
-      $("remaining").textContent = rem + "%";
-      $("barfill").style.width = rem + "%";
-      $("barfill").style.background = color(rem);
-      $("reset").textContent = u.resets_at ? "Resets " + (OM.fmtCountdown(u.resets_at) ? OM.fmtCountdown(u.resets_at) + " · " : "") + fmtDate(u.resets_at) : "Reset time not reported";
-      var parts = [];
-      if (u.raw_used_percent > 100) parts.push("reported " + u.raw_used_percent.toFixed(1) + "% used (over pool)");
-      parts.push("One shared weekly pool — breakdown below");
-      $("products").textContent = parts.join(" · ");
-    } else {
-      $("remaining").textContent = "–";
-      $("reset").textContent = st.error || "No data yet";
-    }
+    var prim = OM.hero(d);
+    $("products").textContent = u && u.raw_used_percent > 100 && prim.id === "xai"
+      ? "Grok reported " + u.raw_used_percent.toFixed(1) + "% used (over pool)" : "";
+    $("weeklimit").hidden = !u;  // the weekly token limit belongs to the Grok pool
 
     var wk = d.week_tokens || {};
     $("weeklabel").textContent = "Tokens used " + (wk.window ? "(" + wk.window + ")" : "this week");
@@ -99,6 +88,10 @@
     setStat("s-cur", d.current_streak, function (v) { return v + (v === 1 ? " day" : " days"); });
 
     renderGrokSuite(d);
+    // The Grok suite card only makes sense with Grok / Cursor data.
+    $("grok-suite-card").hidden = !(((d.providers || {}).cards) || []).some(function (c) {
+      return c.id === "grok" || c.id === "cursor" || c.id === "grok_sessions";
+    });
     renderHeat();
     if (window.OMApp) OMApp.renderActivity(d, days);
     renderForecast(d);

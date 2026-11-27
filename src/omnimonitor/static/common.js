@@ -188,7 +188,28 @@
     };
   }
 
-  window.OM = { fmtTokens: fmtTokens, fmtUsd: fmtUsd, fmtDate: fmtDate, fmtCountdown: fmtCountdown, el: el, na: na,
+  /* Headline card (dashboard + mini): whatever the tray follows (providers.primary). */
+  function hero(d) {
+    var p = ((d.providers || {}).primary) || {}, $ = function (id) { return document.getElementById(id); };
+    var fill = $("barfill");
+    if (!p.available) {
+      $("hero-label").textContent = p.name ? p.name + " · no limit reading yet" : "No limit reading yet";
+      $("remaining").textContent = "–"; fill.style.width = "0";
+      $("reset").textContent = p.reason || ((d.status || {}).error) || "Connect an account on the Setup page";
+      return p;
+    }
+    var rem = Math.round(p.remaining_percent), t = p.resets_at;
+    var iso = typeof t === "number" ? new Date(t * 1000).toISOString() : t;
+    $("hero-label").textContent = p.label + " · remaining" + (p.detail ? " (" + p.detail + ")" : "");
+    $("remaining").textContent = rem + "%";
+    fill.style.width = rem + "%";
+    fill.style.background = rem >= 50 ? "var(--ok)" : rem >= 20 ? "var(--warn)" : "var(--bad)";
+    var c = fmtCountdown(iso);
+    $("reset").textContent = iso ? "Resets " + (c ? c + " · " : "") + fmtDate(iso) : "Reset time not reported";
+    return p;
+  }
+
+  window.OM = { hero: hero, fmtTokens: fmtTokens, fmtUsd: fmtUsd, fmtDate: fmtDate, fmtCountdown: fmtCountdown, el: el, na: na,
                 applyTheme: applyTheme, getJSON: getJSON, isApp: isApp, appPost: appPost, toast: toast,
                 openView: openView, copyText: copyText, reportProblem: reportProblem };
 })();

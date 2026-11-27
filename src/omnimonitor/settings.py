@@ -278,6 +278,8 @@ SCHEMA: Dict[str, Tuple[Callable[[Any], Any], bool, str]] = {
                              "Fireworks account id for the spend summary"),
     "cursor_email": (_ident(254, r"[^@\s]+@[^@\s]+"), False,
                      "your email in the Cursor team (own spend row)"),
+    "source": (_choice("demo", "grok_cli_billing", "none"), False,
+               "Grok weekly pool: grok_cli_billing, none (real data without Grok) or demo"),
     "token_source": (_choice("auto", "grok_sessions", "demo", "none"), False,
                      "where Grok token counts come from"),
     "grok_agent_billing": (_bool, False,

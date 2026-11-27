@@ -616,6 +616,9 @@ def fetch_usage(cfg: Dict[str, Any]) -> UsageResult:
     return fn(cfg)
 
 def fetch_usage_safely(cfg: Dict[str, Any]) -> Tuple[Optional[UsageResult], Optional[str]]:
+    """(reading, error). ``source: "none"`` means the Grok pool is off: neither."""
+    if cfg.get("source") == "none":
+        return None, None
     try:
         return fetch_usage(cfg), None
     except UsageError as e:

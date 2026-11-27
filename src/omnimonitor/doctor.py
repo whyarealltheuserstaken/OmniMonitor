@@ -50,6 +50,29 @@ def checks(cfg: Dict[str, Any], online: bool = True) -> List[Tuple[str, str, str
     except Exception as e:  # noqa: BLE001
         out.append((FAIL, "tray backend", "pystray not usable: %s" % e))
 
+    grok_on = src != "none"
+    if grok_on:
+        out += _grok_install_checks(cfg)
+
+    from omnimonitor.adapters import describe
+    for row in describe(cfg)[1:]:
+        if row["enabled"]:
+            out.append((OK if row["found"] else WARN, row["name"],
+                        "enabled, logs found under %s" % ", ".join(row["paths"]) if row["found"]
+                        else "enabled, but %s" % row["note"]))
+        elif row["found"]:
+            out.append((OK, row["name"], "logs found but not enabled (optional: "
+                        "`omnimonitor providers enable %s`)" % row["name"]))
+    out += provider_checks(cfg, online=online)
+
+    if online and grok_on:
+        out += _grok_billing_checks(cfg)
+    out += cursor_event_checks(cfg, online=online)
+    return out
+
+
+def _grok_install_checks(cfg: Dict[str, Any]) -> List[Tuple[str, str, str]]:
+    out: List[Tuple[str, str, str]] = []
     grok = find_grok_binary(cfg)
     out.append((OK if grok else WARN, "grok CLI", grok or
                 "not found on PATH or in %s/bin - install the Grok CLI (see https://docs.x.ai) and run "
@@ -71,36 +94,26 @@ def checks(cfg: Dict[str, Any], online: bool = True) -> List[Tuple[str, str, str
     out.append((OK if n else WARN, "token logs", "%d session log(s) under %s" % (n, sess) if n
                 else "no Grok CLI session logs under %s - token stats will be 'not available'"
                 % sess))
+    return out
 
-    from omnimonitor.adapters import describe
-    for row in describe(cfg)[1:]:
-        if row["enabled"]:
-            out.append((OK if row["found"] else WARN, row["name"],
-                        "enabled, logs found under %s" % ", ".join(row["paths"]) if row["found"]
-                        else "enabled, but %s" % row["note"]))
-        elif row["found"]:
-            out.append((OK, row["name"], "logs found but not enabled (optional: "
-                        "`omnimonitor providers enable %s`)" % row["name"]))
-    out += provider_checks(cfg, online=online)
 
-    if online:
-        try:
-            r = fetch_grok_cli_billing(cfg)
-            via = (" via %s" % r.billing_via) if r.billing_via else ""
-            out.append((OK, "billing", "%.0f%% remaining, resets %s%s" % (
-                r.remaining_percent, fmt_local(r.resets_at), via)))
-            if r.present_fields:
-                out.append((OK, "billing fields",
-                            "names only: " + ", ".join(r.present_fields)))
-            if r.resets_left is not None:
-                out.append((OK, "usage resets", "Usage resets left: %d" % r.resets_left))
-            elif r.resets_reason:
-                out.append((WARN, "usage resets", r.resets_reason))
-        except UsageError as e:
-            out.append((FAIL, "billing", str(e)))
-        except Exception as e:  # noqa: BLE001
-            out.append((FAIL, "billing", "%s: %s" % (type(e).__name__, e)))
-    out += cursor_event_checks(cfg, online=online)
+def _grok_billing_checks(cfg: Dict[str, Any]) -> List[Tuple[str, str, str]]:
+    out: List[Tuple[str, str, str]] = []
+    try:
+        r = fetch_grok_cli_billing(cfg)
+        via = (" via %s" % r.billing_via) if r.billing_via else ""
+        out.append((OK, "billing", "%.0f%% remaining, resets %s%s" % (
+            r.remaining_percent, fmt_local(r.resets_at), via)))
+        if r.present_fields:
+            out.append((OK, "billing fields", "names only: " + ", ".join(r.present_fields)))
+        if r.resets_left is not None:
+            out.append((OK, "usage resets", "Usage resets left: %d" % r.resets_left))
+        elif r.resets_reason:
+            out.append((WARN, "usage resets", r.resets_reason))
+    except UsageError as e:
+        out.append((FAIL, "billing", str(e)))
+    except Exception as e:  # noqa: BLE001
+        out.append((FAIL, "billing", "%s: %s" % (type(e).__name__, e)))
     return out
 
 
