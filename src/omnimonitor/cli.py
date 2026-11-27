@@ -467,8 +467,11 @@ def cmd_statusline(args) -> int:
     evs = hist.events() if hist is not None else []
     src = None if args.source == "all" else (args.source,)
     ov = ctrl.stats().get("providers") or {}
-    grok_on = ctrl.cfg.get("source") != "none"
+    from omnimonitor import display
     shown = (ov.get("views") or {}).get("statusline") or {}
+    grok_on = ctrl.cfg.get("source") != "none" \
+        and display.visible(display.hidden(ctrl.cfg, "statusline"), "grok") \
+        and "limit" in display.fields(ctrl.cfg, "statusline")
     p = sl.parts(hist.last_billing() if hist is not None and grok_on else None,
                  ov.get("today"), blocks_mod.active_block(evs, src, now), now,
                  suites=shown.get("suites"), fields=shown.get("fields"))

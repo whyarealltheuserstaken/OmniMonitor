@@ -121,8 +121,8 @@
       box.appendChild(g);
     }
     (c.metrics || []).filter(function (m) {
-      // a plan's "% used" figures are already the limit bars above
-      return !(m.unit === "%" && (c.limits || []).length);
+      // the parser marks the figures that are already limit bars above; others stay
+      return !(m.in_limits && (c.limits || []).length);
     }).forEach(function (m) {
       var d = el("div", "brow"), t = el("div", "t");
       t.appendChild(el("span", "n", m.label));
@@ -182,6 +182,7 @@
         Object.keys(c.ranges).forEach(function (k) { r[k] = Object.assign({}, c.ranges[k], { hideCost: true }); });
         c.ranges = r;
       }
+      if (!want.limit) c.metrics = (c.metrics || []).filter(function (m) { return m.unit !== "%"; });
       if (!want.money) c.metrics = (c.metrics || []).filter(function (m) {
         return m.kind !== "balance" && m.kind !== "spend";
       });

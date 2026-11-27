@@ -7,6 +7,7 @@ fixture; identifying strings are replaced with placeholders.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any, Iterable, List
 
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
@@ -30,6 +31,9 @@ def _text(s: str, secrets: List[str]) -> str:
     for sec in secrets:
         if sec:
             s = s.replace(sec, "<secret>")
+    home = str(Path.home())  # the folder name is usually the person's user name
+    if len(home) > 3:
+        s = s.replace(home, "~").replace(home.replace("\\", "/"), "~")
     s = _JWT.sub("<jwt>", s)
     s = _KEY.sub("<key>", s)
     s = _EMAIL.sub("<email>", s)

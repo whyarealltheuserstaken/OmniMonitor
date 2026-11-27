@@ -56,6 +56,8 @@ def _on_state(pid: str, readings: Dict[str, Any]) -> Dict[str, str]:
 
 def _grok_pool(cfg, readings) -> Dict[str, Any]:
     from omnimonitor.app import grok_login_state
+    if cfg.get("source") == "command":  # never offer to replace the user's own source
+        return _row("grok", "connected", "using your own command (config \"command\")")
     login = grok_login_state(cfg)
     on = cfg.get("source") == "grok_cli_billing"
     if login["state"] == "ok":
@@ -106,7 +108,8 @@ def _web(pid: str, cfg, readings, on: bool) -> Dict[str, Any]:
     opts = (cfg.get("providers") or {}).get(pid)
     auth = opts.get("auth") if isinstance(opts, dict) else None
     extra: Dict[str, Any] = {}
-    if pid == "cursor" and cursor_app_auth.default_db_path().is_file() and auth != "cursor_app":
+    if pid == "cursor" and cursor_app_auth.default_db_path().is_file() \
+            and not (on and auth == "cursor_app"):
         extra["cursor_app"] = True
     if on and auth == "cursor_app":
         return _row(pid, enabled=True, **_on_state(pid, readings), **extra)
@@ -175,8 +178,13 @@ def _action(rows: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     return None
 
 
-def status(cfg: Dict[str, Any], readings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def status(cfg: Dict[str, Any], readings: Optional[Dict[str, Any]] = None,
+           login_errors: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     rows = source_rows(cfg, readings)
+    for r in rows:
+        why = (login_errors or {}).get(r["id"])
+        if why:
+            r["detail"] = "last sign-in: %s" % why
     out = []
     for s in suites.SUITES:
         mine = [r for r in rows if suites.suite_of(r["id"]) == s.id]
@@ -271,6 +279,8 @@ def cli_setup(cfg: Dict[str, Any], assume_yes: bool = False) -> int:
     from pathlib import Path
 
     from omnimonitor import doctor
+    if cfg.get("_forced_demo") and cfg.get("_config_path"):
+        cfg = config_mod.load_config(Path(cfg["_config_path"]))  # --demo must not be saved
     st = status(cfg)
     print("OmniMonitor setup\n")
     for line in render(st):

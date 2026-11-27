@@ -67,13 +67,18 @@ class Reading:
         keys = cls.__dataclass_fields__.keys()
         return cls(**{k: v for k, v in d.items() if k in keys})
 
-    def metric(self, key: str, label: str, value: Any, unit: str = "", kind: str = "") -> None:
+    def metric(self, key: str, label: str, value: Any, unit: str = "", kind: str = "",
+               in_limits: bool = False) -> None:
+        """``in_limits``: this figure is also one of ``limits`` (don't show it twice)."""
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             return
         if value != value or abs(value) > 1e12:  # NaN / absurd
             return
-        self.metrics.append({"key": key, "label": label, "value": round(float(value), 4),
-                             "unit": unit, "kind": kind})
+        row = {"key": key, "label": label, "value": round(float(value), 4),
+               "unit": unit, "kind": kind}
+        if in_limits:
+            row["in_limits"] = True
+        self.metrics.append(row)
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -517,6 +522,7 @@ def fetch(pid: str, cfg: Dict[str, Any], http: Optional[Http] = None,
 
 
 META_PREFIX = "reading:"
+FORGOTTEN_PREFIX = "reading-forgotten:"
 
 
 def load(history, pid: str) -> Optional[Reading]:
@@ -524,9 +530,19 @@ def load(history, pid: str) -> Optional[Reading]:
         return None
     try:
         raw = history.meta(META_PREFIX + pid)
-        return Reading.from_dict(json.loads(raw)) if raw else None
+        r = Reading.from_dict(json.loads(raw)) if raw else None
+        forgotten = float(history.meta(FORGOTTEN_PREFIX + pid) or 0)
     except (ValueError, TypeError):
         return None
+    if r is not None and forgotten and max(r.attempted_at, r.fetched_at) < forgotten:
+        return None  # read before a sign-in / sign-out (it may have still been in flight)
+    return r
+
+
+def forget(history, pid: str, now: float) -> None:
+    """Drop the saved reading, including one a read already running may yet save."""
+    history.set_meta(META_PREFIX + pid, "")
+    history.set_meta(FORGOTTEN_PREFIX + pid, repr(float(now)))
 
 
 def poll_seconds(cfg: Dict[str, Any], pid: str) -> int:

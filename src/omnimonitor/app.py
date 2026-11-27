@@ -37,6 +37,8 @@ class Controller:
         self.service_status: Dict[str, Dict[str, Any]] = {}
         self._lock = threading.RLock()
         self._scan_lock = threading.Lock()  # web "save settings" and the poll loop both scan
+        self._config_lock = threading.Lock()  # one web request writes the config at a time
+        self.login_errors: Dict[str, str] = {}  # source -> why its last sign-in failed
         self._wake = threading.Event()
         self._stop = threading.Event()
         self._listeners: List[Callable[[], None]] = []
@@ -330,7 +332,8 @@ class Controller:
             return {"ok": True, "changed": []}
         try:
             if self.cfg.get("_config_path"):
-                config_mod.update_config_file(clean, Path(self.cfg["_config_path"]))
+                with self._config_lock:
+                    config_mod.update_config_file(clean, Path(self.cfg["_config_path"]))
         except Exception as e:  # noqa: BLE001
             return {"ok": False, "errors": {"_": "could not save config: %s" % e}}
         with self._lock:
@@ -415,35 +418,45 @@ class Controller:
         st["error"] = self.error
         from omnimonitor import onboarding
         st["onboarding"] = onboarding.status(
-            self.cfg, None if self.token_source == "demo" else dict(self.readings))
+            self.cfg, None if self.token_source == "demo" else dict(self.readings),
+            login_errors=dict(self.login_errors))
         return st
 
     def onboard(self, body: Any = None) -> Dict[str, Any]:
         """One Setup-page action: write the change, apply it live, open sign-in if asked."""
         from omnimonitor import onboarding, session_login
-        try:
-            plan = onboarding.plan(self.cfg, body)
-        except onboarding.OnboardingError as e:
-            return {"ok": False, "error": str(e)}
-        try:
-            if plan.changes and self.cfg.get("_config_path"):
-                config_mod.update_config_file(plan.changes, Path(self.cfg["_config_path"]))
+        with self._config_lock:
+            # Plan from the file as it is now: the in-memory copy can be older than an edit
+            # made in a terminal, and under --demo it holds forced demo values.
+            path = Path(self.cfg["_config_path"]) if self.cfg.get("_config_path") else None
+            base = config_mod.load_config(path) if path else dict(self.cfg)
+            try:
+                plan = onboarding.plan(base, body)
+            except onboarding.OnboardingError as e:
+                return {"ok": False, "error": str(e)}
+            try:
+                if path and plan.changes:
+                    config_mod.update_config_file(plan.changes, path)
+            except Exception as e:  # noqa: BLE001
+                return {"ok": False, "error": "could not save config: %s" % e}
+            if path:
+                new = config_mod.load_config(path)
                 self._cfg_mtime = self._config_mtime()
-        except Exception as e:  # noqa: BLE001
-            return {"ok": False, "error": "could not save config: %s" % e}
-        new = dict(self.cfg)
-        new.update(plan.changes)
-        if new.get("source") != "demo":
-            new.pop("_forced_demo", None)
-        self._apply_cfg(new)
-        self.forget_readings(plan.sources)
+            else:
+                new = dict(base, **plan.changes)
+                new.pop("_forced_demo", None)
+            self._apply_cfg(new)
         message = "Saved."
-        if plan.signin:
+        if plan.signin:  # the last good reading stays until the sign-in succeeds
+            pid = plan.signin
+            self.login_errors.pop(pid, None)
             try:
                 message = session_login.start_login(
-                    plan.signin, on_done=lambda ok, msg: self.after_login(plan.signin))
+                    pid, on_done=lambda ok, why: self.after_login(pid, ok, why))
             except Exception as e:  # noqa: BLE001
                 return {"ok": False, "error": str(e)}
+        else:
+            self.forget_readings(plan.sources)
         self.poke()
         return {"ok": True, "message": message}
 
@@ -453,10 +466,15 @@ class Controller:
         for pid in ids:
             self.readings.pop(pid, None)
             if self.history is not None:
-                self.history.set_meta(accounts_mod.META_PREFIX + pid, "")
+                accounts_mod.forget(self.history, pid, self.clock().timestamp())
 
-    def after_login(self, pid: str) -> None:
-        self.forget_readings([pid])
+    def after_login(self, pid: str, ok: bool = True, message: str = "") -> None:
+        """A session was stored or removed (``ok``), or a sign-in window failed."""
+        if ok:
+            self.login_errors.pop(pid, None)
+            self.forget_readings([pid])
+        else:
+            self.login_errors[pid] = message or "sign-in failed"
         self.poke()
 
     def setup_use_real(self, body: Any = None) -> Dict[str, Any]:

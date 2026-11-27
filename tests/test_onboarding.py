@@ -267,7 +267,7 @@ def test_dashboard_has_no_grok_only_leftovers_without_grok():
         return resources.files("omnimonitor").joinpath("static", n).read_text("utf-8")
     providers = read("providers.js")
     assert 'cli_login: "CLI login"' in providers and 'web_session: "website sign-in"' in providers
-    assert 'm.unit === "%"' in providers  # not repeated under the same card's limit bars
+    assert 'm.in_limits' in providers  # not repeated under the same card's limit bars
     assert 'id="forecast-pace"' in read("stats.html")
     assert '"forecast-pace"' in read("stats.js")
     assert 'rel="icon"' in read("setup.html")
