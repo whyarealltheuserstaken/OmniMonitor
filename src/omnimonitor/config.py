@@ -502,5 +502,10 @@ def copilot_otel_paths(cfg: Dict[str, Any]) -> list:
 def effective_token_source(cfg: Dict[str, Any]) -> str:
     ts = (cfg.get("token_source") or "auto").strip()
     if ts == "auto":
-        return "demo" if (cfg.get("source") or "demo") == "demo" else "grok_sessions"
+        source = cfg.get("source") or "demo"
+        if source == "demo":
+            return "demo"
+        if source == "none" and not (grok_home(cfg) / "sessions").is_dir():
+            return "none"  # no Grok here: don't scan for it or complain about it
+        return "grok_sessions"
     return ts

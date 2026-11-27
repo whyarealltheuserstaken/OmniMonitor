@@ -132,7 +132,8 @@ def needed_deps(cfg: dict) -> List[Dep]:
     on = set(catalog.enabled_ids(cfg))
     if cfg.get("source", "grok_cli_billing") == "grok_cli_billing":
         on.add("grok")
-    if (cfg.get("providers") or {}).get("grok_sessions", {}).get("enabled", True) is not False:
+    if cfg.get("source") != "none" and (cfg.get("providers") or {}).get(
+            "grok_sessions", {}).get("enabled", True) is not False:
         on.add("grok_sessions")
     return [d for d in DEPS if on & set(d.providers)]
 

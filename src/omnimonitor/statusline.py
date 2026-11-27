@@ -6,7 +6,7 @@ not recorded is left out rather than guessed."""
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 def fmt_tokens(n: float) -> str:
@@ -37,8 +37,23 @@ def _iso_ts(v: Any) -> Optional[float]:
 
 
 def parts(last_billing: Optional[Dict[str, Any]], today: Optional[Dict[str, Any]],
-          block: Optional[Dict[str, Any]], now: float) -> Dict[str, Any]:
+          block: Optional[Dict[str, Any]], now: float,
+          suites: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
+    rows = []
+    for s in suites or []:
+        h = s.get("headline")
+        if not h:
+            continue
+        row = {"id": s["id"], "name": s["name"], "source": h.get("source", ""),
+               "used_percent": round(float(h["used_percent"]), 1)}
+        reset = h.get("resets_at")
+        reset = _iso_ts(reset) if isinstance(reset, str) else reset
+        if reset and reset > now:
+            row["resets_in_s"] = int(reset - now)
+        rows.append(row)
+    if rows:
+        out["suites"] = rows
     if last_billing and last_billing.get("used_percent") is not None:
         g = {"used_percent": round(float(last_billing["used_percent"]), 1),
              "as_of": last_billing.get("ts")}
@@ -56,8 +71,13 @@ def parts(last_billing: Optional[Dict[str, Any]], today: Optional[Dict[str, Any]
 
 def render(p: Dict[str, Any], now: float) -> str:
     bits = []
+    for s in p.get("suites") or []:
+        line = "%s %.0f%% used" % (s["name"], s["used_percent"])
+        if s.get("resets_in_s") is not None:
+            line += ", resets in %s" % fmt_span(s["resets_in_s"])
+        bits.append(line)
     g = p.get("grok")
-    if g:
+    if g and not any(s.get("source") == "grok" for s in p.get("suites") or []):
         s = "Grok %.0f%% used" % g["used_percent"]
         if g.get("resets_in_s") is not None:
             s += ", resets in %s" % fmt_span(g["resets_in_s"])

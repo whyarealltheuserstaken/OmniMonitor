@@ -2,7 +2,6 @@
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); }, el = OM.el, T = OM.fmtTokens;
-  function color(p) { return p >= 50 ? "var(--ok)" : p >= 20 ? "var(--warn)" : "var(--bad)"; }
   function row(k, v, reason) {
     var r = el("div", "mrow"); r.appendChild(el("span", "k", k));
     var s = el("span", "v"); if (v === null || v === undefined) s.appendChild(OM.na(reason)); else s.textContent = v;
@@ -15,17 +14,18 @@
     var b = $("banners"); b.textContent = "";
     if (d.is_demo || (u && u.is_demo)) b.appendChild(el("div", "banner demo", "DEMO - fake sample data"));
     if (st.error) b.appendChild(el("div", "banner err", "Last refresh failed: " + st.error));
-    if (u) {
-      var rem = Math.round(u.remaining_percent);
-      $("remaining").textContent = rem + "%";
-      $("barfill").style.width = rem + "%"; $("barfill").style.background = color(rem);
-      $("reset").textContent = u.resets_at ? "Resets " + (OM.fmtCountdown(u.resets_at) ? OM.fmtCountdown(u.resets_at) + " · " : "") + OM.fmtDate(u.resets_at) : "Reset time not reported";
-    } else { $("remaining").textContent = "–"; $("reset").textContent = st.error || "No data yet"; }
+    OM.hero(d);
     var rows = $("rows"); rows.textContent = "";
     var a = (d.forecast || {}).average || {}, why = (d.lifetime_tokens || {}).reason;
-    rows.appendChild(row("≈ Used at reset", a.percent_at_reset !== undefined ? "≈" + Math.round(Math.min(a.percent_at_reset, 999)) + "%" : null, a.reason));
-    if (a.runs_out_at) rows.appendChild(row("≈ Runs out", OM.fmtDate(a.runs_out_at)));
-    var gs = d.grok_suite;
+    (((d.providers || {}).suites) || []).forEach(function (s) {
+      var h = s.headline;
+      rows.appendChild(row(s.name, h ? Math.round(h.used_percent) + "% used" : null, s.reason));
+    });
+    if (u) {  // the pace forecast and Grok breakdown belong to the Grok weekly pool
+      rows.appendChild(row("≈ Grok used at reset", a.percent_at_reset !== undefined ? "≈" + Math.round(Math.min(a.percent_at_reset, 999)) + "%" : null, a.reason));
+      if (a.runs_out_at) rows.appendChild(row("≈ Grok runs out", OM.fmtDate(a.runs_out_at)));
+    }
+    var gs = u ? d.grok_suite : null;
     if (gs) {
       (gs.buckets || []).forEach(function (b) {
         var pct = (b.used_percent === null || b.used_percent === undefined) ? null

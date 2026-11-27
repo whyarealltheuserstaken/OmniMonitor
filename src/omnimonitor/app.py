@@ -62,7 +62,9 @@ class Controller:
     def _open_history(self) -> None:
         wants = self.token_source == "grok_sessions" or (
             self.token_source != "demo" and (config_mod.extra_token_sources(self.cfg)
-                                             or config_mod.enabled_api_providers(self.cfg)))
+                                             or config_mod.enabled_api_providers(self.cfg)
+                                             or config_mod.enabled_web_providers(self.cfg)
+                                             or config_mod.enabled_cli_providers(self.cfg)))
         if wants and self.history is None:
             try:
                 self.history = History(self.history_file or config_mod.history_path())
@@ -107,7 +109,8 @@ class Controller:
             self.token_source = config_mod.effective_token_source(self.cfg)
             if old_ts == "demo" and self.token_source != "demo":
                 self.readings = {}
-            if self.usage is not None and self.usage.is_demo and self.cfg.get("source") != "demo":
+            if self.usage is not None and (self.cfg.get("source") == "none" or (
+                    self.usage.is_demo and self.cfg.get("source") != "demo")):
                 self.usage = None
             self.error = self.cfg.get("_config_error")
         self._open_history()
@@ -142,11 +145,14 @@ class Controller:
         if usage is not None:
             log.info("poll source=%s ok: %.1f%% remaining%s (%.1fs)", self.cfg.get("source"),
                      usage.remaining_percent, " [DEMO]" if usage.is_demo else "", dt)
-        else:
+        elif err:
             log.warning("poll source=%s failed (%.1fs): %s", self.cfg.get("source"), dt, err)
         with self._lock:
             if usage is not None:
                 self.usage, self.error, self.last_ok = usage, None, self.clock()
+            elif err is None:  # source "none": there is no Grok pool to read
+                self.usage, self.error = None, self.cfg.get("_config_error")
+                self.last_ok = self.clock()
             else:
                 self.error = err  # keep the last good value, but flag it as stale in the UI
         if usage is not None and not usage.is_demo and self.history is not None:
@@ -202,9 +208,7 @@ class Controller:
             self.service_status = {}
             return
         self._refresh_status()
-        ids = list(dict.fromkeys(
-            config_mod.enabled_api_providers(self.cfg) + config_mod.enabled_web_providers(self.cfg)
-            + config_mod.enabled_cli_providers(self.cfg)))
+        ids = self.account_ids()
         if not ids:
             self.readings = {}
             return
@@ -215,6 +219,22 @@ class Controller:
         except Exception as e:  # noqa: BLE001
             self.token_note = (self.token_note + "; " if self.token_note else "") + \
                 "account readers failed: %s" % e.__class__.__name__
+
+    def account_ids(self) -> List[str]:
+        """Enabled sources read through an account: API keys, web sessions, CLI logins."""
+        return list(dict.fromkeys(
+            config_mod.enabled_api_providers(self.cfg)
+            + config_mod.enabled_web_providers(self.cfg)
+            + config_mod.enabled_cli_providers(self.cfg)))
+
+    def load_cached(self) -> None:
+        """Offline: take the last saved account readings (no network), then recompute."""
+        if self.token_source == "demo":
+            self.readings = demo_readings(self.clock().timestamp())
+        else:
+            got = {p: accounts_mod.load(self.history, p) for p in self.account_ids()}
+            self.readings = {p: r.to_dict() for p, r in got.items() if r is not None}
+        self._recompute()
 
     def _refresh_status(self) -> None:
         """Opt-in official status-page badges (cached 5 min; never raises)."""

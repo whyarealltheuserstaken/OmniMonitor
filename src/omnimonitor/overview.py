@@ -398,7 +398,7 @@ def menu_lines(ov: Dict[str, Any], limit: int = 8) -> List[str]:
             m = next((m for m in c.get("metrics") or [] if m.get("kind") in ("balance", "spend")),
                      None)
             if m:
-                bits.append("%s %s%s" % (m["label"], _money(m["value"], m.get("unit")), ""))
+                bits.append("%s %s" % (m["label"], money(m["value"], m.get("unit"))))
             elif c.get("error"):
                 bits.append("⚠ " + c["error"][:40])
         if bits:
@@ -409,7 +409,9 @@ def menu_lines(ov: Dict[str, Any], limit: int = 8) -> List[str]:
     return out
 
 
-def _until(ts: Optional[float], now: float) -> str:
+def until(resets_at: Any, now: float) -> str:
+    """"in 2d 3h" for a unix or ISO reset time; "" when unknown."""
+    ts = _ts(resets_at)
     if not ts:
         return ""
     secs = ts - now
@@ -432,7 +434,7 @@ def suite_menu_lines(ov: Dict[str, Any], now: Optional[float] = None,
         if h:
             bits.append("%.0f%% used" % h["used_percent"])
             if h.get("resets_at"):
-                bits.append("resets " + _until(h["resets_at"], now))
+                bits.append("resets " + until(h["resets_at"], now))
         if s.get("today_tokens"):
             bits.append("today %s tok" % _short(s["today_tokens"]))
             if s.get("today_usd") is not None:
@@ -446,7 +448,7 @@ def suite_menu_lines(ov: Dict[str, Any], now: Optional[float] = None,
     return out
 
 
-def _money(v: Any, unit: Optional[str]) -> str:
+def money(v: Any, unit: Optional[str]) -> str:
     if unit == "USD":
         return "$%.2f" % v
     return "%s %s" % (round(v, 2), unit or "")

@@ -55,40 +55,77 @@ def cmd_run(args) -> int:
 
 def cmd_status(args) -> int:
     from omnimonitor.app import Controller
-    from omnimonitor.timeutil import fmt_local
     cfg = _load(args)
     ctrl = Controller(cfg)
     ctrl.refresh()
     st = ctrl.stats()
+    ov = st.get("providers") or {}
+    has_data = bool(ctrl.usage) or any(
+        s.get("headline") or s.get("today_tokens") for s in ov.get("suites") or []) or any(
+        c.get("metrics") for c in ov.get("cards") or [])
     if args.json:
         print(json.dumps(st, indent=2, default=str))
-        return 0 if ctrl.usage else 1
+        return 0 if has_data else 1
     u = ctrl.usage
-    if u:
-        print("%s%.0f%% remaining (%.0f%% used)%s" % (
-            "DEMO - FAKE DATA: " if u.is_demo else "", u.remaining_percent, u.used_percent or 0,
-            "" if (u.raw_used_percent or 0) <= 100 else
-            " [reported %.1f%%]" % u.raw_used_percent))
-        print("Resets: %s" % fmt_local(u.resets_at))
-        for line in u.detail_lines:
-            print("  " + line)
+    if ov.get("is_demo") or (u and u.is_demo):
+        print("DEMO - FAKE DATA")
+    for line in status_lines(ov, u, time.time()):
+        print(line)
     if ctrl.error:
         print("Error: %s" % ctrl.error)
+    if not has_data:
+        print("No usage data yet. Run `omnimonitor setup` (or open Setup in the app) to "
+              "connect your accounts and tools.")
     wk = st.get("week_tokens", {})
     print("Tokens this week: %s" % (wk.get("value") if wk.get("value") is not None
                                     else "not available (%s)" % wk.get("reason")))
     lim = st.get("weekly_limit", {})
-    if lim.get("value"):
-        print("Weekly token limit: %s" % lim["value"])
-    elif lim.get("estimate"):
-        print("Weekly token limit: ≈%s (ESTIMATE from %s %%)" % (
-            lim["estimate"]["value"], lim["estimate"]["basis"]))
-    else:
-        print("Weekly token limit: not available (%s)" % lim.get("reason"))
+    if u is not None:  # this limit belongs to the Grok weekly pool
+        if lim.get("value"):
+            print("Grok weekly token limit: %s" % lim["value"])
+        elif lim.get("estimate"):
+            print("Grok weekly token limit: ≈%s (ESTIMATE from %s %%)" % (
+                lim["estimate"]["value"], lim["estimate"]["basis"]))
+        else:
+            print("Grok weekly token limit: not available (%s)" % lim.get("reason"))
     lt = st.get("lifetime_tokens", {})
     print("Lifetime tokens: %s" % (lt.get("value") if lt.get("value") is not None
                                    else "not available"))
-    return 0 if ctrl.usage else 1
+    return 0 if has_data else 1
+
+
+def status_lines(ov: dict, usage, now: float) -> List[str]:
+    """`status` text: one block per suite. Only recorded values."""
+    from omnimonitor import overview
+    cards = {c["id"]: c for c in ov.get("cards") or []}
+    out: List[str] = []
+    for s in ov.get("suites") or []:
+        h = s.get("headline")
+        head = "%.0f%% used" % h["used_percent"] if h else s.get("reason") or "no limit"
+        if s.get("today_tokens"):
+            head += " · today %s tokens" % _fmt(s["today_tokens"])
+        out.append("%s: %s" % (s["name"], head))
+        for cid in s.get("card_ids") or []:
+            c = cards.get(cid) or {}
+            for w in c.get("limits") or []:
+                if w.get("used_percent") is None:
+                    continue
+                left = overview.until(w.get("resets_at"), now)
+                out.append("  %s: %s %.0f%% used%s%s" % (
+                    c["name"], w.get("name") or "limit", w["used_percent"],
+                    ", resets " + left if left else "", " (stale)" if w.get("stale") else ""))
+            for m in c.get("metrics") or []:
+                if m.get("kind") in ("balance", "spend"):
+                    out.append("  %s: %s %s" % (c["name"], m["label"],
+                                                overview.money(m["value"], m.get("unit"))))
+            if c.get("error"):
+                out.append("  %s: ! %s" % (c["name"], c["error"]))
+            if cid == "grok" and usage is not None:
+                out += ["  " + line for line in usage.detail_lines]
+    p = ov.get("primary") or {}
+    if p.get("available"):
+        out.append("Tray follows: %s (%.0f%% left)" % (p["label"], p["remaining_percent"]))
+    return out
 
 
 def cmd_serve(args) -> int:
@@ -422,13 +459,16 @@ def cmd_statusline(args) -> int:
     from omnimonitor import blocks as blocks_mod
     from omnimonitor import statusline as sl
     ctrl = _ctrl(args)
+    ctrl.load_cached()
     now = _time.time()
     hist = ctrl.history
     evs = hist.events() if hist is not None else []
     src = None if args.source == "all" else (args.source,)
     ov = ctrl.stats().get("providers") or {}
-    p = sl.parts(hist.last_billing() if hist is not None else None, ov.get("today"),
-                 blocks_mod.active_block(evs, src, now), now)
+    grok_on = ctrl.cfg.get("source") != "none"
+    p = sl.parts(hist.last_billing() if hist is not None and grok_on else None,
+                 ov.get("today"), blocks_mod.active_block(evs, src, now), now,
+                 suites=ov.get("suites"))
     if ctrl.token_source == "demo":
         p["demo"] = True
     if args.json:
@@ -472,6 +512,7 @@ def cmd_config(args) -> int:
 
 
 EXPORT_MARK = "omnimonitor_config_export"
+EXPORT_SOURCES = ("demo", "grok_cli_billing", "grok_billing", "none")
 
 
 def _config_export(cfg: dict, dest: Optional[str]) -> int:
@@ -483,7 +524,7 @@ def _config_export(cfg: dict, dest: Optional[str]) -> int:
         raw = {}
     doc = {EXPORT_MARK: __version__}
     doc.update({k: raw[k] for k in settings_mod.SCHEMA if k in raw})
-    if "source" in raw and raw["source"] in ("demo", "grok_cli_billing", "grok_billing"):
+    if "source" in raw and raw["source"] in EXPORT_SOURCES:
         doc["source"] = raw["source"]
     text = json.dumps(doc, indent=2, sort_keys=True) + "\n"
     if not dest or dest == "-":
@@ -519,7 +560,7 @@ def _config_import(cfg: dict, src: Optional[str]) -> int:
             print("Invalid %s: %s" % (k, e), file=sys.stderr)
         print("Nothing imported.", file=sys.stderr)
         return 2
-    if source in ("demo", "grok_cli_billing", "grok_billing"):
+    if source in EXPORT_SOURCES:
         clean["source"] = source
     path = config_mod.update_config_file(clean, Path(cfg["_config_path"]))
     print("Imported %d setting(s) into %s%s" % (
