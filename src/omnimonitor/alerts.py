@@ -1,7 +1,9 @@
 """Usage notifications. Pure decision logic + a best-effort desktop delivery.
 
 Decisions are made only from REAL billing readings (never demo). "Already fired" state is
-kept per billing period in history meta, so restarting the app doesn't repeat alerts.
+kept per billing period / limit window in history meta, so restarting the app doesn't repeat
+alerts. Providers don't report a stable reset time, so windows are matched with a tolerance
+(:func:`omnimonitor.timeutil.same_window`).
 """
 
 from __future__ import annotations
@@ -11,6 +13,8 @@ import shutil
 import subprocess
 import sys
 from typing import Any, Callable, Dict, List, Optional, Tuple
+
+from omnimonitor.timeutil import same_window
 
 META_KEY = "alerts_state"
 
@@ -45,12 +49,13 @@ def decide(cfg: Dict[str, Any], billing: Optional[Dict[str, Any]],
     period = billing.get("resets_at") or ""
     new = dict(state)
     out: List[Dict[str, str]] = []
-    if state.get("period") != period:
+    if "period" not in state or not same_window(state.get("period"), period):
         if state.get("period") and period and cfg.get("notify_on_reset", True) \
                 and used < float(state.get("last_used", 0)):
             out.append({"kind": "reset", "title": "Grok weekly usage reset",
                         "body": "Your weekly pool reset - %.0f%% used now." % used})
         new = {"period": period, "fired": [], "pace_fired": False}
+    new["period"] = period or new.get("period") or ""
     fired = set(float(x) for x in new.get("fired", []))
     crossed = [t for t in thresholds(cfg) if used >= t and t not in fired]
     if crossed:
@@ -78,13 +83,14 @@ def decide_providers(cfg: Dict[str, Any], ov: Dict[str, Any], state: Dict[str, A
                      ) -> Tuple[List[Dict[str, str]], Dict[str, Any]]:
     """Per-provider limit thresholds (non-Grok cards) and USD budget alerts. Pure.
 
-    State is keyed by provider/period + window reset, so each threshold fires once per
-    window and again after the window resets. Demo data never alerts."""
+    State is keyed by provider + window name and remembers that window's reset time, so each
+    threshold fires once per window and again after the window resets. A window missing from
+    one check keeps its state. Demo data never alerts."""
     if not cfg.get("notifications", True) or not ov or ov.get("is_demo"):
         return [], state
     from omnimonitor.overview import provider_thresholds
 
-    new: Dict[str, Any] = {}
+    new: Dict[str, Any] = dict(state)
     out: List[Dict[str, str]] = []
     for c in ov.get("cards") or []:
         if c.get("id") == "grok" or c.get("demo"):
@@ -94,8 +100,12 @@ def decide_providers(cfg: Dict[str, Any], ov: Dict[str, Any], state: Dict[str, A
             used = w.get("used_percent")
             if used is None or w.get("stale"):
                 continue
-            key = "%s:%s:%s" % (c["id"], w.get("name"), w.get("resets_at") or "")
-            fired = set(float(x) for x in state.get(key, []))
+            key = "%s:%s" % (c["id"], w.get("name"))
+            reset = w.get("resets_at")
+            entry = _window_state(new, key, reset)
+            fired = set(float(x) for x in entry.get("fired", []))
+            if not reset:  # no reset time to go by: re-arm levels usage has dropped below
+                fired = {t for t in fired if used >= t}
             crossed = [t for t in ths if used >= t and t not in fired]
             if crossed:
                 out.append({"kind": "provider", "title": "%s at %.0f%%" % (c["name"], used),
@@ -103,7 +113,7 @@ def decide_providers(cfg: Dict[str, Any], ov: Dict[str, Any], state: Dict[str, A
                                     % (c["name"], used, w.get("name") or "limit",
                                        max(crossed))})
                 fired.update(crossed)
-            new[key] = sorted(fired)
+            new[key] = {"reset": reset or entry.get("reset"), "fired": sorted(fired)}
     b = ov.get("budgets") or {}
     alert = float(b.get("alert_percent") or 80)
     for period, row in (b.get("periods") or {}).items():
@@ -112,6 +122,8 @@ def decide_providers(cfg: Dict[str, Any], ov: Dict[str, Any], state: Dict[str, A
             continue
         key = "budget:%s:%s" % (period, row.get("starts_at"))
         fired = set(float(x) for x in state.get(key, []))
+        for old in [k for k in new if k.startswith("budget:%s:" % period) and k != key]:
+            del new[old]
         for t in (alert, 100.0):
             if pct >= t and t not in fired:
                 fired.add(t)
@@ -125,6 +137,24 @@ def decide_providers(cfg: Dict[str, Any], ov: Dict[str, Any], state: Dict[str, A
                                         % (row["spent_usd"], row["limit_usd"], period)})
         new[key] = sorted(fired)
     return out, new
+
+
+def _window_state(state: Dict[str, Any], key: str, reset: Any) -> Dict[str, Any]:
+    """What already fired for the current window, or {} for a new one. Also takes over (and
+    removes) the 0.6.0 entries, which were keyed ``provider:window:reset`` -> fired list."""
+    entry = state.get(key)
+    for old in [k for k, v in state.items() if k.startswith(key + ":") and isinstance(v, list)]:
+        suffix = old[len(key) + 1:]
+        try:
+            old_reset = float(suffix) if suffix else None
+        except ValueError:
+            continue  # a different window whose name starts the same way
+        if entry is None and same_window(old_reset, reset):
+            entry = {"reset": old_reset, "fired": state[old]}
+        del state[old]
+    if isinstance(entry, dict) and same_window(entry.get("reset"), reset):
+        return entry
+    return {}
 
 
 def load_state(history, key: str = META_KEY) -> Dict[str, Any]:

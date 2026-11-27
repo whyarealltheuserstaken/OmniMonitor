@@ -17,7 +17,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from omnimonitor.timeutil import parse_time
+from omnimonitor.timeutil import parse_time, same_window
 
 MIN_ELAPSED_H = 1.0
 RECENT_WINDOW_H = 6.0
@@ -80,8 +80,7 @@ def recent_pace(snaps: List[Dict[str, Any]], used: float, now: datetime,
     pts = [(float(s["ts"]), float(s.get("raw_used_percent", s.get("used_percent")) or 0))
            for s in snaps
            if s.get("ts") and s.get("used_percent") is not None and lo <= float(s["ts"])
-           <= now.timestamp() and (s.get("period_end") is None or
-                                   parse_time(s.get("period_end")) == reset)]
+           <= now.timestamp() and same_window(s.get("period_end"), reset)]
     if len(pts) < 2:
         return _na("needs at least 2 saved readings from the last %d h of this week"
                    % RECENT_WINDOW_H)
