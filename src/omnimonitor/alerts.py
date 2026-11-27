@@ -12,9 +12,10 @@ import json
 import shutil
 import subprocess
 import sys
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from omnimonitor.timeutil import same_window
+from omnimonitor.timeutil import fmt_local, same_window
 
 META_KEY = "alerts_state"
 
@@ -77,6 +78,8 @@ def decide(cfg: Dict[str, Any], billing: Optional[Dict[str, Any]],
 
 
 PROVIDER_META_KEY = "alerts_state_providers"
+#: Without a reset time, usage must fall this far under a level before it can alert again.
+REARM_MARGIN = 5.0
 
 
 def decide_providers(cfg: Dict[str, Any], ov: Dict[str, Any], state: Dict[str, Any]
@@ -88,7 +91,7 @@ def decide_providers(cfg: Dict[str, Any], ov: Dict[str, Any], state: Dict[str, A
     one check keeps its state. Demo data never alerts."""
     if not cfg.get("notifications", True) or not ov or ov.get("is_demo"):
         return [], state
-    from omnimonitor.overview import provider_thresholds
+    from omnimonitor.overview import provider_thresholds, run_out_warning
 
     new: Dict[str, Any] = dict(state)
     out: List[Dict[str, str]] = []
@@ -102,10 +105,26 @@ def decide_providers(cfg: Dict[str, Any], ov: Dict[str, Any], state: Dict[str, A
                 continue
             key = "%s:%s" % (c["id"], w.get("name"))
             reset = w.get("resets_at")
+            before = new.get(key)
+            alerted = set(before.get("fired") or []) if isinstance(before, dict) else set()
             entry = _window_state(new, key, reset)
             fired = set(float(x) for x in entry.get("fired", []))
-            if not reset:  # no reset time to go by: re-arm levels usage has dropped below
-                fired = {t for t in fired if used >= t}
+            if not reset:  # no reset time to go by: re-arm levels usage has clearly left
+                fired = {t for t in fired if used >= t - REARM_MARGIN}
+            window = w.get("name") or "usage"
+            if alerted and not fired and used < min(alerted) \
+                    and cfg.get("notify_on_reset", True):
+                out.append({"kind": "reset", "title": "%s: %s limit reset" % (c["name"], window),
+                            "body": "%s's %s limit has reset: %.0f%% used now."
+                                    % (c["name"], window, used)})
+            warned = bool(entry.get("pace_fired"))
+            runs_out = run_out_warning(w)
+            if runs_out and not warned and cfg.get("notify_on_pace"):
+                when = fmt_local(datetime.fromtimestamp(runs_out, timezone.utc))
+                out.append({"kind": "pace", "title": "%s may run out early" % c["name"],
+                            "body": "ESTIMATE: at the pace so far, the %s runs out around %s, "
+                                    "before it resets." % (window, when)})
+                warned = True
             crossed = [t for t in ths if used >= t and t not in fired]
             if crossed:
                 out.append({"kind": "provider", "title": "%s at %.0f%%" % (c["name"], used),
@@ -113,7 +132,8 @@ def decide_providers(cfg: Dict[str, Any], ov: Dict[str, Any], state: Dict[str, A
                                     % (c["name"], used, w.get("name") or "limit",
                                        max(crossed))})
                 fired.update(crossed)
-            new[key] = {"reset": reset or entry.get("reset"), "fired": sorted(fired)}
+            new[key] = {"reset": reset or entry.get("reset"), "fired": sorted(fired),
+                        "pace_fired": warned}
     b = ov.get("budgets") or {}
     alert = float(b.get("alert_percent") or 80)
     for period, row in (b.get("periods") or {}).items():

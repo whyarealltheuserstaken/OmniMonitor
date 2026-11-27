@@ -481,9 +481,16 @@ to defaults and shows the error in the menu. See [`config.example.json`](config.
 | `claude_home` / `codex_home` | `""` | override the log dirs; empty = `$CLAUDE_CONFIG_DIR` or `~/.claude` (+ `~/.config/claude`), `$CODEX_HOME` or `~/.codex` |
 | `prices` | `{}` | **your** USD prices per 1M tokens for cost estimates, e.g. `{"grok-code-*": {"input": 0.2, "cached_input": 0.02, "output": 1.5}}`. Keys are model names or globs; fields `input`, `cached_input`, `cache_write`, `output`. Nothing is bundled |
 | `notifications` | `true` | desktop notifications on/off |
-| `notify_thresholds` | `[80, 95]` | alert when this % of the weekly pool is **used** (once per period) |
-| `notify_on_reset` | `true` | alert when a new billing week starts |
-| `notify_on_pace` | `false` | alert when the average pace projects running out before reset |
+| `notify_thresholds` | `[80, 95]` | alert when this % of a limit is **used** (once per limit window) |
+| `notify_on_reset` | `true` | alert when the Grok week starts over, or when another limit you were warned about resets |
+| `notify_on_pace` | `false` | alert when a limit is on pace to run out before it resets (an estimate; only for limits whose length is known) |
+
+**Alerts on your phone or in chat (optional, not yet tried against a real service):** run
+`omnimonitor secrets set OMNIMONITOR_ALERT_WEBHOOK` and paste an `https://` address: an ntfy
+topic (`ntfy+https://…` for your own ntfy server), a Discord or Slack webhook, or any endpoint
+that accepts JSON `{"app", "title", "body"}`. Then `omnimonitor notify-test`. The address is
+stored like an API key, and only each alert's title and text are sent (budget alerts include
+the dollar amounts).
 | `icon_style` | `"ring"` | `ring`, `pie`, `bar` or `number` |
 | `icon_value` | `"remaining"` | number on the icon: `remaining` or `used` (color always follows what's left) |
 | `theme` | `"dark"` | `dark`, `light` or `auto` (follows the OS) |
@@ -502,8 +509,9 @@ to defaults and shows the error in the menu. See [`config.example.json`](config.
 | `xai_team_id` / `cursor_email` | `""` | xAI team id for the balance call; your row in the Cursor team spend list |
 
 **API keys never go in `config.json`.** Set them as environment variables or with
-`omnimonitor secrets set NAME` (stored in `secrets.json` next to the config, chmod 600; a
-secrets file readable by other users is ignored). Variables: `ANTHROPIC_ADMIN_KEY`,
+`omnimonitor secrets set NAME` (stored in the encrypted vault; without a system keychain, in
+an owner-only `secrets.json` next to the config, which is ignored if other users can read it).
+Variables: `ANTHROPIC_ADMIN_KEY`,
 `OPENAI_ADMIN_KEY`, `XAI_MANAGEMENT_KEY` (+ `XAI_TEAM_ID`), `DEEPSEEK_API_KEY`,
 `MOONSHOT_API_KEY`, `GITHUB_COPILOT_TOKEN` (or `GITHUB_TOKEN`), `CURSOR_ADMIN_KEY`,
 `OPENROUTER_API_KEY`, `OLLAMA_API_KEY`, `VENICE_ADMIN_KEY`, `DEEPINFRA_API_KEY`,

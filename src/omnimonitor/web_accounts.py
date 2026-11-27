@@ -142,7 +142,10 @@ def fetch_claude_plan(cfg, http: HttpFn, now: float) -> Reading:
             continue
         r.metric(key, label + " used", used, "%", "used_percent", in_limits=True)
         resets = _reset_ts(block)
-        r.limits.append({"name": label, "used_percent": used, "resets_at": resets})
+        row = {"name": label, "used_percent": used, "resets_at": resets}
+        if key.startswith(("five_hour", "seven_day")):  # the names say how long they are
+            row["window_seconds"] = 18000 if key == "five_hour" else 7 * 86400
+        r.limits.append(row)
         if resets:
             r.metric(key + "_resets", label + " resets", resets, "unix", "resets_at")
         if best_used is None or used > best_used:
@@ -223,7 +226,10 @@ def parse_plan_windows(data: Dict[str, Any], r: Reading) -> bool:
         resets = _reset_ts(block)
         secs = block.get("limit_window_seconds")
         name = _WINDOW_NAMES.get(secs if isinstance(secs, int) else -1, label)
-        r.limits.append({"name": name, "used_percent": used, "resets_at": resets})
+        row = {"name": name, "used_percent": used, "resets_at": resets}
+        if isinstance(secs, int) and not isinstance(secs, bool) and secs > 0:
+            row["window_seconds"] = secs
+        r.limits.append(row)
         if best is None or used > best:
             best = used
             r.limit_percent = used
