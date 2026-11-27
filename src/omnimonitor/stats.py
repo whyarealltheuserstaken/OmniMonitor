@@ -220,7 +220,7 @@ def compute(events: List[Dict[str, Any]], turns: List[Dict[str, Any]],
         if start_ts is None:
             end_ts = now.timestamp() + 1
             start_ts = end_ts - 7 * 86400
-            label = "last 7 days (billing week unknown)"
+            label = "last 7 days (billing week unknown)" if billing else "last 7 days"
         wk = tokens_between(events, start_ts, end_ts)
         grok_wk = tokens_between([e for e in events if is_grok(e)], start_ts, end_ts)
         out["week_tokens"] = {"value": wk, "window": label, "grok_value": grok_wk}
@@ -266,7 +266,8 @@ def compute(events: List[Dict[str, Any]], turns: List[Dict[str, Any]],
                       for m, v in sorted(by_model.items(), key=lambda kv: -kv[1])[:5]]
         sessions = {e.get("session_id") for e in events}
         insights.append({"label": "Sessions recorded", "value": "%d" % len(sessions)})
-        insights.append({"label": "Turns recorded", "value": "%d" % len(turns or [])})
+        if turns:  # only some tools log turns; "0" would look like a measurement
+            insights.append({"label": "Turns recorded", "value": "%d" % len(turns)})
         inp = sum(int(e.get("input_tokens") or 0) for e in events)
         cr = sum(int(e.get("cache_read_tokens") or 0) for e in events)
         if inp:

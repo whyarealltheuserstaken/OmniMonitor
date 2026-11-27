@@ -101,7 +101,9 @@
       nm.appendChild(a);
     }
     h.appendChild(nm);
-    h.appendChild(el("span", "sub", (c.demo ? "DEMO · " : "") + ({ local_logs: "local logs", api: "account API", billing: "Grok billing" }[c.kind] || c.kind)));
+    var kinds = { local_logs: "local logs", api: "account API", billing: "Grok billing",
+      cli_login: "CLI login", web_session: "website sign-in" };
+    h.appendChild(el("span", "sub", (c.demo ? "DEMO · " : "") + (kinds[c.kind] || c.kind)));
     box.appendChild(h);
     if (c.error) box.appendChild(el("div", "sub est", "⚠ " + c.error));
     (c.limits || []).forEach(function (w) { box.appendChild(limitRow(w)); });
@@ -118,7 +120,10 @@
       });
       box.appendChild(g);
     }
-    (c.metrics || []).forEach(function (m) {
+    (c.metrics || []).filter(function (m) {
+      // a plan's "% used" figures are already the limit bars above
+      return !(m.unit === "%" && (c.limits || []).length);
+    }).forEach(function (m) {
       var d = el("div", "brow"), t = el("div", "t");
       t.appendChild(el("span", "n", m.label));
       var shown = m.kind === "resets_at" || m.unit === "unix" ? fmtTs(m.value)
