@@ -134,14 +134,26 @@
   <div class="top">
     <div>
       <h1>Setup <span class="h1sub">· OmniMonitor</span></h1>
-      <div class="sub">Command-line tools needed by the providers you enabled. Nothing installs
-        until you click, review the exact command and SHA256, and confirm.</div>
+      <div class="sub">Connect your accounts and tools. Nothing is turned on until you click,
+        and everything stays on this computer.</div>
     </div>
   </div>
+  <div class="banner demo" id="demo-banner" hidden>DEMO MODE - the app is showing fake sample
+    numbers. Turn something on below, or <button type="button" id="leave-demo">use real data
+    now</button></div>
   <div class="banner" id="root-banner" hidden>OmniMonitor is running as root. Installers are
     refused; restart OmniMonitor as your normal user.</div>
-  <div class="card">
-    <h2>Dependencies <span class="sub" id="summary"></span></h2>
+  <div class="card" style="margin-top:16px">
+    <h2>Your accounts and tools <span class="sub" id="connected-summary"></span></h2>
+    <div id="suites">Looking at this computer…</div>
+    <p class="sub">"Not live-verified" means the reader is tested against recorded or documented
+      responses only. CLI logins are read-only. Website sign-in opens the provider's own page;
+      the session is stored encrypted, with its key in your system keychain. API keys are never
+      typed into this page.</p>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h2>Command-line tools <span class="sub" id="summary"></span></h2>
+    <p class="sub">Tools your switched-on providers need. Nothing installs until you review the exact command and SHA256 and confirm.</p>
     <div id="deps">Loading…</div>
     <p class="sub">Installers are the vendors' own official scripts, downloaded over HTTPS from
       their documented address to a private temp file, run as your user (never sudo), and
