@@ -1,7 +1,8 @@
 """Controller and tray bugs: config reload race, missing alert history, silent first run."""
 from types import SimpleNamespace
 
-from omnimonitor import alerts, config as config_mod
+from omnimonitor import alerts
+from omnimonitor import config as config_mod
 from omnimonitor.app import Controller
 
 
