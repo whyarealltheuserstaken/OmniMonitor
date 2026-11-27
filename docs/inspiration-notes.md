@@ -112,3 +112,39 @@ Built differently on purpose:
 * **No bundled prices.** Costs come from what the tool recorded, or your own `prices`.
 * **Account APIs only with a key you create**, on a fixed host allow-list, rate-limited.
 * **The matrix is generated from code**, so the docs cannot drift from what ships.
+
+# Comparison notes: omni-monitor.com (read 2026-11-27)
+
+A separate, commercial product with almost the same name ("Omni Monitor", version 0.2.1 on
+its site, one-time paid licence). Read from its home, features, install, privacy and terms
+pages. These are the site's claims; the product was not run. No code, text or assets were
+taken. The README's usual disclaimer applies: OmniMonitor is not affiliated with it.
+
+## What it offers, and where OmniMonitor stands
+
+| Their feature | Here |
+|---|---|
+| Local proxy that records each API call (tokens, cost, latency, status) | no: we only read logs, official APIs and your own sessions |
+| Hard spend / rate caps that refuse calls, kill switch, model re-routing | no (needs the proxy) |
+| Browser extension that estimates ChatGPT / Claude / Gemini chat usage | no |
+| Claude Code and Codex 5-hour and weekly windows with countdowns | yes |
+| Burn rate, "days left at this pace" | yes: pace and run-out estimates (added for plan limits) |
+| Warning thresholds | yes, plus reset notices (added) |
+| Alerts to ntfy, Discord, Slack, webhook and others | ntfy, Discord, Slack, webhook (added); no email, SMS, Telegram |
+| CSV / JSON export | yes |
+| Per-project spend (request header) | per project from local logs |
+| Always-on-top mini strip; other overlay styles and ring gauges | mini view with keep-on-top; no overlays |
+| Manual timers for things it cannot read | no |
+| Model catalogue with prices and context sizes | no: you supply your own price table |
+| Assistant chat about the dashboard; agent handoff helpers | no |
+
+## Not adopted, and why
+
+* **Proxy, caps, kill switch:** all your API traffic and keys would pass through this app.
+  That changes what it is and what it must be trusted with, so it is the owner's decision.
+* **Browser extension:** a second product to build, review and publish.
+* **Assistant, handoffs:** outside "monitor your usage".
+
+## Possible next
+
+Manual timers (small), Telegram and email alerts, a bundled price list (needs upkeep).
