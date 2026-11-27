@@ -255,3 +255,25 @@ def test_cli_setup_with_closed_stdin_changes_nothing(home, monkeypatch):
     monkeypatch.setattr(builtins, "input", eof)
     assert cli.main(["--config", str(home), "setup"]) == 1
     assert config_mod.load_config(home)["source"] == "demo"
+
+
+def test_dashboard_has_no_grok_only_leftovers_without_grok():
+    from datetime import datetime, timezone
+    from importlib import resources
+
+    from omnimonitor import stats
+
+    def read(n):
+        return resources.files("omnimonitor").joinpath("static", n).read_text("utf-8")
+    providers = read("providers.js")
+    assert 'cli_login: "CLI login"' in providers and 'web_session: "website sign-in"' in providers
+    assert 'm.unit === "%"' in providers  # not repeated under the same card's limit bars
+    assert 'id="forecast-pace"' in read("stats.html")
+    assert '"forecast-pace"' in read("stats.js")
+    assert 'rel="icon"' in read("setup.html")
+    now = datetime(2026, 1, 8, tzinfo=timezone.utc)
+    ev = [{"ts": now.timestamp() - 60, "input_tokens": 5, "output_tokens": 1,
+           "source": "claude_code", "session_id": "a"}]
+    out = stats.compute(ev, [], None, {}, now, provider="local_logs")
+    assert out["week_tokens"]["window"] == "last 7 days"
+    assert "Turns recorded" not in [i["label"] for i in out["insights"]]
