@@ -44,6 +44,12 @@ def fmt_tokens(n) -> str:
     return str(int(n))
 
 
+def submenu_empty(ov) -> dict:
+    """Which tray submenus would have no entry (some backends draw those as blank)."""
+    return {"providers": not overview_mod.menu_lines(ov or {}),
+            "usage": not (ov or {}).get("suites")}
+
+
 def on_main_thread(fn) -> None:
     """Run fn on the GUI thread. AppKit (NSStatusItem / NSMenu / NSView) must only be touched
     from the main thread; doing it from a worker thread trips an AppKit assertion that kills
@@ -105,6 +111,8 @@ class TrayApp:
         ov, u, err = self._ov(), self.ctrl.usage, self.ctrl.error
         value, label = overview_mod.tray_value(ov, None)
         if value is None:
+            if ov.get("error"):  # the overview itself failed: don't call it "no readings"
+                return "OmniMonitor: %s" % ov["error"]
             if not ov:
                 return "OmniMonitor: %s" % (err or "loading…")
             return "OmniMonitor: no limit readings yet" + (" (%s)" % err if err else "")
@@ -177,7 +185,10 @@ class TrayApp:
             Item(lambda _: self._error_line(), None, enabled=False,
                  visible=lambda _: bool(self.ctrl.error)),
             Menu.SEPARATOR,
-            Item("Providers", Menu(*[self._provider_item(i) for i in range(16)])),
+            Item("Providers", Menu(
+                *[self._provider_item(i) for i in range(16)],
+                Item("No provider data yet - open Setup", None, enabled=False,
+                     visible=lambda _: submenu_empty(self._ov())["providers"]))),
             Menu.SEPARATOR,
             Item("Refresh Now", self._on_refresh),
             Item("Open OmniMonitor", self._on_stats, default=True,
@@ -194,8 +205,12 @@ class TrayApp:
                 Item("Tool / model / project CSV", self._export("csv", "breakdown")),
                 Item("Providers CSV", self._export("csv", "providers")),
                 Item("Everything (JSON)", self._export("json", "daily")))),
-            Item("Usage pages", Menu(*[self._usage_item(x) for x in suites_mod.SUITES
-                                       if x.usage_url])),
+            Item("Usage pages", Menu(
+                *[self._usage_item(x) for x in suites_mod.SUITES if x.usage_url],
+                Item("Nothing connected yet - open Setup", None, enabled=False,
+                     visible=lambda _: submenu_empty(self._ov())["usage"]))),
+            Item("Setup…", self._page("setup"),
+                 enabled=lambda _: self.server is not None),
             Item("Edit Config", self._on_config),
             Menu.SEPARATOR,
             Item("Quit", self._on_quit),

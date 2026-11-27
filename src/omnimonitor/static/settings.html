@@ -164,6 +164,12 @@
     <div class="field"><label class="k" for="prices">Prices for cost estimates<div class="h">USD per 1M tokens. Keys are model names or globs like <code>grok-code-*</code>. Fields: input, cached_input, cache_write, output. Nothing is bundled - unpriced models show "no estimate".</div></label>
       <div><textarea id="prices" spellcheck="false" placeholder='{"grok-code-fast*": {"input": 0.2, "cached_input": 0.02, "output": 1.5}}'></textarea></div></div>
 
+    <h2 class="section" id="layout-title">Layout</h2>
+    <div class="field"><span class="k">What shows where<div class="h">Move suites and sources up or down, untick a place to hide them there, give a suite its own colour. "Tray icon" decides what can drive the icon. Account sources can have their own refresh interval (empty = the global one). Newly switched-on sources appear here after you save.</div></span>
+      <div><table class="pv" id="layout"></table></div></div>
+    <div class="field"><span class="k">Numbers shown<div class="h">Which figures each place shows.</div></span>
+      <div><table class="pv" id="layout_fields"></table></div></div>
+
     <h2 class="section">Notifications</h2>
     <div class="field"><label class="k" for="notifications">Desktop notifications<div class="h">Real data only - never in demo mode.</div></label>
       <div class="checks"><label><input type="checkbox" id="notifications"> enabled</label>
@@ -173,7 +179,7 @@
         <label><input type="checkbox" id="status_badges"> opt-in: show incident badges from official status pages (Claude, OpenAI, GitHub, Cursor, Fireworks, Vercel; one GET per page every 5 min)</label></div></div>
     <div class="field"><label class="k" for="notify_thresholds">Alert at % used<div class="h">Comma-separated, e.g. 50, 80, 95.</div></label>
       <div><input type="text" id="notify_thresholds"></div></div>
-    <div class="field"><label class="k" for="provider_thresholds">Per-provider alert %<div class="h">Optional overrides for providers with limits, e.g. <code>{"codex": [80, 95], "openrouter": [90]}</code>. Others use the list above.</div></label>
+    <div class="field"><label class="k" for="provider_thresholds">Per-source / per-suite alert %<div class="h">Optional overrides by source or suite id, e.g. <code>{"codex": [80, 95], "anthropic": [90]}</code>. A source's own list wins over its suite's. Others use the list above.</div></label>
       <div><textarea id="provider_thresholds" spellcheck="false" style="min-height:60px" placeholder='{"codex": [80, 95]}'></textarea></div></div>
 
     <div class="actions"><button class="primary" id="save" type="submit">Save</button><span class="sub" id="msg"></span></div>

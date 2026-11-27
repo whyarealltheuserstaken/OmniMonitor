@@ -38,20 +38,26 @@ def _iso_ts(v: Any) -> Optional[float]:
 
 def parts(last_billing: Optional[Dict[str, Any]], today: Optional[Dict[str, Any]],
           block: Optional[Dict[str, Any]], now: float,
-          suites: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+          suites: Optional[List[Dict[str, Any]]] = None,
+          fields: Optional[List[str]] = None) -> Dict[str, Any]:
+    """``fields`` (display.FIELDS) picks what the line shows; None = limit and reset."""
+    want = set(fields) if fields is not None else {"limit", "reset", "tokens", "cost"}
     out: Dict[str, Any] = {}
     rows = []
     for s in suites or []:
-        h = s.get("headline")
-        if not h:
-            continue
-        row = {"id": s["id"], "name": s["name"], "source": h.get("source", ""),
-               "used_percent": round(float(h["used_percent"]), 1)}
-        reset = h.get("resets_at")
-        reset = _iso_ts(reset) if isinstance(reset, str) else reset
-        if reset and reset > now:
-            row["resets_in_s"] = int(reset - now)
-        rows.append(row)
+        h, m = s.get("headline"), s.get("money") if "money" in want else None
+        row: Dict[str, Any] = {"id": s["id"], "name": s["name"]}
+        if h and "limit" in want:
+            row.update(source=h.get("source", ""),
+                       used_percent=round(float(h["used_percent"]), 1))
+            reset = h.get("resets_at")
+            reset = _iso_ts(reset) if isinstance(reset, str) else reset
+            if "reset" in want and reset and reset > now:
+                row["resets_in_s"] = int(reset - now)
+        if m:
+            row["money"] = m
+        if len(row) > 2:
+            rows.append(row)
     if rows:
         out["suites"] = rows
     if last_billing and last_billing.get("used_percent") is not None:
@@ -64,17 +70,24 @@ def parts(last_billing: Optional[Dict[str, Any]], today: Optional[Dict[str, Any]
     if block:
         out["block"] = {"tokens": block.get("tokens", 0), "cost_usd": block.get("cost_usd"),
                         "remaining_s": int(block.get("remaining_s") or 0), "estimate": True}
-    if today:
-        out["today"] = {"tokens": today.get("tokens", 0), "usd": today.get("usd")}
+    if today and "tokens" in want:
+        out["today"] = {"tokens": today.get("tokens", 0),
+                        "usd": today.get("usd") if "cost" in want else None}
     return out
 
 
 def render(p: Dict[str, Any], now: float) -> str:
     bits = []
     for s in p.get("suites") or []:
-        line = "%s %.0f%% used" % (s["name"], s["used_percent"])
+        line = s["name"]
+        if s.get("used_percent") is not None:
+            line += " %.0f%% used" % s["used_percent"]
         if s.get("resets_in_s") is not None:
             line += ", resets in %s" % fmt_span(s["resets_in_s"])
+        if s.get("money"):
+            from omnimonitor.overview import money
+            line += " %s %s" % (s["money"]["label"],
+                                money(s["money"]["value"], s["money"].get("unit")))
         bits.append(line)
     g = p.get("grok")
     if g and not any(s.get("source") == "grok" for s in p.get("suites") or []):

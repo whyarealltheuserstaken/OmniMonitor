@@ -210,8 +210,10 @@ def build(events: List[Dict[str, Any]], cfg: Dict[str, Any], now: datetime, *,
            "budgets": budgets(events, cfg, now, tz),
            "catalog_counts": catalog.counts(), "is_demo": is_demo,
            "demo_prices": demo_prices}
-    out["suites"] = suite_view(cards, nowts)
-    out["primary"] = primary(cfg, out["suites"], out["budgets"], nowts)
+    from omnimonitor import display
+    out["suites"] = display.ordered_suites(cfg, suite_view(cards, nowts))
+    out["views"] = display.views(out, cfg, nowts)
+    out["primary"] = primary(cfg, out["views"]["tray"]["suites"], out["budgets"], nowts)
     out["thresholds"] = {c["id"]: provider_thresholds(cfg, c["id"]) for c in cards}
     return out
 
@@ -245,9 +247,11 @@ def suite_view(cards: List[Dict[str, Any]], now: Optional[float] = None
                 if now is not None and reset is not None and reset < now:
                     continue  # the window already reset: this % is no longer true
                 if best is None or w["used_percent"] > best["used_percent"]:
+                    wname = w.get("name") or "limit"
                     best = {"used_percent": float(w["used_percent"]),
                             "resets_at": w.get("resets_at"),
-                            "label": "%s %s" % (c["name"], w.get("name") or "limit"),
+                            "label": c["name"] if c["name"].lower().endswith(wname.lower())
+                            else "%s %s" % (c["name"], wname),
                             "source": c["id"]}
         today = [((c.get("ranges") or {}).get("today") or {}) for c in cs]
         usd = [t["usd"] for t in today if t.get("usd") is not None]
@@ -336,7 +340,11 @@ def primary(cfg: Dict[str, Any], suite_list: List[Dict[str, Any]],
 
 
 def provider_thresholds(cfg: Dict[str, Any], pid: str) -> List[float]:
-    raw = (cfg.get("provider_thresholds") or {}).get(pid)
+    """Alert levels for a source: its own, else its suite's, else the global list."""
+    per = cfg.get("provider_thresholds") or {}
+    raw = per.get(pid)
+    if raw is None:
+        raw = per.get(suites.suite_of(pid))
     if raw is None:
         raw = cfg.get("notify_thresholds") or []
     out = []
@@ -381,23 +389,33 @@ def tray_value(ov: Dict[str, Any], billing: Optional[Dict[str, Any]]
     return None, p.get("label") or "no data"
 
 
+def _menu_view(ov: Optional[Dict[str, Any]]):
+    """(the tray menu's view or None, the numbers it should show)."""
+    from omnimonitor.display import FIELDS
+    shown = ((ov or {}).get("views") or {}).get("menu")
+    return shown, set(shown["fields"] if shown else FIELDS)
+
+
 def menu_lines(ov: Dict[str, Any], limit: int = 8) -> List[str]:
     """Short per-provider lines for the tray menu."""
     out = []
-    for c in (ov or {}).get("cards") or []:
+    shown, want = _menu_view(ov)
+    cards = {c["id"]: c for c in (ov or {}).get("cards") or []}
+    ids = list(cards) if shown is None else shown["card_ids"]
+    for c in (cards[i] for i in ids if i in cards):
         if c["id"] == "grok":
             continue
         bits = []
         for w in (c.get("limits") or [])[:2]:
-            if w.get("used_percent") is not None and not w.get("stale"):
+            if "limit" in want and w.get("used_percent") is not None and not w.get("stale"):
                 bits.append("%.0f%% %s" % (w["used_percent"], w.get("name") or "used"))
         t = (c.get("ranges") or {}).get("today") or {}
-        if t.get("tokens"):
+        if "tokens" in want and t.get("tokens"):
             bits.append("today %s tok" % _short(t["tokens"]))
         if not bits:
             m = next((m for m in c.get("metrics") or [] if m.get("kind") in ("balance", "spend")),
                      None)
-            if m:
+            if m and "money" in want:
                 bits.append("%s %s" % (m["label"], money(m["value"], m.get("unit"))))
             elif c.get("error"):
                 bits.append("⚠ " + c["error"][:40])
@@ -428,17 +446,23 @@ def suite_menu_lines(ov: Dict[str, Any], now: Optional[float] = None,
     import time
     now = time.time() if now is None else now
     out = []
-    for s in (ov or {}).get("suites") or []:
+    shown, want = _menu_view(ov)
+    rows = (ov or {}).get("suites") if shown is None else shown["suites"]
+    for s in rows or []:
         bits = []
         h = s.get("headline")
         if h:
-            bits.append("%.0f%% used" % h["used_percent"])
-            if h.get("resets_at"):
+            if "limit" in want:
+                bits.append("%.0f%% used" % h["used_percent"])
+            if "reset" in want and until(h.get("resets_at"), now):
                 bits.append("resets " + until(h["resets_at"], now))
-        if s.get("today_tokens"):
+        if "tokens" in want and s.get("today_tokens"):
             bits.append("today %s tok" % _short(s["today_tokens"]))
-            if s.get("today_usd") is not None:
-                bits.append("$%.2f" % s["today_usd"])
+        if "cost" in want and s.get("today_tokens") and s.get("today_usd") is not None:
+            bits.append("$%.2f" % s["today_usd"])
+        m = s.get("money")
+        if "money" in want and m:
+            bits.append("%s %s" % (m["label"], money(m["value"], m.get("unit"))))
         if not bits:
             continue
         out.append(("%s%s: %s" % ("DEMO " if s.get("demo") else "", s["name"],

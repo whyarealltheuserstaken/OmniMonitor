@@ -91,6 +91,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # Per-provider "% used" alert thresholds, e.g. {"codex": [75, 90]}. Missing ->
     # notify_thresholds.
     "provider_thresholds": {},
+    # What shows where (see display.py): order, per-surface hidden ids and numbers.
+    "display": {},
+    "suite_colors": {},          # {"openai": "#10a37f"}
+    "source_poll_seconds": {},   # per account source override of provider_poll_seconds
     # USD caps on the ≈ cost of local tool usage (recorded cost, else your price table).
     # 0 = off. Alerts at budget_alert_percent of each cap and at 100 %.
     "budgets": {"daily": 0, "weekly": 0, "monthly": 0},
