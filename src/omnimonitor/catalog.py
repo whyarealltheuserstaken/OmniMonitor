@@ -80,7 +80,9 @@ CATALOG: Tuple[ProviderInfo, ...] = (
              "block + burn rate (estimate, `omnimonitor blocks`)",
        source="~/.claude/projects/**/*.jsonl + ~/.claude/transcripts/**/*.jsonl "
               "($CLAUDE_CONFIG_DIR honoured)",
-       reset="n/a (history)", confidence="high (fixtures; widely documented format)",
+       reset="n/a (history)",
+       confidence="high (widely documented format; fixtures, and read from real logs on "
+                  "2026-11-27)",
        docs=("docs/token-adapters.md",)),
     _P("anthropic_api", "Claude API (organization cost)", "Claude", "api", SUPPORTED,
        shows="month-to-date USD cost (UTC month)",
@@ -108,8 +110,8 @@ CATALOG: Tuple[ProviderInfo, ...] = (
             "refreshes or writes that login",
        reset="per window (from the API)",
        confidence="experimental (undocumented endpoint, shape from community clients). Read "
-                  "successfully with a real Claude Code login on 2026-11-25; the numbers have "
-                  "not been compared with claude.ai's usage page yet",
+                  "successfully with a real Claude Code login on 2026-11-25 and 2026-11-27; the "
+                  "numbers have not been compared with claude.ai's usage page yet",
        docs=("https://docs.anthropic.com/en/docs/claude-code/setup",),
        has_limit=True),
     # ---------------------------------------------------------- OpenAI
@@ -154,8 +156,8 @@ CATALOG: Tuple[ProviderInfo, ...] = (
             "written by OmniMonitor",
        reset="per window (from the API)",
        confidence="experimental (undocumented endpoint, shape from CodexBar docs). Read "
-                  "successfully with a real Codex login on 2026-11-25; the numbers have not "
-                  "been compared with the ChatGPT usage page yet",
+                  "successfully with a real Codex login on 2026-11-25 and 2026-11-27; the "
+                  "numbers have not been compared with the ChatGPT usage page yet",
        docs=("https://github.com/steipete/CodexBar/blob/main/docs/codex.md",),
        has_limit=True),
     # ---------------------------------------------------------- Google
@@ -504,8 +506,13 @@ def counts() -> Dict[str, int]:
     return out
 
 #: Sources checked against real files or a real account (not only recorded fixtures).
-LIVE_VERIFIED = frozenset({"grok_sessions", "claude_code", "codex",
-                           "claude_cli_plan", "codex_cli_plan"})  # last two: read live 2026-11-25
+#: ``codex`` (local logs) is not here: its reader has only met fixtures.
+LIVE_VERIFIED = frozenset({"grok_sessions", "claude_code",
+                           "claude_cli_plan", "codex_cli_plan"})  # last three: 2026-11-27
+
+
+def verified_label(pid: str) -> str:
+    return {"live": "live-verified", "fixtures": "fixture-only"}.get(verified(pid), "-")
 
 
 def verified(pid: str) -> str:

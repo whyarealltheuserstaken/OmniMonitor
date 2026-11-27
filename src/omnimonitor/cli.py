@@ -267,7 +267,7 @@ def cmd_verify(args) -> int:
         print(json.dumps(res, indent=2))
     else:
         if not res:
-            print("No account or sign-in sources are enabled. Enable one: omnimonitor providers enable <id>")
+            print("No sources are switched on. Run `omnimonitor setup`.")
         for r in res:
             print("%s %-18s %s" % ("✔" if r["ok"] else "✘", r["pid"], r["error"] or "read OK"))
         print("Scrubbed responses: %s" % verify.default_dir())
@@ -325,6 +325,7 @@ def cmd_providers(args) -> int:
     for p in catalog.CATALOG:
         r = {"id": p.id, "name": p.name, "family": p.family, "kind": p.kind,
              "status": p.status, "shows": p.shows, "docs": list(p.docs), "reason": p.reason,
+             "verified": catalog.verified(p.id),
              "enabled": (p.id in enabled) if p.id in catalog.SWITCHABLE else None}
         if p.id in found:
             r["found"], r["paths"] = found[p.id]["found"], found[p.id]["paths"]
@@ -355,8 +356,9 @@ def cmd_providers(args) -> int:
             on = "-" if r["enabled"] is None else ("ON " if r["enabled"] else "off")
             extra = ("found" if r.get("found") else "not found") if "found" in r else \
                 ("key: %s" % r["key"] if "key" in r else r.get("login", ""))
-            print("  %-24s %-3s %-9s %-10s %s" % (r["name"][:24], on, _status_word(r["status"]),
-                                                  extra, r["shows"][:60]))
+            print("  %-24s %-3s %-9s %-13s %-10s %s" % (
+                r["name"][:24], on, _status_word(r["status"]), catalog.verified_label(r["id"]),
+                extra, r["shows"][:60]))
     print("\nEnable one:   omnimonitor providers enable <id>   (ids: --json, or docs/providers.md)")
     from omnimonitor import suites
     print("Tray follows: omnimonitor tray <%s>" % "|".join(suites.TRAY_CHOICES))

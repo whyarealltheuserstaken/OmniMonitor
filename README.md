@@ -1,25 +1,33 @@
 # OmniMonitor
 
-**Local-first tray app that monitors AI usage, limits and spend across Grok, Claude,
-ChatGPT/Codex, Gemini, DeepSeek, Qwen, Kimi, Cursor, Copilot and more. No cookies, no
-scraping.**
+**Local-first tray app that monitors AI usage, limits and spend across Claude,
+ChatGPT/Codex, Gemini, Grok, Cursor, DeepSeek, Qwen, Kimi, Copilot and more.**
 
-OmniMonitor reads two kinds of sources, both **opt-in**:
+Sources are grouped into **suites** (Anthropic, OpenAI, Google, Grok & Cursor, DeepSeek,
+Qwen, Kimi, ...). No suite is special, you don't need any particular account, and every
+source is **opt-in**:
 
-* **Local logs** written by the AI tools on your own computer (read-only): Grok CLI,
-  Claude Code, Codex, Gemini CLI, Qwen Code, Kimi CLI / Kimi Code / Kimi Work, opencode and
-  the GitHub Copilot CLI.
-* **Official account APIs** with your own key: Anthropic Admin, OpenAI, xAI, DeepSeek,
-  Moonshot (Kimi), GitHub Copilot, Cursor teams, OpenRouter and Ollama Cloud, plus the Grok
-  weekly usage pool.
+* **CLI logins you already have** (read-only, nothing to sign in to): plan limits for Claude
+  (Claude Code), ChatGPT (Codex) and Gemini CLI, and the Grok weekly pool (Grok CLI).
+* **Website sign-in** on the provider's own page: Claude plan, ChatGPT web and Cursor. Off
+  until you click it. The session is stored encrypted, with its key in your system keychain
+  ([docs/cookies/](docs/cookies/)).
+* **Account APIs** with your own key: Anthropic Admin, OpenAI, xAI, DeepSeek, Moonshot
+  (Kimi), GitHub Copilot, Cursor teams, OpenRouter, Ollama Cloud and other gateways.
+* **Local logs** written by AI tools on your computer (read-only): Claude Code, Codex,
+  Gemini CLI, Grok CLI, Qwen Code, Kimi, opencode, the Copilot CLI and more.
 
-It shows remaining limits, tokens by tool / model / project, estimated cost from **your own**
-price table, weekly pace, threshold alerts and CSV/JSON export on a private page served only
-to your own computer. API keys never go through the web UI. **Web-session** providers
-(Claude plan, ChatGPT web, Cursor individual) are **off by default**; when you enable one
-you choose in-app sign-in or a browser cookie import — cookies stay local and are never
-logged or exported ([docs/cookies/](docs/cookies/)). Everything else shows "not available"
-instead of guessing. The full matrix is in [docs/providers.md](docs/providers.md).
+It shows remaining limits, tokens by tool / model / project, cost estimates from **your own**
+price table, alerts and CSV/JSON export on a private page served only to your own computer.
+You choose what appears on the tray icon, tray menu, dashboard, mini view and status line.
+API keys are never typed into the web page. A number a source didn't return shows as "not
+available", never as a guess.
+
+**Not everything has been tested on real accounts.** Each source is marked *live-verified* or
+*fixture-only* in [docs/providers.md](docs/providers.md), in `omnimonitor providers` and on
+the Setup page. As of 0.6.0-beta, live-verified: Claude Code logs, Grok CLI session logs, and
+the Claude and ChatGPT plan limits read through their CLI logins. The full matrix is in
+[docs/providers.md](docs/providers.md).
 
 Runs on **macOS** (Apple Silicon and Intel), **Windows 10/11** and **Linux** (GNOME/KDE). It
 is the standalone successor to the old SwiftBar plugin in [`legacy/`](legacy/), so SwiftBar
@@ -60,15 +68,14 @@ AI tools. OmniMonitor copies **no code, text, icons or images** from it. Everyth
 Python re-implementation of the ideas. See [docs/inspiration-notes.md](docs/inspiration-notes.md)
 for what we adopted, what we built differently and why.
 
-## What's new (unreleased, 0.6 work)
+## What's new in 0.6.0-beta
 
-OmniMonitor is becoming a monitor for every major AI platform, organised in **suites**
-(Anthropic, OpenAI, Google, Grok & Cursor, DeepSeek, Qwen, Kimi, ...). The tray follows the
-suite you pick, or the tightest limit across all of them (`omnimonitor tray`). **Plan limits for
-Claude, ChatGPT/Codex and Gemini** can now be read from the login the official CLI already holds
-(read-only, off by default, `omnimonitor providers enable claude_cli_plan`). Website sessions and
-API keys live in an **encrypted vault**, and `omnimonitor verify` checks your sources. See the
-[CHANGELOG](CHANGELOG.md).
+OmniMonitor now monitors every major AI platform as equal **suites**, and works without a
+Grok account. A new **Setup** screen shows each suite as Connected / Found / Sign in / Add
+key / Not available, with one button each. Plan limits for Claude, ChatGPT/Codex and Gemini
+can be read from the login the official CLI already holds. You can choose what shows where.
+Website sessions and API keys live in an **encrypted vault**. See the
+[release notes](docs/release-notes/v0.6.0-beta.md).
 
 ## What's new in 0.5.3-beta
 
@@ -358,7 +365,8 @@ omnimonitor --demo              # force demo mode
 omnimonitor status [--json]     # print once and exit (also handy for scripts)
 omnimonitor serve --open        # stats page only, no tray
 omnimonitor doctor              # diagnose CLI / login / billing / logs  (--offline, --json)
-omnimonitor setup               # first run: check login, switch off demo mode  (-y = no prompt)
+omnimonitor setup               # show every suite, turn on what's on this computer (-y = no prompt)
+omnimonitor verify              # check each switched-on source; saves scrubbed results
 omnimonitor config-path         # where the config lives
 omnimonitor breakdown --range 30d [--json]    # tokens by tool, model, project
 omnimonitor blocks [--source all] [--json]    # ≈ 5-hour blocks + burn rate (estimate)
@@ -376,12 +384,23 @@ The stats page links to the **mini view** (a compact page for a small browser wi
 
 ### First run
 
-1. Install the official Grok CLI and sign in once (`grok login`). See https://docs.x.ai.
-2. Run `omnimonitor setup`. It checks the CLI, your login, a billing call and your
-   session logs, and switches `source` to `grok_cli_billing` **only if the billing call
-   worked**.
-3. Run `omnimonitor`. Until setup succeeds, the app stays in **demo mode**: every
-   number is fake and labeled **DEMO**.
+1. Run `omnimonitor`. The app starts in **demo mode** (every number is fake and labeled
+   **DEMO**) and opens the **Setup** screen.
+2. Each suite shows one button: turn on what was found on this computer (tool logs and CLI
+   logins), sign in on the provider's website, or copy the command that adds an API key.
+   Turning anything on leaves demo mode. No Grok account is needed.
+3. In a terminal, `omnimonitor setup` does the same for everything that needs no sign-in. If
+   the Grok CLI is logged in, it also switches on the Grok weekly pool, **only if a billing
+   call works**.
+
+### Choosing what shows where
+
+**Settings → Layout** moves suites and sources up or down, hides them per place (tray icon,
+tray menu, dashboard, mini view, status line), picks which numbers each place shows, gives a
+suite its own colour and sets a source's own refresh interval. Alert levels can be set per
+source or per suite, and USD budgets and your price table are on the same page. The same
+settings work from a terminal, e.g.
+`omnimonitor config set display '{"hide": {"menu": ["suite:google"]}}'`.
 
 ### Start at login
 
@@ -438,8 +457,11 @@ to defaults and shows the error in the menu. See [`config.example.json`](config.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `source` | `"demo"` | `demo` (fake, labeled), `grok_cli_billing` (unofficial endpoint used by the Grok CLI), `command` (your own script) |
-| `token_source` | `"auto"` | `auto` (= `demo` in demo mode, else `grok_sessions`), `grok_sessions`, `demo`, `none` |
+| `source` | `"demo"` | the Grok weekly pool: `demo` (everything fake, labeled), `none` (real data, no Grok pool), `grok_cli_billing` (unofficial endpoint used by the Grok CLI), `command` (your own script) |
+| `token_source` | `"auto"` | `auto` (= `demo` in demo mode, else `grok_sessions`; with `source: none` only if Grok session logs exist), `grok_sessions`, `demo`, `none` |
+| `display` | `{}` | what shows where: `order` (suite and source ids), `hide` per place (`tray`, `menu`, `dashboard`, `mini`, `statusline`) and `fields` per place (`limit`, `reset`, `tokens`, `cost`, `money`). `suite:<id>` means the whole suite |
+| `suite_colors` | `{}` | e.g. `{"openai": "#10a37f"}` |
+| `source_poll_seconds` | `{}` | per account source refresh interval (min 300), e.g. `{"deepseek": 3600}` |
 | `poll_interval_seconds` | `120` | how often to refresh; minimum **60** |
 | `usage_page_url` | `https://grok.com/dashboard` | opened by "Open Grok Usage Page" |
 | `grok_home` | `""` | Grok CLI dir; empty = `$GROK_HOME` or `~/.grok` |
@@ -470,7 +492,7 @@ to defaults and shows the error in the menu. See [`config.example.json`](config.
 | `hidden_cards` | `[]` | any of `grok-suite`, `forecast`, `burn`, `limit`, `heatmap`, `breakdown`, `tools`, `models`, `projects`, `cost`, `insights`, `providers`, `budgets` |
 | `providers` | `{}` | per-provider switches, e.g. `{"gemini_cli": {"enabled": true}, "deepseek": {"enabled": true}}`. Ids: `omnimonitor providers`. Entries here override `extra_token_sources` |
 | `tray_suite` | `"tightest"` | what the tray icon shows: a suite (`anthropic`, `openai`, `google`, `xai`, `deepseek`, `qwen`, `kimi`, `github`, `gateways`, `agents`, `other`), `tightest` (highest % used across all suites) or `budget`. Set with `omnimonitor tray <choice>`. Replaces `primary_provider`, which is migrated automatically |
-| `provider_thresholds` | `{}` | per-provider USED % alerts, e.g. `{"codex": [75, 90]}`; missing = `notify_thresholds` |
+| `provider_thresholds` | `{}` | per-source or per-suite USED % alerts, e.g. `{"codex": [75, 90], "anthropic": [90]}`; a source's own list wins, missing = `notify_thresholds` |
 | `budgets` | `{"daily": 0, "weekly": 0, "monthly": 0}` | USD caps on the ≈ cost of local tool usage (recorded cost, else your `prices`); 0 = off |
 | `budget_alert_percent` | `80` | warn at this % of each budget (and again at 100 %) |
 | `provider_poll_seconds` | `900` | how often account APIs are called; minimum **300** |
@@ -492,9 +514,10 @@ where from, never the values.
 **Settings page / `config set`:** the settings page can change only the personalization,
 data and notification keys above (plus `poll_interval_seconds`, `estimate_*` and
 `heatmap_weeks`), and every value is validated. `omnimonitor config set` can additionally set
-`token_source`, `grok_home`, `claude_home` and `codex_home` (run `omnimonitor config keys`).
-`source`, `token`, `command`, `grok_refresh_command`, `grok_billing_url` and
-`usage_page_url` can only be changed by editing `config.json`. Changes are written to the config file, never the
+`source`, `token_source`, `grok_home`, `claude_home` and `codex_home` (run
+`omnimonitor config keys`). `token`, `command`, `grok_refresh_command`, `grok_billing_url` and
+`usage_page_url` can only be changed by editing `config.json`. The Setup page can only switch
+the Grok pool between off and `grok_cli_billing`, and leave demo mode. Changes are written to the config file, never the
 environment overrides, so a token set via `OMNIMONITOR_TOKEN` is never saved to disk.
 
 Environment overrides: `OMNIMONITOR_HOME`, `OMNIMONITOR_SOURCE` and
@@ -551,13 +574,15 @@ app keeps reading the old dir instead. Uninstall the old package with
   **import from a browser you choose** (Chromium may prompt for Safe Storage; Safari needs
   Full Disk Access). Sessions are never logged, exported, shown in the UI, or included in
   Report a problem. Use **Sign out / forget** per provider. See [docs/cookies/](docs/cookies/).
-- **`omnimonitor verify`** calls each enabled account / sign-in source once, prints pass or
-  fail, and saves the responses to `<config dir>/verify/` with keys, cookies, tokens,
-  emails and account ids replaced by placeholders, so they are safe to share for debugging.
+- **`omnimonitor verify`** checks each switched-on source once, prints pass or fail, and
+  saves what came back to `<config dir>/verify/` with keys, cookies, tokens, emails and
+  account ids replaced by placeholders. For local logs only file, event and token counts are
+  saved. Look through a file before you share it.
 - The stats page binds to **127.0.0.1 only**, on a random port, under a random per-run URL
-  secret. It also checks the `Host` header (DNS-rebinding guard) and sends a strict CSP. The
-  only write is `POST …/api/settings`, which also requires a matching `Origin`, a per-run CSRF
-  token in the `X-OmniMonitor-CSRF` header, a JSON body (≤ 64 KB) and allow-listed keys.
+  secret. It also checks the `Host` header (DNS-rebinding guard) and sends a strict CSP. Every
+  write is a `POST` that also requires a matching `Origin` (if sent), a per-run CSRF token in
+  the `X-OmniMonitor-CSRF` header and a JSON body (≤ 64 KB): settings (allow-listed keys),
+  the Setup actions, installers you confirm, and app actions such as saving an export.
 - The config and history files are chmod 600 where the OS supports it.
 
 See [SECURITY.md](SECURITY.md).
@@ -645,7 +670,8 @@ service. Background research: [docs/research.md](docs/research.md).
 ## Status line, proxy, status badges and alerts
 
 - **`omnimonitor statusline`** prints one offline line for shell prompts / tmux / editor status bars, e.g.
-  `Grok 42% used, resets in 1d 4h (as of 2h ago) | ≈5h block 1.2M tok $3.10, 2h 14m left | today 3.4M tok $5.20`.
+  `Anthropic 47% used, resets in 2d 5h | OpenAI 13% used, resets in 5d 1h | today 3.4M tok $5.20`
+  (account figures are the last ones the app saved).
   It reads only local history (no network). `--json` prints the same data as JSON. Cost and the 5-hour block are estimates (marked `≈`).
 - **Proxy:** set `proxy_url` (http/https `host:port`, no credentials) with `omnimonitor config set proxy_url http://host:3128`
   or in the config file. It is not settable from the web UI. Without it, the standard `HTTPS_PROXY`/`NO_PROXY` env vars apply.

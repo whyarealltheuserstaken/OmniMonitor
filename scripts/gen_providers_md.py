@@ -70,11 +70,15 @@ def render() -> str:
              "%d entries: %d supported, %d partial, %d experimental, %d not supported.\n"
              % (len(catalog.CATALOG), c["supported"], c["partial"], c["experimental"],
                 c["not_supported"]),
-             "| Family | Provider | id | Status | Source | Shows | Tray % |",
-             "|---|---|---|---|---|---|---|"]
+             "**Checked** says how each reader was tested: *live-verified* = read from real "
+             "files or a real account at least once; *fixture-only* = tested against recorded "
+             "or documented responses only.\n",
+             "| Family | Provider | id | Status | Checked | Source | Shows | Tray % |",
+             "|---|---|---|---|---|---|---|---|"]
     for p in catalog.CATALOG:
-        lines.append("| %s | %s | `%s` | %s | %s | %s | %s |" % (
-            p.family, _cell(p.name), p.id, STATUS[p.status], KIND[p.kind],
+        lines.append("| %s | %s | `%s` | %s | %s | %s | %s | %s |" % (
+            p.family, _cell(p.name), p.id, STATUS[p.status], catalog.verified_label(p.id),
+            KIND[p.kind],
             _cell(p.shows if p.kind != "none" else p.reason.split(". ")[0].rstrip(".")),
             "yes" if p.has_limit else "–"))
     lines += ["", "## Supported, partial and experimental providers", ""]
@@ -84,6 +88,7 @@ def render() -> str:
         lines += ["### %s (`%s`)" % (p.name, p.id), "",
                   "| | |", "|---|---|",
                   "| Status | %s |" % STATUS[p.status],
+                  "| Checked | %s |" % catalog.verified_label(p.id),
                   "| Source | %s |" % _cell(p.source),
                   "| Auth | %s |" % _cell(p.auth),
                   "| Shows | %s |" % _cell(p.shows),

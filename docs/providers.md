@@ -31,68 +31,70 @@ only. Please report a mismatch with a redacted sample.
 
 60 entries: 13 supported, 11 partial, 17 experimental, 19 not supported.
 
-| Family | Provider | id | Status | Source | Shows | Tray % |
-|---|---|---|---|---|---|---|
-| Grok | Grok weekly pool | `grok` | 🟡 partial | Grok billing | shared weekly pool % used/left, reset, per-product split when productUsage is present, monthly USD credit cap when used/monthlyLimit are present (not a token allowance), ≈ token limit estimate | yes |
-| Grok | Grok CLI sessions | `grok_sessions` | ✅ supported | local logs | tokens, recorded cost, models, projects | – |
-| Grok | Grok CLI unified log | `grok_unified` | 🧪 experimental | local logs | tokens per inference (prompt incl. cached, completion, reasoning), models | – |
-| Claude | Claude Code | `claude_code` | ✅ supported | local logs | tokens (incl. cache), models, projects; ≈ cost from your price table; ≈ 5-hour block + burn rate (estimate, `omnimonitor blocks`) | – |
-| Claude | Claude API (organization cost) | `anthropic_api` | ✅ supported | official API | month-to-date USD cost (UTC month) | – |
-| Claude | Claude Pro/Max plan limits | `claude_plan` | 🧪 experimental | web session (opt-in) | 5-hour session and weekly (and model-scoped) % used, reset times when returned | yes |
-| Claude | Claude plan (Claude Code login) | `claude_cli_plan` | 🧪 experimental | CLI login (read-only) | 5-hour and weekly (and model-scoped) % used with reset times, from the plan you already use in Claude Code | yes |
-| ChatGPT | Codex CLI (+ ChatGPT plan limits) | `codex` | ✅ supported | local logs | tokens, models, projects; plan limit % (5-hour and weekly windows) when Codex logs them | yes |
-| ChatGPT | OpenAI API (organization cost) | `openai_api` | ✅ supported | official API | month-to-date USD cost (UTC month) | – |
-| ChatGPT | ChatGPT app message limits | `chatgpt_app` | ❌ not supported | – | No official API for the consumer ChatGPT app message counters | – |
-| ChatGPT | ChatGPT / Codex web plan limits | `chatgpt_web` | 🧪 experimental | web session (opt-in) | session and weekly plan windows when chatgpt.com returns them | yes |
-| ChatGPT | ChatGPT plan (Codex login) | `codex_cli_plan` | 🧪 experimental | CLI login (read-only) | 5-hour and weekly plan windows from the ChatGPT plan you use in Codex | yes |
-| Gemini | Gemini CLI | `gemini_cli` | ✅ supported | local logs | tokens (input incl. tool, output incl. thoughts, cached), models, projects | – |
-| Gemini | Gemini API (AI Studio) | `gemini_api` | ❌ not supported | – | The Gemini API has no balance/usage endpoint; spend is only in Google Cloud Billing (export to BigQuery) | – |
-| Gemini | Antigravity (CLI / IDE) | `antigravity` | 🧪 experimental | local logs | tokens (input incl. cache, output incl. thinking), models | – |
-| Gemini | Gemini CLI quota (Google login) | `gemini_cli_quota` | 🧪 experimental | CLI login (read-only) | per-model request quota % used and reset times for your Google login | yes |
-| Grok | xAI API (prepaid credits) | `xai_api` | 🟡 partial | official API | prepaid credit balance, month-to-date spend, postpaid spending limit % used | – |
-| Venice | Venice API | `venice` | 🧪 experimental | official API | USD / DIEM / credit balances; DIEM % used of the epoch allocation | yes |
-| DeepInfra | DeepInfra | `deepinfra` | 🟡 partial | official API | prepaid balance, usage since last invoice, spending limit % used | yes |
-| Fireworks | Fireworks AI | `fireworks` | 🟡 partial | official API | month-to-date spend (no public balance endpoint) | – |
-| Vercel | Vercel AI Gateway | `vercel_ai_gateway` | ✅ supported | official API | credit balance and lifetime credits used (USD) | – |
-| LiteLLM | LiteLLM proxy (self-hosted) | `litellm` | 🧪 experimental | official API | the calling virtual key's spend, budget % used and budget reset | yes |
-| Z.ai | Z.ai (GLM) | `zai` | ❌ not supported | – | Z.ai documents no balance, usage or quota API; figures are dashboard-only | – |
-| Volcengine | Volcengine Ark | `volcengine` | ❌ not supported | – | Balance lives in the Volcengine Billing OpenAPI, which needs AK/SK request signing with account-level credentials; not implemented (an Ark inference key cannot read it) | – |
-| Hugging Face | Hugging Face Inference Providers | `huggingface` | ❌ not supported | – | No documented API returns credit balance or inference spend; it is shown only on the billing settings page | – |
-| AWS | Amazon Bedrock | `bedrock` | ❌ not supported | – | Bedrock has no balance endpoint; spend is in Cost Explorer and token metrics in CloudWatch, both needing SigV4-signed AWS credentials | – |
-| Grok | Grok Bot | `grok_bot` | ❌ not supported | – | No Grok Bot token count or token cap | – |
-| DeepSeek | DeepSeek API | `deepseek` | ✅ supported | official API | balance (total, granted, topped-up) per currency | – |
-| DeepSeek | DeepSeek Harness | `dsh` | 🧪 experimental | local logs | tokens (incl. cache, reasoning), models, projects | – |
-| DeepSeek | DeepSeek chat app | `deepseek_app` | ❌ not supported | – | The consumer app publishes no usage or limit data | – |
-| Qwen | Qwen Code | `qwen_code` | ✅ supported | local logs | tokens (incl. cached and thoughts), models, projects | – |
-| Qwen | Qwen API (Alibaba Model Studio) | `dashscope` | ❌ not supported | – | Balance is only available via Alibaba Cloud BSS OpenAPI (QueryAccountBalance), which needs an AccessKey pair and request signing; not implemented | – |
-| Kimi | Kimi CLI / Kimi Code / Kimi Work | `kimi` | ✅ supported | local logs | tokens (incl. cache), models, projects | – |
-| Kimi | Kimi API (Moonshot) balance | `moonshot` | ✅ supported | official API | available, voucher and cash balance | – |
-| Kimi | Kimi app membership | `kimi_app` | ❌ not supported | – | The consumer app publishes no usage or limit API | – |
-| Copilot | GitHub Copilot premium requests | `github_copilot` | 🟡 partial | official API | premium requests this month, billed USD; % only against an allowance you enter | yes |
-| Copilot | GitHub Copilot CLI (OpenTelemetry file) | `copilot_otel` | 🟡 partial | local logs | tokens (incl. cache, reasoning), models | – |
-| Cursor | Cursor (team Admin API) | `cursor_team` | 🟡 partial | official API | team cycle spend (USD), on-demand spend, your spend vs. your per-user limit | yes |
-| Cursor | Cursor (individual plans) | `cursor` | 🧪 experimental | web session (opt-in) | unified plan dollars (usedCents/limitCents) when v2 usage-status is available, otherwise usage-summary; per-request tokens and cost from get-filtered-usage-events; Grok in Cursor is the total for model names containing grok. Dollars are not tokens. | yes |
-| OpenRouter | OpenRouter | `openrouter` | ✅ supported | official API | credits used (total/day/week/month), key limit % and reset | yes |
-| Ollama | Ollama Cloud | `ollama_cloud` | ✅ supported | official API | balance / allowance and % used when the API returns them | yes |
-| Ollama | Ollama (local) | `ollama_local` | ❌ not supported | – | A local Ollama server keeps no usage log; per-request counts only appear in API responses | – |
-| opencode | opencode | `opencode` | 🟡 partial | local logs | tokens (incl. cache, reasoning), recorded cost, models, projects | – |
-| Windsurf | Windsurf | `windsurf` | ❌ not supported | – | Usage APIs are Enterprise-only (service key) and report acceptances/credits per team, not personal usage; no local usage log | – |
-| Mistral | Mistral (Le Chat / API) | `mistral` | ❌ not supported | – | No public usage or billing API; usage is only in the console | – |
-| Perplexity | Perplexity | `perplexity` | ❌ not supported | – | No public usage or billing API; usage is only in the API console | – |
-| Pi | Pi coding agent | `pi` | 🟡 partial | local logs | tokens (incl. cache), models, projects, cost as logged by Pi | – |
-| OpenClaw | OpenClaw | `openclaw` | 🧪 experimental | local logs | tokens (incl. cache), models, cost as logged | – |
-| Block | Goose | `goose` | 🟡 partial | local logs | tokens per session (incl. cache), models, projects, cost | – |
-| Nous Research | Hermes Agent | `hermes` | 🟡 partial | local logs | tokens per session (incl. cache, reasoning), models, cost | – |
-| Amp | Amp | `amp` | 🧪 experimental | local logs | tokens (incl. cache), models | – |
-| Factory | Factory Droid | `droid` | 🧪 experimental | local logs | tokens per session (incl. cache, thinking), models, projects | – |
-| Cline | Cline | `cline` | 🧪 experimental | local logs | tokens (incl. cache), cost as logged, model when found | – |
-| Roo Code | Roo Code | `roo_code` | 🧪 experimental | local logs | tokens (incl. cache), cost as logged, model when found | – |
-| Kilo Code | Kilo Code | `kilo_code` | 🧪 experimental | local logs | tokens (incl. cache), cost as logged, model when found | – |
-| Zed | Zed AI | `zed` | ❌ not supported | – | Agent threads are stored zstd-compressed in a private SQLite schema without per-request token counts we could verify; plan usage is only in the signed-in account page | – |
-| AWS | Kiro | `kiro` | ❌ not supported | – | Usage (credits) is shown only in the signed-in Kiro app/account; no documented local usage log or personal usage API | – |
-| MiniMax | MiniMax Agent / Code | `minimax_agent` | ❌ not supported | – | No documented local usage log or public balance/usage endpoint could be verified | – |
-| Cognition | Devin CLI | `devin_cli` | ❌ not supported | – | ACU usage is only in the signed-in Devin web app; the CLI's local files are undocumented and could not be verified | – |
-| LM Studio | LM Studio (local) | `lmstudio` | ❌ not supported | – | Local models have no quota; the server returns usage per response but keeps no documented usage log to read | – |
+**Checked** says how each reader was tested: *live-verified* = read from real files or a real account at least once; *fixture-only* = tested against recorded or documented responses only.
+
+| Family | Provider | id | Status | Checked | Source | Shows | Tray % |
+|---|---|---|---|---|---|---|---|
+| Grok | Grok weekly pool | `grok` | 🟡 partial | fixture-only | Grok billing | shared weekly pool % used/left, reset, per-product split when productUsage is present, monthly USD credit cap when used/monthlyLimit are present (not a token allowance), ≈ token limit estimate | yes |
+| Grok | Grok CLI sessions | `grok_sessions` | ✅ supported | live-verified | local logs | tokens, recorded cost, models, projects | – |
+| Grok | Grok CLI unified log | `grok_unified` | 🧪 experimental | fixture-only | local logs | tokens per inference (prompt incl. cached, completion, reasoning), models | – |
+| Claude | Claude Code | `claude_code` | ✅ supported | live-verified | local logs | tokens (incl. cache), models, projects; ≈ cost from your price table; ≈ 5-hour block + burn rate (estimate, `omnimonitor blocks`) | – |
+| Claude | Claude API (organization cost) | `anthropic_api` | ✅ supported | fixture-only | official API | month-to-date USD cost (UTC month) | – |
+| Claude | Claude Pro/Max plan limits | `claude_plan` | 🧪 experimental | fixture-only | web session (opt-in) | 5-hour session and weekly (and model-scoped) % used, reset times when returned | yes |
+| Claude | Claude plan (Claude Code login) | `claude_cli_plan` | 🧪 experimental | live-verified | CLI login (read-only) | 5-hour and weekly (and model-scoped) % used with reset times, from the plan you already use in Claude Code | yes |
+| ChatGPT | Codex CLI (+ ChatGPT plan limits) | `codex` | ✅ supported | fixture-only | local logs | tokens, models, projects; plan limit % (5-hour and weekly windows) when Codex logs them | yes |
+| ChatGPT | OpenAI API (organization cost) | `openai_api` | ✅ supported | fixture-only | official API | month-to-date USD cost (UTC month) | – |
+| ChatGPT | ChatGPT app message limits | `chatgpt_app` | ❌ not supported | - | – | No official API for the consumer ChatGPT app message counters | – |
+| ChatGPT | ChatGPT / Codex web plan limits | `chatgpt_web` | 🧪 experimental | fixture-only | web session (opt-in) | session and weekly plan windows when chatgpt.com returns them | yes |
+| ChatGPT | ChatGPT plan (Codex login) | `codex_cli_plan` | 🧪 experimental | live-verified | CLI login (read-only) | 5-hour and weekly plan windows from the ChatGPT plan you use in Codex | yes |
+| Gemini | Gemini CLI | `gemini_cli` | ✅ supported | fixture-only | local logs | tokens (input incl. tool, output incl. thoughts, cached), models, projects | – |
+| Gemini | Gemini API (AI Studio) | `gemini_api` | ❌ not supported | - | – | The Gemini API has no balance/usage endpoint; spend is only in Google Cloud Billing (export to BigQuery) | – |
+| Gemini | Antigravity (CLI / IDE) | `antigravity` | 🧪 experimental | fixture-only | local logs | tokens (input incl. cache, output incl. thinking), models | – |
+| Gemini | Gemini CLI quota (Google login) | `gemini_cli_quota` | 🧪 experimental | fixture-only | CLI login (read-only) | per-model request quota % used and reset times for your Google login | yes |
+| Grok | xAI API (prepaid credits) | `xai_api` | 🟡 partial | fixture-only | official API | prepaid credit balance, month-to-date spend, postpaid spending limit % used | – |
+| Venice | Venice API | `venice` | 🧪 experimental | fixture-only | official API | USD / DIEM / credit balances; DIEM % used of the epoch allocation | yes |
+| DeepInfra | DeepInfra | `deepinfra` | 🟡 partial | fixture-only | official API | prepaid balance, usage since last invoice, spending limit % used | yes |
+| Fireworks | Fireworks AI | `fireworks` | 🟡 partial | fixture-only | official API | month-to-date spend (no public balance endpoint) | – |
+| Vercel | Vercel AI Gateway | `vercel_ai_gateway` | ✅ supported | fixture-only | official API | credit balance and lifetime credits used (USD) | – |
+| LiteLLM | LiteLLM proxy (self-hosted) | `litellm` | 🧪 experimental | fixture-only | official API | the calling virtual key's spend, budget % used and budget reset | yes |
+| Z.ai | Z.ai (GLM) | `zai` | ❌ not supported | - | – | Z.ai documents no balance, usage or quota API; figures are dashboard-only | – |
+| Volcengine | Volcengine Ark | `volcengine` | ❌ not supported | - | – | Balance lives in the Volcengine Billing OpenAPI, which needs AK/SK request signing with account-level credentials; not implemented (an Ark inference key cannot read it) | – |
+| Hugging Face | Hugging Face Inference Providers | `huggingface` | ❌ not supported | - | – | No documented API returns credit balance or inference spend; it is shown only on the billing settings page | – |
+| AWS | Amazon Bedrock | `bedrock` | ❌ not supported | - | – | Bedrock has no balance endpoint; spend is in Cost Explorer and token metrics in CloudWatch, both needing SigV4-signed AWS credentials | – |
+| Grok | Grok Bot | `grok_bot` | ❌ not supported | - | – | No Grok Bot token count or token cap | – |
+| DeepSeek | DeepSeek API | `deepseek` | ✅ supported | fixture-only | official API | balance (total, granted, topped-up) per currency | – |
+| DeepSeek | DeepSeek Harness | `dsh` | 🧪 experimental | fixture-only | local logs | tokens (incl. cache, reasoning), models, projects | – |
+| DeepSeek | DeepSeek chat app | `deepseek_app` | ❌ not supported | - | – | The consumer app publishes no usage or limit data | – |
+| Qwen | Qwen Code | `qwen_code` | ✅ supported | fixture-only | local logs | tokens (incl. cached and thoughts), models, projects | – |
+| Qwen | Qwen API (Alibaba Model Studio) | `dashscope` | ❌ not supported | - | – | Balance is only available via Alibaba Cloud BSS OpenAPI (QueryAccountBalance), which needs an AccessKey pair and request signing; not implemented | – |
+| Kimi | Kimi CLI / Kimi Code / Kimi Work | `kimi` | ✅ supported | fixture-only | local logs | tokens (incl. cache), models, projects | – |
+| Kimi | Kimi API (Moonshot) balance | `moonshot` | ✅ supported | fixture-only | official API | available, voucher and cash balance | – |
+| Kimi | Kimi app membership | `kimi_app` | ❌ not supported | - | – | The consumer app publishes no usage or limit API | – |
+| Copilot | GitHub Copilot premium requests | `github_copilot` | 🟡 partial | fixture-only | official API | premium requests this month, billed USD; % only against an allowance you enter | yes |
+| Copilot | GitHub Copilot CLI (OpenTelemetry file) | `copilot_otel` | 🟡 partial | fixture-only | local logs | tokens (incl. cache, reasoning), models | – |
+| Cursor | Cursor (team Admin API) | `cursor_team` | 🟡 partial | fixture-only | official API | team cycle spend (USD), on-demand spend, your spend vs. your per-user limit | yes |
+| Cursor | Cursor (individual plans) | `cursor` | 🧪 experimental | fixture-only | web session (opt-in) | unified plan dollars (usedCents/limitCents) when v2 usage-status is available, otherwise usage-summary; per-request tokens and cost from get-filtered-usage-events; Grok in Cursor is the total for model names containing grok. Dollars are not tokens. | yes |
+| OpenRouter | OpenRouter | `openrouter` | ✅ supported | fixture-only | official API | credits used (total/day/week/month), key limit % and reset | yes |
+| Ollama | Ollama Cloud | `ollama_cloud` | ✅ supported | fixture-only | official API | balance / allowance and % used when the API returns them | yes |
+| Ollama | Ollama (local) | `ollama_local` | ❌ not supported | - | – | A local Ollama server keeps no usage log; per-request counts only appear in API responses | – |
+| opencode | opencode | `opencode` | 🟡 partial | fixture-only | local logs | tokens (incl. cache, reasoning), recorded cost, models, projects | – |
+| Windsurf | Windsurf | `windsurf` | ❌ not supported | - | – | Usage APIs are Enterprise-only (service key) and report acceptances/credits per team, not personal usage; no local usage log | – |
+| Mistral | Mistral (Le Chat / API) | `mistral` | ❌ not supported | - | – | No public usage or billing API; usage is only in the console | – |
+| Perplexity | Perplexity | `perplexity` | ❌ not supported | - | – | No public usage or billing API; usage is only in the API console | – |
+| Pi | Pi coding agent | `pi` | 🟡 partial | fixture-only | local logs | tokens (incl. cache), models, projects, cost as logged by Pi | – |
+| OpenClaw | OpenClaw | `openclaw` | 🧪 experimental | fixture-only | local logs | tokens (incl. cache), models, cost as logged | – |
+| Block | Goose | `goose` | 🟡 partial | fixture-only | local logs | tokens per session (incl. cache), models, projects, cost | – |
+| Nous Research | Hermes Agent | `hermes` | 🟡 partial | fixture-only | local logs | tokens per session (incl. cache, reasoning), models, cost | – |
+| Amp | Amp | `amp` | 🧪 experimental | fixture-only | local logs | tokens (incl. cache), models | – |
+| Factory | Factory Droid | `droid` | 🧪 experimental | fixture-only | local logs | tokens per session (incl. cache, thinking), models, projects | – |
+| Cline | Cline | `cline` | 🧪 experimental | fixture-only | local logs | tokens (incl. cache), cost as logged, model when found | – |
+| Roo Code | Roo Code | `roo_code` | 🧪 experimental | fixture-only | local logs | tokens (incl. cache), cost as logged, model when found | – |
+| Kilo Code | Kilo Code | `kilo_code` | 🧪 experimental | fixture-only | local logs | tokens (incl. cache), cost as logged, model when found | – |
+| Zed | Zed AI | `zed` | ❌ not supported | - | – | Agent threads are stored zstd-compressed in a private SQLite schema without per-request token counts we could verify; plan usage is only in the signed-in account page | – |
+| AWS | Kiro | `kiro` | ❌ not supported | - | – | Usage (credits) is shown only in the signed-in Kiro app/account; no documented local usage log or personal usage API | – |
+| MiniMax | MiniMax Agent / Code | `minimax_agent` | ❌ not supported | - | – | No documented local usage log or public balance/usage endpoint could be verified | – |
+| Cognition | Devin CLI | `devin_cli` | ❌ not supported | - | – | ACU usage is only in the signed-in Devin web app; the CLI's local files are undocumented and could not be verified | – |
+| LM Studio | LM Studio (local) | `lmstudio` | ❌ not supported | - | – | Local models have no quota; the server returns usage per response but keeps no documented usage log to read | – |
 
 ## Supported, partial and experimental providers
 
@@ -101,6 +103,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🟡 partial |
+| Checked | fixture-only |
 | Source | Grok CLI billing endpoint using the Grok CLI's own login file (see README) |
 | Auth | Grok CLI login (~/.grok/auth.json) |
 | Shows | shared weekly pool % used/left, reset, per-product split when productUsage is present, monthly USD credit cap when used/monthlyLimit are present (not a token allowance), ≈ token limit estimate |
@@ -115,6 +118,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | ✅ supported |
+| Checked | live-verified |
 | Source | ~/.grok/sessions/**/updates.jsonl |
 | Auth | none |
 | Shows | tokens, recorded cost, models, projects |
@@ -129,6 +133,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🧪 experimental |
+| Checked | fixture-only |
 | Source | ~/.grok/logs/unified.jsonl, msg=shell.turn.inference_done ($GROK_HOME honoured) |
 | Auth | none |
 | Shows | tokens per inference (prompt incl. cached, completion, reasoning), models |
@@ -144,11 +149,12 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | ✅ supported |
+| Checked | live-verified |
 | Source | ~/.claude/projects/**/*.jsonl + ~/.claude/transcripts/**/*.jsonl ($CLAUDE_CONFIG_DIR honoured) |
 | Auth | none |
 | Shows | tokens (incl. cache), models, projects; ≈ cost from your price table; ≈ 5-hour block + burn rate (estimate, `omnimonitor blocks`) |
 | Reset period | n/a (history) |
-| Confidence / testing | high (fixtures; widely documented format) |
+| Confidence / testing | high (widely documented format; fixtures, and read from real logs on 2026-11-27) |
 | Key variables | – |
 | Can drive the tray % | no |
 | Docs | [token-adapters.md](../docs/token-adapters.md) |
@@ -158,6 +164,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | ✅ supported |
+| Checked | fixture-only |
 | Source | GET https://api.anthropic.com/v1/organizations/cost_report |
 | Auth | Admin API key (sk-ant-admin…) in ANTHROPIC_ADMIN_KEY |
 | Shows | month-to-date USD cost (UTC month) |
@@ -172,6 +179,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🧪 experimental |
+| Checked | fixture-only |
 | Source | GET https://claude.ai/api/organizations/{id}/usage with a sessionKey cookie |
 | Auth | opt-in: in-app sign-in to claude.ai, or import sessionKey from a chosen browser |
 | Shows | 5-hour session and weekly (and model-scoped) % used, reset times when returned |
@@ -186,11 +194,12 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🧪 experimental |
+| Checked | live-verified |
 | Source | GET https://api.anthropic.com/api/oauth/usage with the Claude Code login (~/.claude/.credentials.json), read-only |
 | Auth | none to set up: sign in to Claude Code once (`claude`); OmniMonitor never refreshes or writes that login |
 | Shows | 5-hour and weekly (and model-scoped) % used with reset times, from the plan you already use in Claude Code |
 | Reset period | per window (from the API) |
-| Confidence / testing | experimental (undocumented endpoint, shape from community clients). Read successfully with a real Claude Code login on 2026-11-25; the numbers have not been compared with claude.ai's usage page yet |
+| Confidence / testing | experimental (undocumented endpoint, shape from community clients). Read successfully with a real Claude Code login on 2026-11-25 and 2026-11-27; the numbers have not been compared with claude.ai's usage page yet |
 | Key variables | – |
 | Can drive the tray % | yes |
 | Docs | [docs.anthropic.com](https://docs.anthropic.com/en/docs/claude-code/setup) |
@@ -200,6 +209,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | ✅ supported |
+| Checked | fixture-only |
 | Source | ~/.codex/sessions/**/rollout-*.jsonl + ~/.codex/archived_sessions/ ($CODEX_HOME honoured); rate_limits from token_count events |
 | Auth | none |
 | Shows | tokens, models, projects; plan limit % (5-hour and weekly windows) when Codex logs them |
@@ -214,6 +224,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | ✅ supported |
+| Checked | fixture-only |
 | Source | GET https://api.openai.com/v1/organization/costs |
 | Auth | Admin key in OPENAI_ADMIN_KEY |
 | Shows | month-to-date USD cost (UTC month) |
@@ -228,6 +239,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🧪 experimental |
+| Checked | fixture-only |
 | Source | GET https://chatgpt.com/backend-api/wham/usage with session cookies (and optional access token from in-app login) |
 | Auth | opt-in: in-app sign-in to chatgpt.com, or import cookies from a chosen browser |
 | Shows | session and weekly plan windows when chatgpt.com returns them |
@@ -242,11 +254,12 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🧪 experimental |
+| Checked | live-verified |
 | Source | GET https://chatgpt.com/backend-api/wham/usage with the Codex login (~/.codex/auth.json), read-only |
 | Auth | none to set up: sign in to Codex once (`codex login`); never refreshed or written by OmniMonitor |
 | Shows | 5-hour and weekly plan windows from the ChatGPT plan you use in Codex |
 | Reset period | per window (from the API) |
-| Confidence / testing | experimental (undocumented endpoint, shape from CodexBar docs). Read successfully with a real Codex login on 2026-11-25; the numbers have not been compared with the ChatGPT usage page yet |
+| Confidence / testing | experimental (undocumented endpoint, shape from CodexBar docs). Read successfully with a real Codex login on 2026-11-25 and 2026-11-27; the numbers have not been compared with the ChatGPT usage page yet |
 | Key variables | – |
 | Can drive the tray % | yes |
 | Docs | [github.com](https://github.com/steipete/CodexBar/blob/main/docs/codex.md) |
@@ -256,6 +269,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | ✅ supported |
+| Checked | fixture-only |
 | Source | ~/.gemini/tmp/**/chats/*.json\|*.jsonl ($GEMINI_CLI_HOME honoured) |
 | Auth | none |
 | Shows | tokens (input incl. tool, output incl. thoughts, cached), models, projects |
@@ -270,6 +284,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🧪 experimental |
+| Checked | fixture-only |
 | Source | ~/.gemini/antigravity-cli\|antigravity\|antigravity-ide/conversations/*.db, ~/.config/antigravity/conversations/*.db ($GEMINI_CLI_HOME honoured); read-only SQLite, protobuf gen_metadata rows |
 | Auth | none |
 | Shows | tokens (input incl. cache, output incl. thinking), models |
@@ -285,6 +300,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🧪 experimental |
+| Checked | fixture-only |
 | Source | POST https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist, then :retrieveUserQuota, with the Gemini CLI login (~/.gemini/oauth_creds.json), read-only |
 | Auth | none to set up: sign in to Gemini CLI once (`gemini`); never refreshed or written by OmniMonitor |
 | Shows | per-model request quota % used and reset times for your Google login |
@@ -299,6 +315,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🟡 partial |
+| Checked | fixture-only |
 | Source | GET .../billing/teams/{team_id}/prepaid/balance; POST .../usage; GET .../postpaid/invoice/preview (management-api.x.ai) |
 | Auth | Management key in XAI_MANAGEMENT_KEY + team id (config xai_team_id or XAI_TEAM_ID) |
 | Shows | prepaid credit balance, month-to-date spend, postpaid spending limit % used |
@@ -313,6 +330,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🧪 experimental |
+| Checked | fixture-only |
 | Source | GET https://api.venice.ai/api/v1/billing/balance |
 | Auth | ADMIN API key in VENICE_ADMIN_KEY (inference keys are rejected) |
 | Shows | USD / DIEM / credit balances; DIEM % used of the epoch allocation |
@@ -327,6 +345,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🟡 partial |
+| Checked | fixture-only |
 | Source | GET https://api.deepinfra.com/payment/checklist |
 | Auth | API key in DEEPINFRA_API_KEY |
 | Shows | prepaid balance, usage since last invoice, spending limit % used |
@@ -341,6 +360,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🟡 partial |
+| Checked | fixture-only |
 | Source | GET https://api.fireworks.ai/v1/accounts/{account_id}/billing/summary |
 | Auth | API key in FIREWORKS_API_KEY + account id (config fireworks_account_id or FIREWORKS_ACCOUNT_ID) |
 | Shows | month-to-date spend (no public balance endpoint) |
@@ -355,6 +375,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | ✅ supported |
+| Checked | fixture-only |
 | Source | GET https://ai-gateway.vercel.sh/v1/credits |
 | Auth | API key in AI_GATEWAY_API_KEY |
 | Shows | credit balance and lifetime credits used (USD) |
@@ -369,6 +390,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🧪 experimental |
+| Checked | fixture-only |
 | Source | GET {LITELLM_BASE_URL}/key/info |
 | Auth | virtual key in LITELLM_API_KEY; proxy URL in LITELLM_BASE_URL (env or secrets.json only; https, or http on localhost) |
 | Shows | the calling virtual key's spend, budget % used and budget reset |
@@ -383,6 +405,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | ✅ supported |
+| Checked | fixture-only |
 | Source | GET https://api.deepseek.com/user/balance |
 | Auth | API key in DEEPSEEK_API_KEY |
 | Shows | balance (total, granted, topped-up) per currency |
@@ -397,6 +420,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🧪 experimental |
+| Checked | fixture-only |
 | Source | $DSH_HOME or ~/.dsh/sessions/*/session-*/session[.vN].jsonl[.zstd] |
 | Auth | none |
 | Shows | tokens (incl. cache, reasoning), models, projects |
@@ -412,6 +436,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | ✅ supported |
+| Checked | fixture-only |
 | Source | ~/.qwen/projects/**/chats/*.jsonl (usageMetadata) |
 | Auth | none |
 | Shows | tokens (incl. cached and thoughts), models, projects |
@@ -426,6 +451,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | ✅ supported |
+| Checked | fixture-only |
 | Source | ~/.kimi/sessions/**/wire.jsonl, ~/.kimi-code/sessions/**, Kimi Work (macOS/Windows) …/kimi-desktop/daimon-share/daimon/runtime/kimi-code/home/sessions (or the shareDir set in kimi-desktop/daimon-storage.json) |
 | Auth | none |
 | Shows | tokens (incl. cache), models, projects |
@@ -440,6 +466,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | ✅ supported |
+| Checked | fixture-only |
 | Source | GET https://api.moonshot.ai/v1/users/me/balance (or api.moonshot.cn) |
 | Auth | API key in MOONSHOT_API_KEY; region via config moonshot_region |
 | Shows | available, voucher and cash balance |
@@ -454,6 +481,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🟡 partial |
+| Checked | fixture-only |
 | Source | GET https://api.github.com/users/{user}/settings/billing/premium_request/usage |
 | Auth | Fine-grained token with Plan: read in GITHUB_COPILOT_TOKEN (or GITHUB_TOKEN) + github_username |
 | Shows | premium requests this month, billed USD; % only against an allowance you enter |
@@ -468,6 +496,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🟡 partial |
+| Checked | fixture-only |
 | Source | ~/.copilot/otel/*.jsonl or $COPILOT_OTEL_FILE_EXPORTER_PATH, written only after you set COPILOT_OTEL_ENABLED=true and COPILOT_OTEL_EXPORTER_TYPE=file |
 | Auth | none |
 | Shows | tokens (incl. cache, reasoning), models |
@@ -482,6 +511,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🟡 partial |
+| Checked | fixture-only |
 | Source | POST https://api.cursor.com/teams/spend |
 | Auth | Team Admin API key in CURSOR_ADMIN_KEY |
 | Shows | team cycle spend (USD), on-demand spend, your spend vs. your per-user limit |
@@ -496,6 +526,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🧪 experimental |
+| Checked | fixture-only |
 | Source | GET https://cursor.com/api/dashboard/v2/usage-status?scope=user (preferred) and GET https://cursor.com/api/usage-summary; POST https://cursor.com/api/dashboard/get-filtered-usage-events |
 | Auth | opt-in, off by default: in-app sign-in, browser cookies, or the signed-in Cursor app's state.vscdb (cursorAuth/accessToken; macOS Keychain prompt when the token is cursor-safe-storage) |
 | Shows | unified plan dollars (usedCents/limitCents) when v2 usage-status is available, otherwise usage-summary; per-request tokens and cost from get-filtered-usage-events; Grok in Cursor is the total for model names containing grok. Dollars are not tokens. |
@@ -510,6 +541,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | ✅ supported |
+| Checked | fixture-only |
 | Source | GET https://openrouter.ai/api/v1/key |
 | Auth | API key in OPENROUTER_API_KEY |
 | Shows | credits used (total/day/week/month), key limit % and reset |
@@ -524,6 +556,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | ✅ supported |
+| Checked | fixture-only |
 | Source | GET https://ollama.com/api/balance |
 | Auth | API key in OLLAMA_API_KEY |
 | Shows | balance / allowance and % used when the API returns them |
@@ -538,6 +571,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🟡 partial |
+| Checked | fixture-only |
 | Source | ~/.local/share/opencode/storage/message/**/*.json or opencode.db (opened read-only) |
 | Auth | none |
 | Shows | tokens (incl. cache, reasoning), recorded cost, models, projects |
@@ -552,6 +586,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🟡 partial |
+| Checked | fixture-only |
 | Source | ~/.pi/agent/sessions/**/*.jsonl ($PI_CODING_AGENT_DIR, $PI_CODING_AGENT_SESSION_DIR; also ~/.omp fork) |
 | Auth | none |
 | Shows | tokens (incl. cache), models, projects, cost as logged by Pi |
@@ -566,6 +601,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🧪 experimental |
+| Checked | fixture-only |
 | Source | ~/.openclaw/agents/**/*.jsonl (legacy ~/.clawdbot, ~/.moltbot) |
 | Auth | none |
 | Shows | tokens (incl. cache), models, cost as logged |
@@ -581,6 +617,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🟡 partial |
+| Checked | fixture-only |
 | Source | <goose data dir>/sessions/sessions.db, opened read-only ($GOOSE_PATH_ROOT/data, ~/.local/share/goose, %APPDATA%\Block\goose\data) |
 | Auth | none |
 | Shows | tokens per session (incl. cache), models, projects, cost |
@@ -595,6 +632,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🟡 partial |
+| Checked | fixture-only |
 | Source | $HERMES_HOME or ~/.hermes/state.db (+ profiles/*/state.db), opened read-only |
 | Auth | none |
 | Shows | tokens per session (incl. cache, reasoning), models, cost |
@@ -609,6 +647,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🧪 experimental |
+| Checked | fixture-only |
 | Source | ~/.local/share/amp/threads/*.json (usageLedger) |
 | Auth | none |
 | Shows | tokens (incl. cache), models |
@@ -624,6 +663,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🧪 experimental |
+| Checked | fixture-only |
 | Source | ~/.factory/sessions/**/*.settings.json (tokenUsage) |
 | Auth | none |
 | Shows | tokens per session (incl. cache, thinking), models, projects |
@@ -638,6 +678,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🧪 experimental |
+| Checked | fixture-only |
 | Source | <VS Code\|Cursor>/User/globalStorage/saoudrizwan.claude-dev/tasks/*/ui_messages.json |
 | Auth | none |
 | Shows | tokens (incl. cache), cost as logged, model when found |
@@ -652,6 +693,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🧪 experimental |
+| Checked | fixture-only |
 | Source | <VS Code\|Cursor>/User/globalStorage/rooveterinaryinc.roo-cline/tasks/*/ui_messages.json |
 | Auth | none |
 | Shows | tokens (incl. cache), cost as logged, model when found |
@@ -666,6 +708,7 @@ only. Please report a mismatch with a redacted sample.
 | | |
 |---|---|
 | Status | 🧪 experimental |
+| Checked | fixture-only |
 | Source | <VS Code\|Cursor>/User/globalStorage/kilocode.kilo-code/tasks/*/ui_messages.json |
 | Auth | none |
 | Shows | tokens (incl. cache), cost as logged, model when found |
