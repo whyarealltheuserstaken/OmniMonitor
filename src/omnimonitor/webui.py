@@ -102,9 +102,21 @@ class StatsServer:
                     return None
                 return path[len(prefix):]
 
+            def _reject(self, code: int, why: bytes) -> None:
+                """Refuse a POST. Read its (size-capped) body first: closing with unread
+                data resets the connection, so the client would never see the status."""
+                try:
+                    left = min(int(self.headers.get("Content-Length") or "0"), MAX_POST_BYTES)
+                    if left > 0:
+                        self.connection.settimeout(2)
+                        self.rfile.read(left)
+                except (ValueError, OSError):
+                    pass
+                self._send(code, why, "text/plain")
+
             def do_POST(self):  # noqa: N802
                 if not self._host_ok():
-                    return self._send(421, b"bad host", "text/plain")
+                    return self._reject(421, b"bad host")
                 rel = self._rel()
                 posts = {"api/settings": outer.save_settings,
                          "api/setup/prepare": outer.setup.get("prepare"),
@@ -115,23 +127,23 @@ class StatsServer:
                     posts[rel] = outer.app_actions.get(rel[len("api/app/"):])
                 handler = posts.get(rel or "")
                 if handler is None:
-                    return self._send(404, b"not found", "text/plain")
+                    return self._reject(404, b"not found")
                 port = self.server.server_address[1]
                 origin = self.headers.get("Origin")
                 if origin is not None and origin.lower() not in (
                         "http://127.0.0.1:%d" % port, "http://localhost:%d" % port):
-                    return self._send(403, b"bad origin", "text/plain")
+                    return self._reject(403, b"bad origin")
                 if not hmac.compare_digest(self.headers.get(CSRF_HEADER) or "", outer.csrf):
-                    return self._send(403, b"missing or wrong CSRF token", "text/plain")
+                    return self._reject(403, b"missing or wrong CSRF token")
                 ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
                 if ctype != "application/json":
-                    return self._send(415, b"JSON only", "text/plain")
+                    return self._reject(415, b"JSON only")
                 try:
                     n = int(self.headers.get("Content-Length") or "0")
                 except ValueError:
                     n = -1
                 if n <= 0 or n > MAX_POST_BYTES:
-                    return self._send(413 if n > 0 else 411, b"bad length", "text/plain")
+                    return self._reject(413 if n > 0 else 411, b"bad length")
                 try:
                     body = json.loads(self.rfile.read(n).decode("utf-8"))
                 except (ValueError, UnicodeDecodeError):

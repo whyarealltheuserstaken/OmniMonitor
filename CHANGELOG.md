@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Run-out estimates for plan limits** (Claude and ChatGPT plans, and any limit whose length
+  the provider reports): the dashboard shows the pace, the tray menu says "runs out in … (est.)",
+  and `notify_on_pace` now covers these limits too, not just the Grok week.
+- **"Limit reset" notice** for a limit you were warned about (`notify_on_reset`).
+- **Alerts to ntfy, Discord, Slack or a webhook** (`secrets set OMNIMONITOR_ALERT_WEBHOOK`).
+  Off by default; not yet tried against a real service.
+
+### Fixed
+- **Alerts repeated** for Claude plan limits: its reset time differs by a fraction of a second
+  on every read, and each read looked like a new window. A read that missed a limit also made
+  its alerts fire again.
+- "Refresh Now" during a background check could send the same alert twice.
+- Reloading the config could briefly show an empty config to the rest of the app.
+- With token logs off, the Grok pool had no history database, so its alerts never ran.
+- The first-run "OmniMonitor is running" notice never appeared on Windows.
+
 ## [0.6.0-beta] - 2026-11-27
 
 Beta / prerelease. See [release notes](docs/release-notes/v0.6.0-beta.md).

@@ -392,7 +392,9 @@ def cmd_secrets(args) -> int:
     except (ValueError, EOFError, KeyboardInterrupt) as e:
         print("Not saved: %s" % (e or "cancelled"), file=sys.stderr)
         return 2
-    print("Saved %s to %s (chmod 600). It is never shown in the UI." % (args.name, path))
+    where = "the encrypted vault" if path == config_mod.config_dir() / "vault" else \
+        "%s in plain text (no system keychain; owner-only file)" % path
+    print("Saved %s to %s. It is never shown in the UI." % (args.name, where))
     return 0
 
 
@@ -579,7 +581,13 @@ def cmd_notify_test(args) -> int:
     ok = deliver("OmniMonitor test", "Notifications work.")
     print("Sent a test notification." if ok else
           "No notification backend found (osascript / notify-send). The tray app uses its own.")
-    return 0 if ok else 1
+    from omnimonitor import outbound
+    if not outbound.configured_url():
+        print("Webhook: not set (omnimonitor secrets set %s)" % outbound.NAME)
+        return 0 if ok else 1
+    sent, why = outbound.send("OmniMonitor test", "Alerts reach this webhook.")
+    print("Webhook: %s" % why)
+    return 0 if sent else 1
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -623,7 +631,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--json", action="store_true")
     s = sub.add_parser("tray", help="which suite the tray icon follows (or tightest / budget)")
     s.add_argument("choice")
-    s = sub.add_parser("secrets", help="API keys for account providers (chmod-600 file)")
+    s = sub.add_parser("secrets", help="API keys and the alert webhook (encrypted vault)")
     s.add_argument("action", choices=("list", "set", "unset"))
     s.add_argument("name", nargs="?")
     s = sub.add_parser("breakdown", help="tokens by tool, model and project")

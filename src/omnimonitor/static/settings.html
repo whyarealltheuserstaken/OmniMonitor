@@ -128,7 +128,7 @@
   <form id="form" class="section card" autocomplete="off">
     <h2>Look</h2>
     <div class="field"><label class="k" for="display_name">Display name<div class="h">Shown as the stats page title.</div></label>
-      <div><input type="text" id="display_name" maxlength="40" placeholder="e.g. Henry's usage"></div></div>
+      <div><input type="text" id="display_name" maxlength="40" placeholder="e.g. My AI usage"></div></div>
     <div class="field"><label class="k" for="theme">Theme</label>
       <div><select id="theme"><option value="dark">Dark</option><option value="light">Light</option><option value="auto">Follow system</option></select></div></div>
     <div class="field"><label class="k" for="accent_color">Accent color<div class="h">Heatmap, bars and buttons.</div></label>
@@ -144,7 +144,7 @@
       <div><input type="number" id="heatmap_weeks" min="4" max="106" step="1"></div></div>
 
     <h2 class="section">Data</h2>
-    <div class="field"><span class="k">Providers<div class="h">Each one is opt-in. Local logs are read-only files on this computer; account APIs use your own key from an environment variable or <code>omnimonitor secrets set NAME</code> (keys can't be entered or seen here). <strong>Web session</strong> providers (Claude plan, ChatGPT web, Cursor individual) are off by default: choose in-app sign-in or import cookies from a browser you pick. Only that provider's domains/cookie names are read; cookies are stored locally (Keychain when available, else a chmod-600 file), never shown, exported, or put in Report a problem. Chromium import may prompt for Safe Storage; Safari needs Full Disk Access.</div></span>
+    <div class="field"><span class="k">Providers<div class="h">Each one is opt-in. Local logs are read-only files on this computer; account APIs use your own key from an environment variable or <code>omnimonitor secrets set NAME</code> (keys can't be entered or seen here). <strong>Web session</strong> providers (Claude plan, ChatGPT web, Cursor individual) are off by default: choose in-app sign-in or import cookies from a browser you pick. Only that provider's domains/cookie names are read; sessions are kept only in an encrypted vault whose key is in your system keychain (without one, sign-in is refused), and are never shown, exported, or put in Report a problem. Chromium import may prompt for Safe Storage; Safari needs Full Disk Access.</div></span>
       <div><table class="pv" id="providers_table"></table><div class="h" id="providers"></div></div></div>
     <div class="field"><label class="k" for="tray_suite">Tray icon follows<div class="h">A suite without a reading falls back to the tightest limit, and says so.</div></label>
       <div><select id="tray_suite"></select></div></div>
@@ -171,9 +171,9 @@
       <div><table class="pv" id="layout_fields"></table></div></div>
 
     <h2 class="section">Notifications</h2>
-    <div class="field"><label class="k" for="notifications">Desktop notifications<div class="h">Real data only - never in demo mode.</div></label>
+    <div class="field"><label class="k" for="notifications">Desktop notifications<div class="h">Real data only - never in demo mode. To also get them in ntfy, Discord, Slack or a webhook, run <code>omnimonitor secrets set OMNIMONITOR_ALERT_WEBHOOK</code> in a terminal.</div></label>
       <div class="checks"><label><input type="checkbox" id="notifications"> enabled</label>
-        <label><input type="checkbox" id="notify_on_reset"> when the week resets</label>
+        <label><input type="checkbox" id="notify_on_reset"> when a warned limit resets</label>
         <label><input type="checkbox" id="notify_on_pace"> when on pace to run out (estimate)</label></div></div>
       <div class="row"><label for="status_badges">Service status</label><div>
         <label><input type="checkbox" id="status_badges"> opt-in: show incident badges from official status pages (Claude, OpenAI, GitHub, Cursor, Fireworks, Vercel; one GET per page every 5 min)</label></div></div>

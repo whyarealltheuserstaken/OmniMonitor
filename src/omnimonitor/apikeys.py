@@ -15,7 +15,7 @@ import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
-from omnimonitor import catalog, vault
+from omnimonitor import catalog, outbound, vault
 from omnimonitor import config as config_mod
 
 _MIGRATED: Set[str] = set()
@@ -27,7 +27,7 @@ def allowed_names() -> List[str]:
         for n in p.env:
             if n not in names:
                 names.append(n)
-    return names
+    return names + [outbound.NAME]  # the alert webhook URL carries its own token
 
 
 def secrets_path() -> Path:

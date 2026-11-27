@@ -64,15 +64,38 @@ def pace(used_percent: Optional[float], start: Optional[float], resets_at: Optio
     if used_percent is None or not start or not resets_at or resets_at <= start:
         return None
     elapsed = max(0.0, min(1.0, (now - start) / (resets_at - start)))
+    if elapsed < 0.02 or used_percent <= 0:
+        return None  # nothing to project yet
+    proj = used_percent / elapsed
     out = {"elapsed_percent": round(elapsed * 100, 1), "used_percent": round(used_percent, 1),
-           "estimate": True}
-    if elapsed >= 0.02 and used_percent > 0:
-        proj = used_percent / elapsed
-        out["projected_percent"] = round(proj, 1)
-        out["status"] = "over" if proj > 100 else ("high" if proj > 85 else "ok")
-        if proj > 100:
-            out["runs_out_at"] = start + (resets_at - start) * elapsed * 100 / used_percent
+           "estimate": True, "projected_percent": round(proj, 1),
+           "status": "over" if proj > 100 else ("high" if proj > 85 else "ok")}
+    if proj > 100:
+        out["runs_out_at"] = start + (resets_at - start) * elapsed * 100 / used_percent
     return out
+
+
+#: Don't warn about running out from a sliver of a window or of usage.
+WARN_MIN_ELAPSED, WARN_MIN_USED = 10.0, 25.0
+
+
+def run_out_warning(window: Dict[str, Any]) -> Optional[float]:
+    """When (unix time) this window is estimated to run out before it resets, or None."""
+    p = window.get("pace") or {}
+    if window.get("stale") or not p.get("runs_out_at") \
+            or p["elapsed_percent"] < WARN_MIN_ELAPSED \
+            or not WARN_MIN_USED <= p["used_percent"] < 100:
+        return None
+    return p["runs_out_at"]
+
+
+def _window_pace(window: Dict[str, Any], now: float) -> Optional[Dict[str, Any]]:
+    """Pace for a plan window whose length the provider told us."""
+    reset, length = _ts(window.get("resets_at")), window.get("window_seconds")
+    if reset is None or reset < now or isinstance(length, bool) \
+            or not isinstance(length, (int, float)) or length <= 0:
+        return None
+    return pace(window.get("used_percent"), reset - length, reset, now)
 
 
 def codex_windows(snap: Optional[Dict[str, Any]], now: float) -> List[Dict[str, Any]]:
@@ -189,7 +212,8 @@ def build(events: List[Dict[str, Any]], cfg: Dict[str, Any], now: datetime, *,
         if r.get("limits"):
             c["limits"] = [{"name": w.get("name") or "limit", "used_percent": w["used_percent"],
                             "resets_at": w.get("resets_at"),
-                            "stale": _past(w.get("resets_at"), nowts), "pace": None}
+                            "stale": _past(w.get("resets_at"), nowts),
+                            "pace": _window_pace(w, nowts)}
                            for w in r["limits"] if w.get("used_percent") is not None]
         elif r.get("limit_percent") is not None:
             c["limits"] = [{"name": r.get("period") or "limit",
@@ -255,9 +279,12 @@ def suite_view(cards: List[Dict[str, Any]], now: Optional[float] = None
                             "source": c["id"]}
         today = [((c.get("ranges") or {}).get("today") or {}) for c in cs]
         usd = [t["usd"] for t in today if t.get("usd") is not None]
+        soon = [t for c in cs for w in c.get("limits") or []
+                for t in [run_out_warning(w)] if t and (now is None or t > now)]
         out.append({"id": s.id, "name": s.name, "usage_url": s.usage_url,
                     "card_ids": [c["id"] for c in cs], "headline": best,
                     "reason": "" if best else "no limit reading yet",
+                    "runs_out_at": min(soon, default=None),
                     "today_tokens": sum(int(t.get("tokens") or 0) for t in today),
                     "today_usd": sum(usd) if usd else None,
                     "demo": any(c.get("demo") for c in cs)})
@@ -456,6 +483,8 @@ def suite_menu_lines(ov: Dict[str, Any], now: Optional[float] = None,
                 bits.append("%.0f%% used" % h["used_percent"])
             if "reset" in want and until(h.get("resets_at"), now):
                 bits.append("resets " + until(h["resets_at"], now))
+        if "limit" in want and s.get("runs_out_at"):
+            bits.append("runs out %s (est.)" % until(s["runs_out_at"], now))
         if "tokens" in want and s.get("today_tokens"):
             bits.append("today %s tok" % _short(s["today_tokens"]))
         if "cost" in want and s.get("today_tokens") and s.get("today_usd") is not None:

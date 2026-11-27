@@ -16,6 +16,7 @@ from omnimonitor import alerts as alerts_mod
 from omnimonitor import config as config_mod
 from omnimonitor import forecast as forecast_mod
 from omnimonitor import net as net_mod
+from omnimonitor import outbound as outbound_mod
 from omnimonitor import overview as overview_mod
 from omnimonitor import settings as settings_mod
 from omnimonitor import stats as stats_mod
@@ -37,6 +38,7 @@ class Controller:
         self.service_status: Dict[str, Dict[str, Any]] = {}
         self._lock = threading.RLock()
         self._scan_lock = threading.Lock()  # web "save settings" and the poll loop both scan
+        self._alert_lock = threading.Lock()  # read-decide-save of "what already fired"
         self._config_lock = threading.Lock()  # one web request writes the config at a time
         self.login_errors: Dict[str, str] = {}  # source -> why its last sign-in failed
         self._wake = threading.Event()
@@ -293,6 +295,10 @@ class Controller:
         self.token_note = "; ".join(notes)
 
     def _check_alerts(self) -> None:
+        with self._alert_lock:  # Refresh Now can overlap the poll loop
+            self._check_alerts_locked()
+
+    def _check_alerts_locked(self) -> None:
         u = self.usage
         if u is None or u.is_demo or self.history is None:
             self._check_provider_alerts()
@@ -305,8 +311,7 @@ class Controller:
             if new != state:
                 alerts_mod.save_state(self.history, new)
             for m in msgs:
-                alerts_mod.deliver(m["title"], m["body"], self.notifier)
-                self.sent_alerts.append(m)
+                self._send_alert(m)
         except Exception:  # noqa: BLE001 - alerts must never break polling
             pass
         self._check_provider_alerts()
@@ -322,10 +327,22 @@ class Controller:
             if new != state:
                 alerts_mod.save_state(self.history, new, key)
             for m in msgs:
-                alerts_mod.deliver(m["title"], m["body"], self.notifier)
-                self.sent_alerts.append(m)
+                self._send_alert(m)
         except Exception:  # noqa: BLE001
             pass
+
+    def _send_alert(self, m: Dict[str, str]) -> None:
+        """Desktop notification, plus your webhook when you saved one."""
+        alerts_mod.deliver(m["title"], m["body"], self.notifier)
+        self.sent_alerts.append(m)
+        try:
+            url = outbound_mod.configured_url()
+            if url:
+                ok, why = outbound_mod.send(m["title"], m["body"], url=url)
+                if not ok:
+                    log.warning("alert webhook: %s", why)
+        except Exception as e:  # noqa: BLE001 - never log the message: it can hold the URL
+            log.warning("alert webhook failed (%s)", type(e).__name__)
 
     def update_settings(self, changes: Any, web: bool = True) -> Dict[str, Any]:
         """Validate (allow-list), write to the config file, apply live. Never raises."""
