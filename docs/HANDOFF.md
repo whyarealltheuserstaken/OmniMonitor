@@ -1,54 +1,42 @@
-# OmniMonitor suites rework: handoff (2026-11-25)
+# OmniMonitor suites rework: handoff (2026-11-27)
 
 Read first: `docs/superpowers/specs/2026-11-25-suites-rework-design.md` (approved design) and the
-plans in `docs/superpowers/plans/`. Owner's working agreements are in Claude's memory
-(`omnimonitor-working-agreements`): self-merge (squash) after green CI + clean review, no
-attribution lines, commit as the GitHub noreply identity, ask only when blocked.
+plans in `docs/superpowers/plans/` (the last one is `2026-11-27-finish-0.6.md`). Owner's working
+agreements are in Claude's memory (`omnimonitor-working-agreements`): self-merge (squash) after
+green CI + clean review, no attribution lines, commit as the GitHub noreply identity, ask only
+when blocked.
 
-## Done
-- **Step 1, suite layer**: PR #22, merged. `suites.py`, `overview.suite_view`, `tray_suite`
-  (migrated from `primary_provider`), suite-first tray menu, `omnimonitor tray`.
-- **Step 2, auth hardening**: PR #23, merged. `vault.py` (AES-GCM, key in OS keychain), sessions
-  and API keys on the vault with migration, `login_specs.py`, sign-in in a child process
-  (`omnimonitor login <pid>`), `redact.py` + `omnimonitor verify`, keyring/cryptography bundled.
-- **Step 3a, plan limits from CLI logins**: PR #24, merged. `cli_logins.py` (read-only), `cli_accounts.py` (Claude, Codex, Gemini), catalog kind
-  `cli_login`, `Reading.limits`. **Read live on the owner's PC on 2026-11-25**: Claude (5-hour
-  and weekly) and Codex returned sensible numbers, so those two are in `catalog.LIVE_VERIFIED`.
-  The owner has not yet compared them with claude.ai / ChatGPT usage pages. Gemini CLI is not
-  installed on that PC (fixture-only). Security review: no Critical/High, all Low fixed.
+## Done (0.6.0-beta)
+- Suite layer (#22), vault + sign-in hardening (#23), plan limits from CLI logins (#24).
+- Real data without Grok (#26), customization (#27), easy setup (#28), then verification, docs
+  and release, including the fixes from the pre-release security + correctness review.
 
-## Next
-All work so far is merged into `main` (PRs #22, #23, #24); nothing is in flight.
-1. **Step 3b, remaining suites.** Grok/Cursor already has deep support (`grok_suite`,
-   `cursor_usage`, `cursor_app_auth`) and the Grok CLI is not installed on the owner's PC, so
-   it waits for the live check. DeepSeek / Qwen / Kimi: API balance exists for DeepSeek and
-   Kimi (Moonshot); Qwen has no balance API; the owner has no accounts, so any web-plan reader
-   would be guesswork. Do not invent endpoints; research and mark fixture-only.
-2. **Step 4, customization.** Per-suite/source display choices (what shows in tray / menu /
-   dashboard / mini view), ordering, thresholds, budgets, all validated in Settings and the
-   CLI. De-Grok `status`, `statusline` and the mini view (still Grok-first).
-3. **Step 5, easy setup.** First-run screen listing every suite as Connected / Sign in / Add
-   key / Not available, one action each; detect installed CLIs and existing logins.
-4. **Step 6, live verification** with the owner: sign in through the app's windows, run
-   `omnimonitor verify`, read only the scrubbed output. Compare Claude / Codex numbers with the
-   vendors' pages. Never read cookies or keys directly.
+## Checked on the owner's PC (2026-11-27)
+`omnimonitor verify` passed for Claude Code logs, the Claude plan (Claude Code login) and the
+ChatGPT plan (Codex login). The vault round trip worked with Windows Credential Manager, the
+dashboard window loaded, and the three sign-in windows reached claude.ai, chatgpt.com and
+Cursor's sign-in pages. The pages were driven in Edge with no console errors.
 
-## Deferred minors (from reviews)
-- The tray says "no limit readings yet" if `overview.build` raises.
-- `config import` of a pre-0.6 export ignores `primary_provider` instead of migrating it.
-- The Grok headline label is doubled ("Grok weekly pool weekly pool") in `primary.detail`.
-- Empty Providers / Usage pages submenus may render on some pystray backends.
-- `catalog.PRIMARY_CHOICES` is dead code.
+## Still needs the owner
+1. **Finish a website sign-in** (Claude, ChatGPT, Cursor) from Setup, then `omnimonitor verify`.
+   Their readers are still fixture-only.
+2. Compare the Claude and ChatGPT percentages with the vendors' own usage pages.
+3. Grok CLI, Gemini CLI and API keys, if/when available: turn on, run `omnimonitor verify`, read
+   only the scrubbed output, then add passing ids to `catalog.LIVE_VERIFIED`.
+
+## Deferred
+- `Controller._apply_cfg` clears and refills the shared config dict without a lock; another
+  thread could briefly see it empty (older than 0.6).
+- The README screenshots predate suites. UI/visual redesign is the next project (spec).
+- No DeepSeek / Qwen / Kimi web-plan reader or Qwen balance: no source could be confirmed.
 
 ## Environment notes (Windows dev box)
 - venv: `py -m venv .venv`; `.venv/Scripts/python -m pytest -q`; `.venv/Scripts/ruff check src tests`.
-- The checkout uses CRLF. Multi-line string replacements must normalize `\r\n` or use the
-  Edit tool.
+- The checkout uses CRLF.
 - `tests/conftest.py` gives every test a fake keyring and its own `OMNIMONITOR_HOME`. Tests
   must never touch the real Credential Manager or `%APPDATA%\omnimonitor`.
-- `test_live_setup.py::test_web_use_real_route_needs_csrf` sometimes fails with
-  WinError 10053. It's a pre-existing flake that passes on rerun.
-
-## Flaky test on Windows
-`WinError 10053` (socket abort) appears now and then in local web-server tests when the whole suite runs
-(`test_live_setup`, `test_deps`). Each passes alone and on `main`; rerun the suite.
+- Local web-server tests now and then fail with `WinError 10053` when the whole suite runs; they
+  pass on rerun.
+- CI's packaged-app window smoke on Windows failed once with `loaded: False` and passed on rerun.
+- No Chrome on this PC. For UI checks use Playwright with `channel="msedge"`; the pages' CSP
+  blocks `wait_for_function` with a string, so wait on locators.

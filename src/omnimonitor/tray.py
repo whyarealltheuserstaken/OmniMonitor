@@ -322,7 +322,8 @@ class TrayApp:
             if sys.platform == "darwin" else "system tray"
         deliver("OmniMonitor is running", "Look for the ring icon in the %s." % where)
         if self.server and not config_mod.env("NO_BROWSER"):
-            self._open("")
+            demo = (self.ctrl.cfg.get("source") or "demo") == "demo"
+            self._open("setup" if demo else "")  # nothing connected yet: start at Setup
         log.info("first run: hint shown")
         return True
 

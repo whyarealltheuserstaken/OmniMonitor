@@ -193,8 +193,8 @@ def cmd_doctor(args) -> int:
 
 
 def cmd_setup(args) -> int:
-    from omnimonitor import doctor
-    return doctor.setup(_load(args), assume_yes=args.yes)
+    from omnimonitor import onboarding
+    return onboarding.cli_setup(_load(args), assume_yes=args.yes)
 
 
 def cmd_autostart(args, install: bool) -> int:
@@ -267,7 +267,7 @@ def cmd_verify(args) -> int:
         print(json.dumps(res, indent=2))
     else:
         if not res:
-            print("No account or sign-in sources are enabled. Enable one: omnimonitor providers enable <id>")
+            print("No sources are switched on. Run `omnimonitor setup`.")
         for r in res:
             print("%s %-18s %s" % ("✔" if r["ok"] else "✘", r["pid"], r["error"] or "read OK"))
         print("Scrubbed responses: %s" % verify.default_dir())
@@ -325,6 +325,7 @@ def cmd_providers(args) -> int:
     for p in catalog.CATALOG:
         r = {"id": p.id, "name": p.name, "family": p.family, "kind": p.kind,
              "status": p.status, "shows": p.shows, "docs": list(p.docs), "reason": p.reason,
+             "verified": catalog.verified(p.id),
              "enabled": (p.id in enabled) if p.id in catalog.SWITCHABLE else None}
         if p.id in found:
             r["found"], r["paths"] = found[p.id]["found"], found[p.id]["paths"]
@@ -355,8 +356,9 @@ def cmd_providers(args) -> int:
             on = "-" if r["enabled"] is None else ("ON " if r["enabled"] else "off")
             extra = ("found" if r.get("found") else "not found") if "found" in r else \
                 ("key: %s" % r["key"] if "key" in r else r.get("login", ""))
-            print("  %-24s %-3s %-9s %-10s %s" % (r["name"][:24], on, _status_word(r["status"]),
-                                                  extra, r["shows"][:60]))
+            print("  %-24s %-3s %-9s %-13s %-10s %s" % (
+                r["name"][:24], on, _status_word(r["status"]), catalog.verified_label(r["id"]),
+                extra, r["shows"][:60]))
     print("\nEnable one:   omnimonitor providers enable <id>   (ids: --json, or docs/providers.md)")
     from omnimonitor import suites
     print("Tray follows: omnimonitor tray <%s>" % "|".join(suites.TRAY_CHOICES))
@@ -465,8 +467,11 @@ def cmd_statusline(args) -> int:
     evs = hist.events() if hist is not None else []
     src = None if args.source == "all" else (args.source,)
     ov = ctrl.stats().get("providers") or {}
-    grok_on = ctrl.cfg.get("source") != "none"
+    from omnimonitor import display
     shown = (ov.get("views") or {}).get("statusline") or {}
+    grok_on = ctrl.cfg.get("source") != "none" \
+        and display.visible(display.hidden(ctrl.cfg, "statusline"), "grok") \
+        and "limit" in display.fields(ctrl.cfg, "statusline")
     p = sl.parts(hist.last_billing() if hist is not None and grok_on else None,
                  ov.get("today"), blocks_mod.active_block(evs, src, now), now,
                  suites=shown.get("suites"), fields=shown.get("fields"))
@@ -643,6 +648,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("id", nargs="?")
     s.add_argument("--dry-run", action="store_true", help="download + verify, don't run")
     s.add_argument("--json", action="store_true")
+    s = sub.add_parser("vault-check", help="check that this build can store sign-ins")
+    s.add_argument("--require-os-store", action="store_true",
+                   help="also fail without the operating system's credential store")
     sub.add_parser("log-path", help="print the log file path")
     s = sub.add_parser("window", help="native app window (started by the tray; URL on stdin)")
     s.add_argument("--smoke", action="store_true",
@@ -777,6 +785,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_config_path(args)
     if cmd == "net-check":
         return cmd_net_check(args)
+    if cmd == "vault-check":
+        from omnimonitor import vault
+        return vault.self_check(args.require_os_store)
     if cmd == "window":
         return cmd_window(args)
     if cmd == "log-path":

@@ -64,7 +64,7 @@ def parts(last_billing: Optional[Dict[str, Any]], today: Optional[Dict[str, Any]
         g = {"used_percent": round(float(last_billing["used_percent"]), 1),
              "as_of": last_billing.get("ts")}
         reset = _iso_ts(last_billing.get("period_end"))
-        if reset and reset > now:
+        if "reset" in want and reset and reset > now:
             g["resets_in_s"] = int(reset - now)
         out["grok"] = g
     if block:

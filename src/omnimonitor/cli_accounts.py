@@ -84,7 +84,7 @@ def fetch_claude(cfg: Dict[str, Any], http: HttpFn, now: float) -> Reading:
         if isinstance(u, bool) or not isinstance(u, (int, float)):
             continue
         used, resets = max(0.0, min(200.0, float(u))), _iso(block.get("resets_at"))
-        r.metric(key, name + " used", used, "%", "used_percent")
+        r.metric(key, name + " used", used, "%", "used_percent", in_limits=True)
         r.limits.append({"name": name, "used_percent": used, "resets_at": resets})
         if best is None or used > best:
             best, r.limit_percent, r.resets_at = used, used, resets

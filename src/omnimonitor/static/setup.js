@@ -74,51 +74,108 @@
     return row;
   }
 
-  function renderLogin(s) {
-    var box = document.getElementById("grok-login");
-    if (!box) {
-      box = el("div", "dep"); box.id = "grok-login";
-      var deps = document.getElementById("deps"); deps.parentNode.insertBefore(box, deps);
-    }
-    box.textContent = "";
-    var g = s.grok_login || {}, left = el("div", "");
-    var ok = g.state === "ok";
-    var t = el("h3", "", "Grok login ");
-    t.appendChild(el("span", "pill " + (ok ? "ok" : "miss"), ok ? "logged in" :
-      ({ not_installed: "CLI missing", not_logged_in: "not logged in", expired: "expired" }[g.state] || "?")));
-    left.appendChild(t);
-    left.appendChild(el("div", "meta", g.message || ""));
-    if (!ok && g.state !== "not_installed") {
-      var c = el("div", "meta", "Login is interactive: open Terminal and run ");
-      c.appendChild(el("code", "", g.login_command || "grok login")); left.appendChild(c);
-    }
-    left.appendChild(el("div", "meta", s.demo ? "This app is showing DEMO (fake) numbers." :
-      "Real Grok usage is on" + (s.last_ok ? " · updated " + new Date(s.last_ok).toLocaleString() : "") +
-      (s.error ? " · last error: " + s.error : "")));
-    box.appendChild(left);
-    var right = el("div", ""), out = el("div", "meta", "");
-    var re = el("button", "", "Re-check"); re.addEventListener("click", load); right.appendChild(re);
-    if (s.demo) {
-      var use = el("button", "primary", "Use my real Grok usage"); use.disabled = !ok;
-      use.addEventListener("click", function () {
-        use.disabled = true; out.textContent = "Checking your Grok usage…";
-        post("api/setup/use-real", {}).then(function (r) {
-          out.textContent = r.ok ? "Done: " + Math.round(r.remaining_percent) + "% remaining." :
-            "Failed: " + (r.error || "?");
-          setTimeout(load, 800);
-        }).catch(function () { out.textContent = "Request failed."; use.disabled = false; });
-      });
-      right.appendChild(document.createTextNode(" ")); right.appendChild(use);
-    }
-    right.appendChild(out); box.appendChild(right);
+  /* ---- accounts and tools (api/setup "onboarding"; actions POST api/app/onboard) ---- */
+  var PILL = { connected: "ok", found: "miss", sign_in: "miss", add_key: "miss", attention: "bad",
+    not_available: "" };
+  var LABEL = { connected: "Connected", found: "Found", sign_in: "Sign in", add_key: "Add key",
+    attention: "Needs attention", not_available: "Not available" };
+  var open = {};  // which suites have their source list expanded
+
+  function pill(state) { return el("span", "pill " + PILL[state], LABEL[state] || state); }
+
+  function act(body, button) {
+    if (button) button.disabled = true;
+    OM.appPost("onboard", body).then(function (r) {
+      OM.toast(r.message || "Saved.");
+      // the next read happens in the background: look again shortly
+      loadSuites(); setTimeout(loadSuites, 2500); setTimeout(loadSuites, 8000);
+    }, function (e) { OM.toast(e.message, true); if (button) button.disabled = false; });
   }
 
+  function actionButton(a) {
+    var b = el("button", "primary", a.type === "add_key" ? "Copy key command" : a.label);
+    b.type = "button";
+    b.addEventListener("click", function () {
+      if (a.type === "enable") act({ action: "enable", sources: a.sources }, b);
+      else if (a.type === "signin") act({ action: "signin", source: a.source }, b);
+      else OM.copyText(a.command).then(function (ok) {
+        OM.toast((ok ? "Copied. Run it in a terminal: " : "Run in a terminal: ") + a.command);
+      });
+    });
+    return b;
+  }
+
+  function sourceRow(r) {
+    var row = el("div", "dep"), left = el("div", ""), right = el("div", "");
+    var t = el("div", "", r.name + " "); t.appendChild(pill(r.state)); left.appendChild(t);
+    var bits = [r.detail];
+    if (r.verified === "fixtures") bits.push("not live-verified");
+    else if (r.verified === "live") bits.push("checked on real data");
+    if (r.status === "experimental") bits.push("experimental");
+    left.appendChild(el("div", "meta", bits.filter(Boolean).join(" · ")));
+    function button(label, body) {
+      var b = el("button", "", label); b.type = "button";
+      b.addEventListener("click", function () { act(body, b); });
+      right.appendChild(b); right.appendChild(document.createTextNode(" "));
+    }
+    if (r.state === "found") button("Turn on", { action: "enable", sources: [r.id] });
+    if (r.state === "sign_in") button("Sign in…", { action: "signin", source: r.id });
+    if (r.state === "attention" && r.can_sign_in) button("Sign in again…", { action: "signin", source: r.id });
+    if (r.state === "add_key") right.appendChild(actionButton({ type: "add_key", command: r.command }));
+    if (r.cursor_app) button("Use signed-in Cursor app", { action: "cursor_app" });
+    if (r.enabled && r.id !== "grok_sessions") button("Turn off", { action: "disable", sources: [r.id] });
+    row.appendChild(left); row.appendChild(right);
+    return row;
+  }
+
+  function renderSuites(o) {
+    var box = document.getElementById("suites"); box.textContent = "";
+    var suites = o.suites || [];
+    document.getElementById("demo-banner").hidden = !o.demo;
+    document.getElementById("connected-summary").textContent = "· " +
+      suites.filter(function (s) { return s.state === "connected"; }).length + " of " + suites.length + " connected";
+    suites.forEach(function (s) {
+      var wrap = el("div", "dep"), left = el("div", ""), right = el("div", "");
+      var t = el("h3", "", s.name + " "); t.appendChild(pill(s.state)); left.appendChild(t);
+      var more = el("button", ""), list = el("div", "plan");
+      more.type = "button";
+      function show() {
+        list.hidden = !open[s.id];
+        more.textContent = open[s.id] ? "Hide sources" : "Sources (" + s.sources.length + ")";
+        more.setAttribute("aria-expanded", String(!!open[s.id]));
+      }
+      more.addEventListener("click", function () { open[s.id] = !open[s.id]; show(); });
+      left.appendChild(more);
+      if (s.action) {
+        right.appendChild(actionButton(s.action));
+        if (s.action.type === "add_key") left.appendChild(el("div", "meta", s.action.command));
+      }
+      s.sources.forEach(function (r) { list.appendChild(sourceRow(r)); });
+      show();
+      wrap.appendChild(left); wrap.appendChild(right); wrap.appendChild(list); box.appendChild(wrap);
+    });
+  }
+
+  function fetchSetup() {
+    return fetch("api/setup", { cache: "no-store", credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .then(function (s) { csrf = s._csrf || ""; return s; });
+  }
+
+  function loadSuites() {
+    return fetchSetup().then(function (s) { renderSuites(s.onboarding || {}); })
+      .catch(function () { document.getElementById("suites").textContent = "Could not load setup status."; });
+  }
+  document.getElementById("leave-demo").addEventListener("click", function () {
+    act({ action: "real" }, this);
+  });
+  setInterval(loadSuites, 15000);  // picks up finished sign-ins and first reads
+
   function load() {
-    fetch("api/setup", { credentials: "same-origin" }).then(function (r) { return r.json(); })
+    fetchSetup()
       .then(function (s) {
-        csrf = s._csrf || "";
         document.getElementById("root-banner").hidden = !s.root;
-        renderLogin(s);
+        renderSuites(s.onboarding || {});
         var box = document.getElementById("deps"); box.textContent = "";
         var deps = s.deps || [], miss = deps.filter(function (d) { return !d.installed; }).length;
         document.getElementById("summary").textContent = deps.length ?

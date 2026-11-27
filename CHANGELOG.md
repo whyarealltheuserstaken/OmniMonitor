@@ -6,7 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0-beta] - 2026-11-27
+
+Beta / prerelease. See [release notes](docs/release-notes/v0.6.0-beta.md).
+
 ### Added
+- **No Grok account needed.** `source: "none"` gives real data with the Grok weekly pool off.
+  `status`, `statusline`, the tray menu, the dashboard headline and the mini view follow suites
+  and `tray_suite`.
+- **Easy setup.** The Setup page and `omnimonitor setup` list every suite as Connected / Found
+  / Sign in / Add key / Not available / Needs attention, with one action each. First run opens
+  it, and the tray menu has **Setup…**.
+- **Customization** (Settings → Layout, or `config set`): order, per-place hiding of suites and
+  sources (tray icon, tray menu, dashboard, mini view, status line), which numbers each place
+  shows, suite colours, per-suite alert levels and per-source refresh intervals.
+- Every source says whether it is **live-verified** or **fixture-only** (`providers`, Setup,
+  `docs/providers.md`).
 - **Suites.** Every provider belongs to a suite (Anthropic, OpenAI, Google, Grok & Cursor, DeepSeek,
   Qwen, Kimi, GitHub Copilot, API gateways, Coding agents). The tray follows `tray_suite`
   (a suite, `tightest` = default, or `budget`), replacing `primary_provider` (migrated). Grok is no
@@ -26,6 +41,17 @@ All notable changes to this project are documented here. The format follows
 - Cursor sign-in could never finish (it required all three alternative cookie names at once).
 - Release builds did not bundle `keyring` / `cryptography`, so saved sessions were plaintext files.
 - A limit whose reset time has passed no longer drives the tray icon.
+- `omnimonitor verify` used the API-key HTTP client for every source, so ChatGPT (and other
+  CLI-login and website sources) were refused before any request was made. It now also checks
+  local logs and the Grok pool.
+- A new sign-in, cookie import or sign-out is read at once, not after the refresh interval.
+- `omnimonitor setup` crashed with `EOFError` when Windows reported `NUL` as a terminal.
+- `doctor` and the tool-installer list no longer ask for the Grok CLI when Grok is off.
+- Doubled Grok headline label, blank tray submenus, a misleading tray title when the overview
+  failed, and old settings exports losing the tray choice.
+- `codex` (local logs) was wrongly labelled live-verified.
+- New `omnimonitor vault-check`, run against every packaged build in CI, so a build that cannot
+  load its encryption can no longer be released.
 
 ## [0.5.3-beta] - 2026-11-16
 

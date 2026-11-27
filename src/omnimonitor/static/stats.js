@@ -51,8 +51,12 @@
       b.appendChild(tb);
     }
     $("sub").textContent = "Updated " + (st.last_ok ? fmtDate(st.last_ok) : "never") +
-      " · source: " + (st.source || "?") + " · tokens: " + (d.provider || "?") +
+      (st.source === "none" ? "" : " · Grok source: " + (st.source || "?")) +
       (d.data_since ? " · token data since " + fmtDate(d.data_since) : "");
+    // The pace forecast is computed from the Grok weekly pool; the burn rate is not.
+    $("forecast-pace").hidden = !u;
+    $("fc-kind").hidden = !u;
+    document.querySelector("#forecast-card h2").firstChild.textContent = u ? "Pace & forecast " : "Token pace ";
 
     var prim = OM.hero(d);
     $("products").textContent = u && u.raw_used_percent > 100 && prim.id === "xai"

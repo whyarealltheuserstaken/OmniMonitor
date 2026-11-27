@@ -173,6 +173,23 @@ def available() -> bool:
         return False
 
 
+def self_check(require_os_store: bool = False) -> int:
+    """``omnimonitor vault-check``: can this build encrypt, and is there a keychain? Reads
+    and writes no secrets. The release smoke test runs it, because a bundling mistake once
+    shipped builds that kept sessions in plaintext."""
+    try:
+        aes = _aesgcm()(bytes(32))
+        nonce = bytes(12)
+        ok = aes.decrypt(nonce, aes.encrypt(nonce, b"check", None), None) == b"check"
+        print("encryption: %s" % ("OK" if ok else "FAILED (round trip mismatch)"))
+    except Exception as e:  # noqa: BLE001
+        ok = False
+        print("encryption: FAILED (%s: %s)" % (type(e).__name__, e.__cause__ or e))
+    store = _kr() is not None
+    print("keychain: %s" % ("OK" if store else "not available"))
+    return 0 if ok and (store or not require_os_store) else 1
+
+
 def put(name: str, data: bytes) -> None:
     path = _path(name)
     aes = _aesgcm()

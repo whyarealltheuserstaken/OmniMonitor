@@ -12,6 +12,7 @@ import re
 from typing import Any, Callable, Dict, List, Tuple
 
 from omnimonitor import catalog, display, suites
+from omnimonitor import config as config_mod
 from omnimonitor.pricing import clean_prices
 
 HIDEABLE_CARDS = ("providers", "budgets", "grok-suite", "forecast", "burn", "limit",
@@ -392,6 +393,7 @@ def apply(cfg: Dict[str, Any], changes: Any, web: bool = False
 def public_view(cfg: Dict[str, Any]) -> Dict[str, Any]:
     """What the Settings page may READ: web keys only, plus a few read-only facts."""
     out = {k: cfg.get(k) for k in web_keys()}
+    out.update(_valid_layout(cfg))  # the page sends these back: one typo would block a save
     out["_readonly"] = {"source": cfg.get("source"), "token_source": cfg.get("token_source"),
                         "config_path": cfg.get("_config_path"),
                         "hideable_cards": list(HIDEABLE_CARDS),
@@ -411,12 +413,44 @@ def public_view(cfg: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _valid_layout(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """The stored layout settings with anything the validators would refuse left out."""
+    def as_dict(v: Any) -> Dict[str, Any]:
+        return v if isinstance(v, dict) else {}
+
+    def ids(v: Any) -> List[str]:
+        return [x for x in v if display.valid_id(x)] if isinstance(v, list) else []
+
+    def passes(check: Callable[[Any], Any], value: Any) -> bool:
+        try:
+            check(value)
+            return True
+        except SettingError:
+            return False
+    stored = as_dict(cfg.get("display"))
+    out: Dict[str, Any] = {}
+    if ids(stored.get("order")):
+        out["order"] = ids(stored.get("order"))
+    hide = {s: ids(v) for s, v in as_dict(stored.get("hide")).items()
+            if s in display.SURFACES and ids(v)}
+    fields = {s: [x for x in v if x in display.FIELDS]
+              for s, v in as_dict(stored.get("fields")).items()
+              if s in display.SURFACES and isinstance(v, list)}
+    out.update({k: v for k, v in (("hide", hide), ("fields", fields)) if v})
+    return {"display": out,
+            "suite_colors": {k: v for k, v in as_dict(cfg.get("suite_colors")).items()
+                             if passes(_suite_colors, {k: v})},
+            "source_poll_seconds": {
+                k: v for k, v in as_dict(cfg.get("source_poll_seconds")).items()
+                if passes(_source_poll, {k: v})}}
+
+
 def _layout_suites(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Suites and their switched-on sources, in the user's order (the Layout editor)."""
     on = set(catalog.enabled_ids(cfg))
     if cfg.get("source") != "none":
         on.add("grok")
-    if cfg.get("source") != "none" or cfg.get("token_source") == "grok_sessions":
+    if config_mod.effective_token_source(cfg) == "grok_sessions":
         on.add("grok_sessions")
     cards = [{"id": p.id} for p in catalog.CATALOG if p.id in on]
     rows = [{"id": s.id, "name": s.name} for s in suites.SUITES
@@ -424,7 +458,8 @@ def _layout_suites(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
     rows = display.ordered_suites(cfg, rows)
     cards = display.ordered_cards(cfg, cards, rows)
     for s in rows:
-        s["sources"] = [{"id": c["id"], "name": catalog.name(c["id"]),
+        s["shared_id"] = s["id"] in catalog.BY_ID  # "deepseek": a source and a suite
+        s["sources"] =[{"id": c["id"], "name": catalog.name(c["id"]),
                          "account": catalog.get(c["id"]).kind in ("api", "web_session",
                                                                   "cli_login")}
                         for c in cards if suites.suite_of(c["id"]) == s["id"]]

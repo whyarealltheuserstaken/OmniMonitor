@@ -131,7 +131,8 @@
     tr.appendChild(name);
     var where = el("td", "s"), wrap = el("div", "checks");
     (ro.surfaces || []).forEach(function (sf) {
-      var ids = isSuite ? [key, item.id] : [item.id];
+      // "deepseek" alone means the DeepSeek source, never the whole suite
+      var ids = isSuite ? (item.shared_id ? [key] : [key, item.id]) : [item.id];
       wrap.appendChild(box(!isHidden(s, sf, ids), "data-show", sf, SURFACE_LABELS[sf] || sf));
     });
     where.appendChild(wrap);
@@ -179,8 +180,9 @@
     var shown = {};
     rows.forEach(function (r) { shown[r.getAttribute("data-key")] = true; });
     // keep entries for things that aren't listed here (switched off, or set from the CLI)
-    var old = s.display || {};
-    function unlisted(id) { return !shown[id] && !shown["suite:" + id]; }
+    var old = s.display || {}, shared = {};
+    (ro.suites || []).forEach(function (su) { if (su.shared_id) shared[su.id] = true; });
+    function unlisted(id) { return !shown[id] && !(shown["suite:" + id] && !shared[id]); }
     var order = rows.map(function (r) { return r.getAttribute("data-key"); })
       .concat((old.order || []).filter(unlisted));
     var hide = {};
