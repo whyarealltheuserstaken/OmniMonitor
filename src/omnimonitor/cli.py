@@ -648,6 +648,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("id", nargs="?")
     s.add_argument("--dry-run", action="store_true", help="download + verify, don't run")
     s.add_argument("--json", action="store_true")
+    s = sub.add_parser("vault-check", help="check that this build can store sign-ins")
+    s.add_argument("--require-os-store", action="store_true",
+                   help="also fail without the operating system's credential store")
     sub.add_parser("log-path", help="print the log file path")
     s = sub.add_parser("window", help="native app window (started by the tray; URL on stdin)")
     s.add_argument("--smoke", action="store_true",
@@ -782,6 +785,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_config_path(args)
     if cmd == "net-check":
         return cmd_net_check(args)
+    if cmd == "vault-check":
+        from omnimonitor import vault
+        return vault.self_check(args.require_os_store)
     if cmd == "window":
         return cmd_window(args)
     if cmd == "log-path":

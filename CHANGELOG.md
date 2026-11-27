@@ -50,6 +50,8 @@ Beta / prerelease. See [release notes](docs/release-notes/v0.6.0-beta.md).
 - Doubled Grok headline label, blank tray submenus, a misleading tray title when the overview
   failed, and old settings exports losing the tray choice.
 - `codex` (local logs) was wrongly labelled live-verified.
+- New `omnimonitor vault-check`, run against every packaged build in CI, so a build that cannot
+  load its encryption can no longer be released.
 
 ## [0.5.3-beta] - 2026-11-16
 

@@ -210,3 +210,35 @@ def test_settings_page_gets_only_valid_stored_layout_entries():
     assert view["display"] == {"order": ["openai"], "fields": {"menu": ["limit"]}}
     assert view["suite_colors"] == {"openai": "#10a37f"}
     assert view["source_poll_seconds"] == {"deepseek": 3600}
+
+
+# the packaged app must be able to load its encryption (nothing in CI checked this)
+def test_vault_check_passes_without_touching_the_keychain(capsys, _fake_keyring):
+    assert cli.main(["vault-check", "--require-os-store"]) == 0
+    out = capsys.readouterr().out
+    assert "encryption: OK" in out and "keychain: OK" in out
+    assert _fake_keyring.store == {}
+
+
+def test_vault_check_fails_when_encryption_cannot_load(capsys, monkeypatch):
+    from omnimonitor import vault
+
+    def broken():
+        raise vault.VaultUnavailable("the cryptography package is missing")
+    monkeypatch.setattr(vault, "_aesgcm", broken)
+    assert cli.main(["vault-check"]) == 1
+    assert "encryption: FAILED" in capsys.readouterr().out
+
+
+def test_vault_check_keychain_is_only_required_when_asked(capsys, monkeypatch):
+    from omnimonitor import vault
+    monkeypatch.setattr(vault, "_kr", lambda: None)
+    assert cli.main(["vault-check"]) == 0
+    assert cli.main(["vault-check", "--require-os-store"]) == 1
+    assert "keychain: not available" in capsys.readouterr().out
+
+
+def test_release_builds_run_vault_check():
+    yml = (Path(__file__).resolve().parents[1] / ".github" / "workflows"
+           / "release.yml").read_text("utf-8")
+    assert "vault-check --require-os-store" in yml and 'grep -q "encryption: OK"' in yml
