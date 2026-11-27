@@ -193,8 +193,8 @@ def cmd_doctor(args) -> int:
 
 
 def cmd_setup(args) -> int:
-    from omnimonitor import doctor
-    return doctor.setup(_load(args), assume_yes=args.yes)
+    from omnimonitor import onboarding
+    return onboarding.cli_setup(_load(args), assume_yes=args.yes)
 
 
 def cmd_autostart(args, install: bool) -> int:

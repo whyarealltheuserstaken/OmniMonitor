@@ -239,8 +239,9 @@ def default_app_actions(ctrl) -> Dict[str, Callable[[Any], Dict[str, Any]]]:
         if isinstance(body, dict) and body.get("save"):
             return aa.save_diagnostics(ctrl)
         return aa.diagnostics(ctrl)
-    actions = {"export": export, "open-url": aa.open_external, "diagnostics": diag}
-    actions.update(aa.session_actions(lambda k: ctrl.cfg.get(k)))
+    actions = {"export": export, "open-url": aa.open_external, "diagnostics": diag,
+               "onboard": ctrl.onboard}
+    actions.update(aa.session_actions(lambda k: ctrl.cfg.get(k), changed=ctrl.after_login))
     return actions
 
 

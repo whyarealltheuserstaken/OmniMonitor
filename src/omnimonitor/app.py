@@ -413,7 +413,51 @@ class Controller:
         st["grok_login"] = grok_login_state(self.cfg)
         st["last_ok"] = self.last_ok.isoformat() if self.last_ok else None
         st["error"] = self.error
+        from omnimonitor import onboarding
+        st["onboarding"] = onboarding.status(
+            self.cfg, None if self.token_source == "demo" else dict(self.readings))
         return st
+
+    def onboard(self, body: Any = None) -> Dict[str, Any]:
+        """One Setup-page action: write the change, apply it live, open sign-in if asked."""
+        from omnimonitor import onboarding, session_login
+        try:
+            plan = onboarding.plan(self.cfg, body)
+        except onboarding.OnboardingError as e:
+            return {"ok": False, "error": str(e)}
+        try:
+            if plan.changes and self.cfg.get("_config_path"):
+                config_mod.update_config_file(plan.changes, Path(self.cfg["_config_path"]))
+                self._cfg_mtime = self._config_mtime()
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": "could not save config: %s" % e}
+        new = dict(self.cfg)
+        new.update(plan.changes)
+        if new.get("source") != "demo":
+            new.pop("_forced_demo", None)
+        self._apply_cfg(new)
+        self.forget_readings(plan.sources)
+        message = "Saved."
+        if plan.signin:
+            try:
+                message = session_login.start_login(
+                    plan.signin, on_done=lambda ok, msg: self.after_login(plan.signin))
+            except Exception as e:  # noqa: BLE001
+                return {"ok": False, "error": str(e)}
+        self.poke()
+        return {"ok": True, "message": message}
+
+    def forget_readings(self, ids: List[str]) -> None:
+        """Drop saved readings so these sources are read again at the next poll instead of
+        after their refresh interval (a cached "signed out" would otherwise stick)."""
+        for pid in ids:
+            self.readings.pop(pid, None)
+            if self.history is not None:
+                self.history.set_meta(accounts_mod.META_PREFIX + pid, "")
+
+    def after_login(self, pid: str) -> None:
+        self.forget_readings([pid])
+        self.poke()
 
     def setup_use_real(self, body: Any = None) -> Dict[str, Any]:
         """Setup page: check the Grok login + billing, then switch source from demo to

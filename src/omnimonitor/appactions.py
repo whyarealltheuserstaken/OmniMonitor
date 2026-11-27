@@ -167,8 +167,10 @@ def window_actions(launcher, base_url: Callable[[], str], cfg_get: Callable[[str
     return {"window": window, "browser": open_browser}
 
 
-def session_actions(cfg_get) -> Dict[str, Callable[[Any], Dict[str, Any]]]:
-    """CSRF-protected actions for web-session providers: status, browser import, in-app login, forget."""
+def session_actions(cfg_get, changed: Callable[[str], None] = lambda pid: None
+                    ) -> Dict[str, Callable[[Any], Dict[str, Any]]]:
+    """CSRF-protected actions for web-session providers: status, browser import, in-app login,
+    forget. ``changed(pid)`` runs after a session is stored or removed."""
     from omnimonitor import browser_cookies, catalog, session_login, sessions
 
     def _pid(body) -> str:
@@ -203,12 +205,13 @@ def session_actions(cfg_get) -> Dict[str, Callable[[Any], Dict[str, Any]]]:
             where = sessions.save(pid, header, meta={"source": "browser", "browser": browser})
         except Exception as e:  # noqa: BLE001
             return {"ok": False, "error": str(e)}
+        changed(pid)
         return {"ok": True, "stored": where, "provider": pid}
 
     def login(body):
         pid = _pid(body)
         try:
-            msg = session_login.start_login(pid)
+            msg = session_login.start_login(pid, on_done=lambda ok, why: changed(pid))
         except Exception as e:  # noqa: BLE001
             return {"ok": False, "error": str(e)}
         return {"ok": True, "message": msg, "provider": pid}
@@ -216,6 +219,7 @@ def session_actions(cfg_get) -> Dict[str, Callable[[Any], Dict[str, Any]]]:
     def forget(body):
         pid = _pid(body)
         gone = sessions.forget(pid)
+        changed(pid)
         return {"ok": True, "forgotten": gone, "provider": pid}
 
     return {"session-status": status, "session-import": import_browser,
