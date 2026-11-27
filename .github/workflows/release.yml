@@ -35,6 +35,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # cryptography may ship no Intel macOS wheel, so pip compiles it. Linked dynamically it
+      # would load whichever libssl ends up in the app (symbol errors at run time).
+      - name: Link OpenSSL statically (Intel macOS)
+        if: runner.os == 'macOS' && matrix.arch == 'x86_64'
+        run: |
+          echo "OPENSSL_STATIC=1" >> "$GITHUB_ENV"
+          echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
       - run: pip install . "pyinstaller>=6"
       - name: Build (macOS)
         if: runner.os == 'macOS'
