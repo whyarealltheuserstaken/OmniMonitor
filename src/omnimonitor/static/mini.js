@@ -17,9 +17,19 @@
     OM.hero(d);
     var rows = $("rows"); rows.textContent = "";
     var a = (d.forecast || {}).average || {}, why = (d.lifetime_tokens || {}).reason;
-    (((d.providers || {}).suites) || []).forEach(function (s) {
-      var h = s.headline;
-      rows.appendChild(row(s.name, h ? Math.round(h.used_percent) + "% used" : null, s.reason));
+    var views = (d.providers || {}).views || {}, mine = views.mini || {};
+    var want = {};
+    (mine.fields || ["limit", "reset", "tokens", "cost", "money"]).forEach(function (f) { want[f] = true; });
+    (mine.suites || []).forEach(function (s) {
+      var h = s.headline, bits = [];
+      if (h && want.limit) bits.push(Math.round(h.used_percent) + "% used");
+      if (h && want.reset && OM.fmtCountdown(h.resets_at)) bits.push("resets " + OM.fmtCountdown(h.resets_at));
+      if (want.tokens && s.today_tokens) bits.push("today " + T(s.today_tokens));
+      if (want.cost && s.today_tokens && s.today_usd !== null && s.today_usd !== undefined) bits.push(OM.fmtUsd(s.today_usd));
+      if (want.money && s.money) bits.push(s.money.label + " " + (s.money.unit === "USD" ? OM.fmtUsd(s.money.value) : s.money.value + " " + (s.money.unit || "")));
+      var r = row(s.name, bits.length ? bits.join(" · ") : null, s.reason);
+      if (/^#[0-9a-fA-F]{6}$/.test(s.color || "")) { r.style.borderLeft = "3px solid " + s.color; r.style.paddingLeft = "6px"; }
+      rows.appendChild(r);
     });
     if (u) {  // the pace forecast and Grok breakdown belong to the Grok weekly pool
       rows.appendChild(row("≈ Grok used at reset", a.percent_at_reset !== undefined ? "≈" + Math.round(Math.min(a.percent_at_reset, 999)) + "%" : null, a.reason));

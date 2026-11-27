@@ -466,9 +466,10 @@ def cmd_statusline(args) -> int:
     src = None if args.source == "all" else (args.source,)
     ov = ctrl.stats().get("providers") or {}
     grok_on = ctrl.cfg.get("source") != "none"
+    shown = (ov.get("views") or {}).get("statusline") or {}
     p = sl.parts(hist.last_billing() if hist is not None and grok_on else None,
                  ov.get("today"), blocks_mod.active_block(evs, src, now), now,
-                 suites=ov.get("suites"))
+                 suites=shown.get("suites"), fields=shown.get("fields"))
     if ctrl.token_source == "demo":
         p["demo"] = True
     if args.json:
@@ -550,7 +551,7 @@ def _config_import(cfg: dict, src: Optional[str]) -> int:
     if not isinstance(doc, dict) or EXPORT_MARK not in doc:
         print("Not an OmniMonitor settings export (missing %s)" % EXPORT_MARK, file=sys.stderr)
         return 2
-    doc = {k: v for k, v in doc.items() if k != EXPORT_MARK}
+    doc = config_mod.migrate_tray_suite({k: v for k, v in doc.items() if k != EXPORT_MARK})
     source = doc.pop("source", None)
     skipped = sorted(k for k in doc if k not in settings_mod.SCHEMA)
     clean, errors = settings_mod.apply(cfg, {k: v for k, v in doc.items()

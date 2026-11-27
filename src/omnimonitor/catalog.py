@@ -473,8 +473,6 @@ CLI_LOGIN_IDS: Tuple[str, ...] = tuple(p.id for p in CATALOG if p.kind == "cli_l
 #: Ids that can be switched on (local adapters other than the built-in Grok one, APIs, web sessions).
 SWITCHABLE: Tuple[str, ...] = tuple(
     i for i in LOCAL_IDS + API_IDS + WEB_SESSION_IDS + CLI_LOGIN_IDS if i != "grok_sessions")
-#: Choices for the tray's primary provider. ``budget`` = the tightest budget cap.
-PRIMARY_CHOICES: Tuple[str, ...] = tuple(p.id for p in CATALOG if p.has_limit) + ("budget",)
 
 
 def get(pid: str) -> Optional[ProviderInfo]:

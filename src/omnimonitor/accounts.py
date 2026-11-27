@@ -529,12 +529,21 @@ def load(history, pid: str) -> Optional[Reading]:
         return None
 
 
+def poll_seconds(cfg: Dict[str, Any], pid: str) -> int:
+    """Seconds between reads of one account source (its own value, else the global one)."""
+    per = cfg.get("source_poll_seconds")
+    for v in ((per or {}).get(pid) if isinstance(per, dict) else None,
+              cfg.get("provider_poll_seconds")):
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0:
+            return max(300, int(v))
+    return 900
+
+
 def refresh(cfg: Dict[str, Any], history, ids: List[str], force: bool = False,
             http: Optional[Http] = None, now: Optional[float] = None) -> Dict[str, Reading]:
     """Fetch due providers (rate-limited by provider_poll_seconds); return latest readings.
     A failed fetch keeps showing the last good numbers, marked with the error."""
     now = time.time() if now is None else now
-    every = max(300, int(cfg.get("provider_poll_seconds") or 900))
     out: Dict[str, Reading] = {}
     web_ids = set(getattr(catalog, "WEB_SESSION_IDS", ()))
     cli_ids = set(getattr(catalog, "CLI_LOGIN_IDS", ()))
@@ -543,7 +552,8 @@ def refresh(cfg: Dict[str, Any], history, ids: List[str], force: bool = False,
         if pid not in FETCHERS and not is_web and pid not in cli_ids:
             continue
         last = load(history, pid)
-        if last and not force and now - max(last.fetched_at, last.attempted_at) < every:
+        if last and not force and \
+                now - max(last.fetched_at, last.attempted_at) < poll_seconds(cfg, pid):
             out[pid] = last
             continue
         if pid in cli_ids:

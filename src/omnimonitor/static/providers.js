@@ -90,6 +90,7 @@
   function card(c, full) {
     var box = el("div", "card pv-card");
     box.setAttribute("data-provider", c.id);
+    if (/^#[0-9a-fA-F]{6}$/.test(c.color || "")) box.style.borderLeft = "4px solid " + c.color;
     var h = el("div", "t"); h.style.display = "flex"; h.style.justifyContent = "space-between";
     var nm = el("strong", "", c.name);
     if (c.service) {
@@ -110,7 +111,9 @@
         var x = c.ranges[r[0]] || {}, d = el("div");
         d.appendChild(el("div", "mini-k", r[1]));
         d.appendChild(el("div", "", fmtTokens(x.tokens || 0) + " tok"));
-        var s = el("div", "sub"); s.appendChild(x.tokens ? usd(x.usd) : document.createTextNode("–")); d.appendChild(s);
+        var s = el("div", "sub");
+        if (!x.hideCost) s.appendChild(x.tokens ? usd(x.usd) : document.createTextNode("–"));
+        d.appendChild(s);
         g.appendChild(d);
       });
       box.appendChild(g);
@@ -153,8 +156,36 @@
     return box;
   }
 
+  // The user's layout (providers.views.dashboard): order, hidden sources, numbers, colours.
+  function dashboardCards(ov) {
+    var v = (ov.views || {}).dashboard, byId = {};
+    (ov.cards || []).forEach(function (c) { byId[c.id] = c; });
+    if (!v) return ov.cards || [];
+    var color = {}, want = {};
+    (v.suites || []).forEach(function (s) { (s.card_ids || []).forEach(function (i) { color[i] = s.color; }); });
+    (v.fields || []).forEach(function (f) { want[f] = true; });
+    return (v.card_ids || []).map(function (i) {
+      var c = Object.assign({}, byId[i]);
+      c.color = color[i] || "";
+      if (!want.limit) c.limits = [];
+      else if (!want.reset) c.limits = (c.limits || []).map(function (w) {
+        return Object.assign({}, w, { resets_at: null, pace: null });
+      });
+      if (!want.tokens) c.ranges = null;
+      else if (!want.cost && c.ranges) {
+        var r = {};
+        Object.keys(c.ranges).forEach(function (k) { r[k] = Object.assign({}, c.ranges[k], { hideCost: true }); });
+        c.ranges = r;
+      }
+      if (!want.money) c.metrics = (c.metrics || []).filter(function (m) {
+        return m.kind !== "balance" && m.kind !== "spend";
+      });
+      return c;
+    });
+  }
+
   function renderCards(ov) {
-    var tabs = $("pv-tabs"), grid = $("pv-cards"), cards = ov.cards || [];
+    var tabs = $("pv-tabs"), grid = $("pv-cards"), cards = dashboardCards(ov);
     if (tab !== "all" && !cards.some(function (c) { return c.id === tab; })) tab = "all";
     tabs.textContent = "";
     var fam = {};

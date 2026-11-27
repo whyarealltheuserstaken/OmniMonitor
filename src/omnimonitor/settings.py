@@ -11,7 +11,7 @@ import json
 import re
 from typing import Any, Callable, Dict, List, Tuple
 
-from omnimonitor import catalog, suites
+from omnimonitor import catalog, display, suites
 from omnimonitor.pricing import clean_prices
 
 HIDEABLE_CARDS = ("providers", "budgets", "grok-suite", "forecast", "burn", "limit",
@@ -179,10 +179,69 @@ def _provider_thresholds(v: Any) -> Dict[str, List[float]]:
         raise SettingError('expected {"provider_id": [50, 80, 95], ...}')
     out = {}
     for pid, ths in v.items():
-        if pid not in catalog.BY_ID:
-            raise SettingError("unknown provider %r" % pid)
+        if pid not in catalog.BY_ID and pid not in suites.SUITE_IDS:
+            raise SettingError("unknown provider or suite %r" % pid)
         out[pid] = _thresholds(ths)
     return out
+
+
+def _object(v: Any, what: str) -> Dict[str, Any]:
+    if isinstance(v, str):
+        try:
+            v = json.loads(v or "{}")
+        except ValueError:
+            raise SettingError("%s must be a JSON object" % what) from None
+    if not isinstance(v, dict):
+        raise SettingError("%s must be a JSON object" % what)
+    return v
+
+
+def _id_list(v: Any, what: str) -> List[str]:
+    if not isinstance(v, list) or len(v) > 200:
+        raise SettingError("%s must be a list" % what)
+    if not all(display.valid_id(x) for x in v):
+        raise SettingError("%s: unknown suite or source id" % what)
+    return list(dict.fromkeys(v))
+
+
+def _display(v: Any) -> Dict[str, Any]:
+    v = _object(v, "display")
+    if set(v) - {"order", "hide", "fields"}:
+        raise SettingError('expected {"order": [...], "hide": {...}, "fields": {...}}')
+    out: Dict[str, Any] = {}
+    if v.get("order"):
+        out["order"] = _id_list(v["order"], "display.order")
+    for key in ("hide", "fields"):
+        section = _object(v.get(key) or {}, "display." + key)
+        if set(section) - set(display.SURFACES):
+            raise SettingError("display.%s: surfaces are %s" % (key, ", ".join(display.SURFACES)))
+        clean = {}
+        for surface, items in section.items():
+            if key == "hide":
+                ids = _id_list(items, "display.hide.%s" % surface)
+                if ids:
+                    clean[surface] = ids
+            else:
+                clean[surface] = _list_of(display.FIELDS)(items)
+        if clean:
+            out[key] = clean
+    return out
+
+
+def _suite_colors(v: Any) -> Dict[str, str]:
+    v = _object(v, "suite_colors")
+    if set(v) - set(suites.SUITE_IDS):
+        raise SettingError("unknown suite (use: %s)" % ", ".join(suites.SUITE_IDS))
+    return {k: _color(c) for k, c in v.items()}
+
+
+def _source_poll(v: Any) -> Dict[str, int]:
+    v = _object(v, "source_poll_seconds")
+    account = catalog.API_IDS + catalog.WEB_SESSION_IDS + catalog.CLI_LOGIN_IDS
+    if set(v) - set(account):
+        raise SettingError("only account sources have their own interval: %s"
+                           % ", ".join(account))
+    return {k: _num(300, 86400, True)(s) for k, s in v.items()}
 
 
 def _budgets(v: Any) -> Dict[str, float]:
@@ -225,7 +284,11 @@ SCHEMA: Dict[str, Tuple[Callable[[Any], Any], bool, str]] = {
     "tray_suite": (_choice(*suites.TRAY_CHOICES), True,
                    "suite whose % drives the tray icon (or tightest / budget)"),
     "provider_thresholds": (_provider_thresholds, True,
-                            "per-provider alert thresholds (USED %)"),
+                            "per-source or per-suite alert thresholds (USED %)"),
+    "display": (_display, True, "what shows where: order, hide (per surface), fields"),
+    "suite_colors": (_suite_colors, True, 'per-suite colour, e.g. {"openai": "#10a37f"}'),
+    "source_poll_seconds": (_source_poll, True,
+                            "per account source refresh seconds (min 300)"),
     "budgets": (_budgets, True, "USD budgets for local-log spend (0 = off)"),
     "budget_alert_percent": (_num(1, 100), True, "warn when a budget reaches this %"),
     "provider_poll_seconds": (_num(300, 86400, True), True,
@@ -339,9 +402,33 @@ def public_view(cfg: Dict[str, Any]) -> Dict[str, Any]:
                                     for p in catalog.CATALOG if p.id in catalog.SWITCHABLE],
                         "tray_choices": [{"id": i, "name": _tray_choice_name(i)}
                                          for i in suites.TRAY_CHOICES],
+                        "suites": _layout_suites(cfg),
+                        "surfaces": list(display.SURFACES),
+                        "fields": {s: display.fields(cfg, s) for s in display.SURFACES},
+                        "all_fields": list(display.FIELDS),
                         "keys": _key_presence(),
                         "sessions": _session_presence()}
     return out
+
+
+def _layout_suites(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Suites and their switched-on sources, in the user's order (the Layout editor)."""
+    on = set(catalog.enabled_ids(cfg))
+    if cfg.get("source") != "none":
+        on.add("grok")
+    if cfg.get("source") != "none" or cfg.get("token_source") == "grok_sessions":
+        on.add("grok_sessions")
+    cards = [{"id": p.id} for p in catalog.CATALOG if p.id in on]
+    rows = [{"id": s.id, "name": s.name} for s in suites.SUITES
+            if any(suites.suite_of(c["id"]) == s.id for c in cards)]
+    rows = display.ordered_suites(cfg, rows)
+    cards = display.ordered_cards(cfg, cards, rows)
+    for s in rows:
+        s["sources"] = [{"id": c["id"], "name": catalog.name(c["id"]),
+                         "account": catalog.get(c["id"]).kind in ("api", "web_session",
+                                                                  "cli_login")}
+                        for c in cards if suites.suite_of(c["id"]) == s["id"]]
+    return rows
 
 
 def _session_presence() -> Dict[str, str]:
