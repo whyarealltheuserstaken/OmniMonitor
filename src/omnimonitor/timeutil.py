@@ -44,6 +44,18 @@ def parse_time(value: Any) -> Optional[datetime]:
     return dt
 
 
+# Two reset times this close belong to the same window: Claude's differs by up to a second on
+# every read, and no tracked window is shorter than a few hours.
+SAME_WINDOW_S = 600.0
+
+
+def same_window(a: Any, b: Any) -> bool:
+    """Do two reset times (ISO or epoch) mean the same limit window? True when either is
+    unknown: nothing says the window changed."""
+    x, y = parse_time(a), parse_time(b)
+    return x is None or y is None or abs((x - y).total_seconds()) <= SAME_WINDOW_S
+
+
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 

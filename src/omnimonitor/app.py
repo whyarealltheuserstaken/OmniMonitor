@@ -62,7 +62,9 @@ class Controller:
         self._open_history()
 
     def _open_history(self) -> None:
-        wants = self.token_source == "grok_sessions" or (
+        # A real Grok pool needs it too: alert state and the pace forecast live there.
+        wants = self.token_source == "grok_sessions" or self.cfg.get("source") in (
+            "grok_cli_billing", "command") or (
             self.token_source != "demo" and (config_mod.extra_token_sources(self.cfg)
                                              or config_mod.enabled_api_providers(self.cfg)
                                              or config_mod.enabled_web_providers(self.cfg)
@@ -105,8 +107,10 @@ class Controller:
     def _apply_cfg(self, new: Dict[str, Any]) -> None:
         with self._lock:
             old_ts = self.token_source
-            self.cfg.clear()
+            # Never empty it: other threads read it without this lock.
             self.cfg.update(new)
+            for key in [k for k in self.cfg if k not in new]:
+                del self.cfg[key]
             net_mod.configure(self.cfg)
             self.token_source = config_mod.effective_token_source(self.cfg)
             if old_ts == "demo" and self.token_source != "demo":

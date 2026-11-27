@@ -320,7 +320,8 @@ class TrayApp:
         from omnimonitor.alerts import deliver
         where = "menu bar (top right; on a notched Mac it can hide behind the notch)" \
             if sys.platform == "darwin" else "system tray"
-        deliver("OmniMonitor is running", "Look for the ring icon in the %s." % where)
+        deliver("OmniMonitor is running", "Look for the ring icon in the %s." % where,
+                self._notify_os)
         if self.server and not config_mod.env("NO_BROWSER"):
             demo = (self.ctrl.cfg.get("source") or "demo") == "demo"
             self._open("setup" if demo else "")  # nothing connected yet: start at Setup
