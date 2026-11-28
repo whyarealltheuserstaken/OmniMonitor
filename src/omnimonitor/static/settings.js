@@ -4,8 +4,8 @@
   var $ = function (id) { return document.getElementById(id); }, el = OM.el;
   var csrf = "", initial = null;
   if (window.OMApp) OMApp.shell("settings");
-  var BOOLS = ["notifications", "notify_on_reset", "notify_on_pace", "estimate_weekly_limit", "status_badges", "icon_text", "mini_on_top"];
-  var TEXTS = ["display_name", "theme", "accent_color", "icon_style", "icon_value", "tray_suite"];
+  var BOOLS = ["notifications", "notify_on_reset", "notify_on_pace", "estimate_weekly_limit", "status_badges", "icon_text", "mini_on_top", "update_check"];
+  var TEXTS = ["display_name", "theme", "accent_color", "icon_style", "icon_value", "tray_suite", "update_channel"];
   var NUMS = ["heatmap_weeks", "poll_interval_seconds", "estimate_min_used_percent",
               "provider_poll_seconds", "budget_alert_percent"];
   var CARD_LABELS = { "grok-suite": "Grok suite breakdown", forecast: "Pace & forecast", burn: "Burn rate", limit: "Tokens this week / limit",

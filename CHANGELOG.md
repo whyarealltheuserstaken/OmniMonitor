@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **In-app updater.** A daily check (can be turned off) with stable and beta channels. The
+  Windows download updates from the tray menu, installing only newer releases signed with the
+  publisher's key; other installs get a link. New command: `omnimonitor update`.
+- Releases are now created as drafts and published by `scripts/sign_release.py`.
+
 ## [0.6.1-beta] - 2026-11-27
 
 Beta / prerelease. See [release notes](docs/release-notes/v0.6.1-beta.md).

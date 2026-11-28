@@ -363,6 +363,24 @@ omnimonitor
 
 ---
 
+## Updates
+
+OmniMonitor checks this repository's public releases once a day (not in demo mode) and tells
+you when there is a newer version. Nothing installs until you choose it. Turn the check off or
+pick a channel in **Settings → Updates**; "Same as this version" follows whether you run a
+stable release or a beta. Switching to stable never downgrades.
+
+- **Windows download:** tray menu → **Update to X and restart**. The app only installs a newer
+  release signed with the publisher's key whose size and SHA-256 match, and checks that it
+  starts before swapping it in. The old file stays as `omnimonitor.exe.old` until the new one
+  is running; if it never starts, rename that file back. A build with no signing key only
+  gives notice.
+- **macOS, Linux, source installs:** the menu item opens the download page.
+- `omnimonitor update` checks from a terminal. On the Windows download, add `| Out-String` to
+  see the output.
+
+---
+
 ## Run
 
 ```bash
@@ -657,8 +675,14 @@ with a fixture. **Never return made-up numbers.**
 **If the endpoint changes:** capture a redacted response into `tests/fixtures/`, update
 `parse_billing`, and keep the rules above.
 
-**Releases:** bump `__version__` (in `src/omnimonitor/__init__.py`) and
-`pyproject.toml`, update `CHANGELOG.md`, then tag `vX.Y.Z` and push the tag.
+**Releases:** `X.Y.Z` is a stable release; `X.Y.Z-beta` (or `-beta.N`) is a prerelease for
+features few people have tried. Bump `__version__` (in `src/omnimonitor/__init__.py`) and
+`pyproject.toml`, update `CHANGELOG.md`, then tag `vX.Y.Z` and push the tag. The workflow
+creates a **draft**. Publish it from your own terminal with
+`python scripts/sign_release.py sign vX.Y.Z` (needs `gh` signed in and your signing-key
+password); this attaches the signed `update.json` the in-app updater requires. Create the key
+once with `python scripts/sign_release.py keygen`, commit `src/omnimonitor/update_key.py`,
+and keep an offline copy of `~/.omnimonitor-signing/key.pem`.
 `.github/workflows/release.yml` builds PyInstaller binaries (`omnimonitor-<os>-<arch>`, e.g.
 `omnimonitor-macos-arm64.dmg`/`.zip`, `omnimonitor-windows-x86_64.zip`, `omnimonitor-linux-x86_64.AppImage`/`.tar.gz`) on macOS 15 (arm64; GitHub retired `macos-14` 2026-11-02), macOS 15 Intel
 (`macos-15-intel`), Windows and Ubuntu, and attaches them with `SHA256SUMS.txt` to a GitHub Release whose notes come from `docs/release-notes/vX.Y.Z.md`. The binaries are

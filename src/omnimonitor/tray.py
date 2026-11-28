@@ -10,7 +10,7 @@ import webbrowser
 from datetime import datetime, timezone
 from typing import Optional
 
-from omnimonitor import appactions
+from omnimonitor import appactions, updater
 from omnimonitor import config as config_mod
 from omnimonitor import overview as overview_mod
 from omnimonitor import suites as suites_mod
@@ -79,6 +79,9 @@ class TrayApp:
 
         self.pystray = pystray
         self.ctrl = ctrl
+        self.updater = updater.Updater(ctrl.cfg)
+        self._updating = threading.Lock()  # one update action at a time
+        self._stop_updates = threading.Event()
         self.server: Optional[StatsServer] = None
         try:
             self.server = for_controller(ctrl, int(ctrl.cfg.get("web_port") or 0)).start()
@@ -213,6 +216,7 @@ class TrayApp:
                  enabled=lambda _: self.server is not None),
             Item("Edit Config", self._on_config),
             Menu.SEPARATOR,
+            Item(lambda _: self._update_line(), self._on_update),
             Item("Quit", self._on_quit),
         )
 
@@ -260,6 +264,7 @@ class TrayApp:
         open_path(str(path))
 
     def _on_quit(self, *_):
+        self._stop_updates.set()
         self.ctrl.stop()
         self.window.close()
         if self.server:
@@ -269,7 +274,57 @@ class TrayApp:
                 pass
         self.icon.stop()
 
-    # ------------------------------------------------------------- updates
+    # ------------------------------------------------------------- new versions
+    def _update_line(self) -> str:
+        found = self.updater.available
+        if not found:
+            return "Check for updates"
+        if found.installable:
+            return "Update to %s and restart" % found.version
+        return "Version %s available (download page)" % found.version
+
+    def _on_update(self, *_):
+        threading.Thread(target=self._update_action, daemon=True).start()
+
+    def _update_action(self) -> None:
+        """Does what the menu item says: install, open the download page, or check."""
+        if not self._updating.acquire(blocking=False):
+            return
+        try:
+            found = self.updater.available
+            if found and found.installable:
+                self._say("Updating OmniMonitor", "Downloading %s…" % found.version)
+                updater.update_app(found)
+                log.info("updated to %s; quitting so it can take over", found.version)
+                self._on_quit()
+            elif found:
+                webbrowser.open(found.page)
+            else:
+                found = self.updater.refresh()
+                self._say("OmniMonitor updates",
+                          "Version %s is available. Choose it in the menu." % found.version
+                          if found else "OmniMonitor is up to date.")
+                on_main_thread(self.icon.update_menu)
+        except updater.UpdateError as e:
+            log.warning("update: %s", e)
+            self._say("OmniMonitor update failed", str(e))
+        except Exception:  # noqa: BLE001
+            log.exception("update")
+            self._say("OmniMonitor update failed", "See the log for details.")
+        finally:
+            self._updating.release()
+
+    def _say(self, title: str, body: str) -> None:
+        from omnimonitor.alerts import deliver
+        deliver(title, body, self._notify_os)
+
+    def _announce(self, found) -> None:
+        on_main_thread(self.icon.update_menu)
+        self._say("OmniMonitor %s is available" % found.version,
+                  "Open the tray menu to %s." % ("update" if found.installable else
+                                                 "get the download"))
+
+    # ------------------------------------------------------------- refreshed data
     def update(self) -> None:
         """Controller listener (called from the poll thread): hop to the GUI thread."""
         on_main_thread(self._apply_update)
@@ -333,6 +388,9 @@ class TrayApp:
             # pystray calls this on a worker thread; AppKit calls must go to the main thread.
             on_main_thread(self._show)
             self.ctrl.start_background()
+            if updater.can_self_update():
+                updater.cleanup(sys.executable)
+            self.updater.start(self._announce, self._stop_updates)
             self.first_run_hint()
         log.info("starting tray loop on %s", threading.current_thread().name)
         # macOS requires the event loop on the main thread: pystray.Icon.run() blocks here.

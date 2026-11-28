@@ -590,6 +590,23 @@ def cmd_notify_test(args) -> int:
     return 0 if sent else 1
 
 
+def cmd_update(args) -> int:
+    from omnimonitor import updater
+    chan = updater.channel(_load(args))
+    try:
+        found = updater.check(__version__, chan)
+    except updater.UpdateError as e:
+        print("Update check failed: %s" % e, file=sys.stderr)
+        return 1
+    if not found:
+        print("OmniMonitor %s is up to date (%s channel)." % (__version__, chan))
+        return 0
+    how = "Install it from the tray menu, or download it:" if found.installable else "Download:"
+    print("OmniMonitor %s is available (%s channel). %s %s"
+          % (found.version, chan, how, found.page))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="omnimonitor",
@@ -649,6 +666,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("key", nargs="?")
     s.add_argument("value", nargs="?")
     sub.add_parser("notify-test", help="show a test desktop notification")
+    sub.add_parser("update", help="check GitHub for a newer version")
     s = sub.add_parser("net-check", help="test an HTTPS request with the app's CA bundle")
     s.add_argument("url", nargs="?", default="https://api.github.com/")
     s = sub.add_parser("deps", help="CLI tools for enabled providers; install one (official)")
@@ -803,7 +821,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(log_path())
         return 0
     handlers = {"export": cmd_export, "providers": cmd_providers, "tray": cmd_tray, "verify": cmd_verify, "login": cmd_login, "breakdown": cmd_breakdown, "blocks": cmd_blocks, "statusline": cmd_statusline,
-                "config": cmd_config, "notify-test": cmd_notify_test, "secrets": cmd_secrets, "deps": cmd_deps}
+                "config": cmd_config, "notify-test": cmd_notify_test, "update": cmd_update,
+"secrets": cmd_secrets, "deps": cmd_deps}
     if cmd in handlers:
         return handlers[cmd](args)
     return 2

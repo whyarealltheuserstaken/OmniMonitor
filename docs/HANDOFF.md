@@ -24,6 +24,14 @@ Cursor's sign-in pages. The pages were driven in Edge with no console errors.
 3. Grok CLI, Gemini CLI and API keys, if/when available: turn on, run `omnimonitor verify`, read
    only the scrubbed output, then add passing ids to `catalog.LIVE_VERIFIED`.
 
+## Since 0.6.1-beta (not released)
+In-app updater (`updater.py`, `scripts/sign_release.py`, design in
+`docs/superpowers/specs/2026-11-27-in-app-updater-design.md`). Before the first release that
+has it, the owner runs `python scripts/sign_release.py keygen` and `update_key.py` gets
+committed; with no key the app only gives notice. A real in-app update can first be tried
+between two signed releases that include the updater. Open bug: the typed `secrets set`
+prompt doesn't work in the Windows `omnimonitor.exe`.
+
 ## Done (0.6.1-beta)
 Alert repeats and other runtime fixes; run-out estimates for plan limits, reset notices and
 webhook alerts (see CHANGELOG). Reset times from Claude differ on every read, so

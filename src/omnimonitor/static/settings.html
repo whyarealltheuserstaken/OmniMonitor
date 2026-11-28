@@ -182,6 +182,12 @@
     <div class="field"><label class="k" for="provider_thresholds">Per-source / per-suite alert %<div class="h">Optional overrides by source or suite id, e.g. <code>{"codex": [80, 95], "anthropic": [90]}</code>. A source's own list wins over its suite's. Others use the list above.</div></label>
       <div><textarea id="provider_thresholds" spellcheck="false" style="min-height:60px" placeholder='{"codex": [80, 95]}'></textarea></div></div>
 
+    <h2 class="section">Updates</h2>
+    <div class="field"><label class="k" for="update_check">Check for new versions<div class="h">Once a day, from this project's public GitHub releases. GitHub sees your IP address; no account or usage data is sent. Nothing installs until you choose it in the tray menu.</div></label>
+      <div class="checks"><label><input type="checkbox" id="update_check"> automatically</label></div></div>
+    <div class="field"><label class="k" for="update_channel">Channel<div class="h">Beta versions have features that few people have tried.</div></label>
+      <div><select id="update_channel"><option value="auto">Same as this version</option><option value="stable">Stable releases</option><option value="beta">Betas and stable releases</option></select></div></div>
+
     <div class="actions"><button class="primary" id="save" type="submit">Save</button><span class="sub" id="msg"></span></div>
     <div class="ro section" id="ro"></div>
   </form>
