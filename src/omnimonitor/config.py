@@ -71,6 +71,11 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "notify_thresholds": [80, 95],          # % USED of the weekly pool
     "notify_on_reset": True,
     "notify_on_pace": False,                # "on pace to run out before reset"
+    # Updates. The check reads this project's public GitHub release list once a day (never in
+    # demo mode). Nothing installs without a click. channel: auto (follow this build) |
+    # stable | beta.
+    "update_check": True,
+    "update_channel": "auto",
     # Personalization.
     "icon_style": "ring",                   # ring | pie | bar | number
     "icon_value": "remaining",              # remaining | used

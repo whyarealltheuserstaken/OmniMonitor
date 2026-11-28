@@ -24,6 +24,8 @@ about a week. This is a volunteer project.
 | Exports | written only where you choose (CLI `-o`) or downloaded by your browser; CSV cells starting with `= + - @` are escaped |
 | Desktop notifications | via the tray library; contain provider and limit names, percentages, times and, for budgets, dollar amounts |
 | Alert webhook (off until you save one) | `OMNIMONITOR_ALERT_WEBHOOK`, stored like an API key (it can carry its own token) and never settable from the web page or logged; each alert's title and text are `POST`ed to it over HTTPS only, no redirects, 10 s limit. Discord mentions are disabled |
+| Update check (on by default, once a day, not in demo mode; off in Settings) | `GET` of this repository's public release list and files, over HTTPS to GitHub hosts only (redirects included). No token or account data; GitHub sees your IP address |
+| Update install (Windows download only, only when you choose it) | needs an Ed25519 signature from a key built into the app, covering the version, size and SHA-256; never installs an older or equal version; download addresses are built by the app; the web page cannot start an install. Replaces `omnimonitor.exe` in its own folder, without administrator rights |
 | Config + history (`config.json`, `history.sqlite3`) | in the per-user config dir, chmod 600 where supported |
 
 Browser cookies are read only for opt-in web-session providers (see docs/cookies/). The opt-in
@@ -47,4 +49,7 @@ a number. There is no telemetry.
   variables from your OS secret manager if you need more.
 - Admin / management keys (Anthropic, OpenAI, xAI, Cursor) are powerful. Create the
   narrowest read-only key the provider offers.
-- PyInstaller release binaries are unsigned.
+- PyInstaller release binaries have no code-signing certificate, so the system still warns.
+- The update signature shows who released a build, not that its code is safe. It does not
+  help on a computer where someone can already run programs as you, and someone who can block
+  GitHub can keep you on an old version.
