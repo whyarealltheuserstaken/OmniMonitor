@@ -68,7 +68,13 @@ AI tools. OmniMonitor copies **no code, text, icons or images** from it. Everyth
 Python re-implementation of the ideas. See [docs/inspiration-notes.md](docs/inspiration-notes.md)
 for what we adopted, what we built differently and why.
 
-## What's new in 0.6.0-beta
+## What's new in 0.6.1-beta
+
+Fixes alerts that repeated in 0.6.0-beta. Adds run-out estimates for plan limits, "limit reset"
+notices, and optional alerts to ntfy, Discord, Slack or a webhook (not yet tried against a real
+service). See the [release notes](docs/release-notes/v0.6.1-beta.md).
+
+### Earlier: 0.6.0-beta
 
 OmniMonitor now monitors every major AI platform as equal **suites**, and works without a
 Grok account. A new **Setup** screen shows each suite as Connected / Found / Sign in / Add

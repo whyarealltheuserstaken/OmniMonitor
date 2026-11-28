@@ -198,12 +198,12 @@ def test_providers_command_and_docs_say_how_each_source_was_checked(tmp_path, ca
     assert "fixture-only" in row
 
 
-def test_version_is_0_6_0_beta_with_release_notes():
+def test_version_is_0_6_1_beta_with_release_notes():
     from pathlib import Path
 
     import omnimonitor
     root = Path(__file__).resolve().parents[1]
-    assert omnimonitor.__version__ == "0.6.0-beta"
-    assert 'version = "0.6.0-beta"' in (root / "pyproject.toml").read_text("utf-8")
-    assert (root / "docs" / "release-notes" / "v0.6.0-beta.md").is_file()
-    assert "## [0.6.0-beta]" in (root / "CHANGELOG.md").read_text("utf-8")
+    assert omnimonitor.__version__ == "0.6.1-beta"
+    assert 'version = "0.6.1-beta"' in (root / "pyproject.toml").read_text("utf-8")
+    assert (root / "docs" / "release-notes" / "v0.6.1-beta.md").is_file()
+    assert "## [0.6.1-beta]" in (root / "CHANGELOG.md").read_text("utf-8")
