@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.1-beta] - 2026-11-27
+
+Beta / prerelease. See [release notes](docs/release-notes/v0.6.1-beta.md).
+
 ### Added
 - **Run-out estimates for plan limits** (Claude and ChatGPT plans, and any limit whose length
   the provider reports): the dashboard shows the pace, the tray menu says "runs out in … (est.)",
@@ -22,6 +26,9 @@ All notable changes to this project are documented here. The format follows
 - Reloading the config could briefly show an empty config to the rest of the app.
 - With token logs off, the Grok pool had no history database, so its alerts never ran.
 - The first-run "OmniMonitor is running" notice never appeared on Windows.
+- The dashboard could show "NaN%" for a limit with nothing used yet.
+- The local web page could drop the connection instead of answering a rejected request.
+- Outdated text about where keys and sign-ins are stored.
 
 ## [0.6.0-beta] - 2026-11-27
 

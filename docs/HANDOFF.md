@@ -24,9 +24,9 @@ Cursor's sign-in pages. The pages were driven in Edge with no console errors.
 3. Grok CLI, Gemini CLI and API keys, if/when available: turn on, run `omnimonitor verify`, read
    only the scrubbed output, then add passing ids to `catalog.LIVE_VERIFIED`.
 
-## Since 0.6.0-beta (on main, not released)
+## Done (0.6.1-beta)
 Alert repeats and other runtime fixes; run-out estimates for plan limits, reset notices and
-webhook alerts (see CHANGELOG "Unreleased"). Reset times from Claude differ on every read, so
+webhook alerts (see CHANGELOG). Reset times from Claude differ on every read, so
 compare them with `timeutil.same_window`, never exactly. Competitor comparison:
 `docs/inspiration-notes.md`. The owner should know a commercial "Omni Monitor" exists at
 omni-monitor.com (naming is their call).
